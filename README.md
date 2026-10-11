@@ -29,10 +29,10 @@ These questions guide an intentionally small, hardware-grounded architecture rat
 | **Local cognitive control** | `BrainCore` / Local Cognitive Executive (LCE), goals, priorities, behavior lifecycle, cancellation and result tracking | A completed software operation does not prove that the human's physical goal was achieved |
 | **Robot capability interface** | Shared `RobotInterface`, discoverable capabilities and an asynchronous Python SDK | Capability coverage is growing; availability depends on live owners and sensors |
 | **Executable skill system** | File-based `.py` library, separate CPython worker, versioned source identity, runtime status and cancellation | Integration is tested; general unattended operation needs further field validation |
-| **LLM collaboration** | Provider-facing proposals can select, create, update and optionally test Python skills; failed saved tests can prompt a bounded repair attempt | An autonomous, open-ended learning loop has not yet been demonstrated end-to-end in the physical world |
+| **LLM collaboration** | `r learn` generates, measures, repairs and reuses Python skills with independent scenario checks and capture/EVI/DIAG/replay feedback | Motor-free evidence does not establish open-ended learning or goal satisfaction in the physical world |
 | **Perception and memory** | Camera/person perception, public temporal world model, person identity and spatial references | Mouse/door recognition, reliable room semantics and global localization are not implied |
 | **Research instrumentation** | Passive observer, MCAP flight recording, explicit Evidence Compiler, diagnostic tools and native V3 replay | Exact decision replay needs complete, valid 50 Hz capture evidence |
-| **Mapping and simulation** | Offline 50 Hz MCAP-to-map tool and targeted synthetic/replay tests | A general integrated learning simulator and autonomous IDLE mapping cycle are future work |
+| **Mapping and simulation** | Offline 50 Hz MCAP-to-map tool, motor-free semantic skill trials and native STOP capture/replay | Physical scene/recognition simulation and an autonomous IDLE mapping cycle remain future work |
 
 The first local observation skill, [`monitor_region.py`](robot_skills/monitor_region.py), watches an **image-space region for people**, responds to local detector events and requests video clips. It is not a general mouse detector, room-aware observer or field-proven eight-hour surveillance system.
 

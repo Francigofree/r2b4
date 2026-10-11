@@ -1,8 +1,10 @@
 # R2B4 — nyitott Skill/Interface, Python Skill Runtime és LCE–LLM együttműködés
 
 Dátum: 2026-10-10; implementációs állapot frissítve: 2026-10-11.
-A közös async SDK, a Python Skill Library/Runtime, az LCE–LLM együttműködés és
-az owning vision-edge observer/recorder implementálva. A valós recognition,
+A közös async SDK, a Python Skill Library/Runtime, az LCE–LLM együttműködés,
+az owning vision-edge observer/recorder és az explicit, mért `r learn` ciklus
+implementálva. A tanulási infrastruktúra részlete és bizonyítási scope-ja a
+17. fejezetben szerepel. A valós recognition,
 nyolcórás üzem és RPi-timing külön hardver-evidence-et igényel.
 
 Implementáció: [`robot_sdk.py`](../r2b4_orchestration/robot_sdk.py),
@@ -99,6 +101,16 @@ flowchart TD
     O -->|szemantikus observation| W[Public World / Spatial]
     W --> I
     I <--> D[Közös fejlesztői eszközök]
+    O -.-> C[Observer és capture: passzív evidence]
+    V -.-> C
+    C --> E[Explicit offline EVI Compiler]
+    E --> Q[DIAG: integritás, mérések, lineage]
+    C --> P[Natív V3 replay]
+    D --> T[Pytest és motor nélküli skillpróba]
+    T -.-> C
+    Q -.->|mért visszacsatolás| L
+    P -.->|külön replay-verdict| L
+    T -.->|független célfeltételek| L
     R -->|állapot és eredmény| L
     L -->|tapasztalat és javítás| K
 ```
@@ -450,12 +462,120 @@ opcionális `test_source` paramétere a megtartott teszt → javítás kört tá
 Az observer/media tesztek szintetikus measurementet, veszteséget, deadline-t,
 readiness-t és cancellationt vizsgálnak; szintetikus JPEG-ekből valódi ffmpeg
 MP4 készül. A release-gate a meglévő szintetikus native replay esetet is futtatja.
-Az implementáció és a lezáró javítások célzott ellenőrzése összesen 105 sikeres
+Az SDK/observer korábbi implementációs körének célzott ellenőrzése 105 sikeres
 tesztet adott; a `./r test release` mind a 23 tesztje sikeres. A pack-tesztek
 továbbra is opcionális fejlesztői evidence-ek, nem új permanent gate-entryk.
-Új live capture/MCAP evidence compiler út, providerhálózat, hardvermérés vagy
-fizikai mozgás nem futott. Meglévő runtime/capture/log adat nem lett másolva,
+Ebben a korábbi körben új capture/compiler út, providerhálózat, hardvermérés
+vagy fizikai mozgás nem futott; az új offline tanulási evidence a 17. fejezetben
+szerepel. Meglévő runtime/capture/log adat nem lett másolva,
 felülírva vagy törölve. Nyolcórás működés, RPi5 V3-jitter/CPU/RSS,
 éjszakai coverage és recognition-minőség nem bizonyított. Az egér-/ajtódetektor,
 kitchen-scoped XY-újraazonosítás és csapdaállapot/reverse capability további
 konkrét owning fejlesztés és evidence nélkül nem állítható késznek.
+
+## 17. Mért tanulás és a meglévő infrastruktúra integrációja
+
+Az új belépési pont az explicit offline `r learn "TELJES CÉL"`. A
+[`learning_cli.py`](../r2b4_orchestration/learning_cli.py) a meglévő provider-,
+hitelesítési és failover-útból épít AgentCore-t, a közös rendszerpromptot
+használja, és a [`SkillLearningLoop`](../r2b4_orchestration/skill_learning.py)
+bounded generálás → pytest → próba → mérés → javítás ciklusát indítja.
+Megadott `--skill` esetén az első lépés a mentett program mért baseline-ja;
+megfelelő baseline-hoz nem kell LLM. Új skillt a modell a közös könyvtárba
+ment, és ugyanaz a `.py` fájl használható később a canonical `r skill` úton.
+Nincs automatikus Git-művelet vagy külön agent-admin workflow.
+
+| Meglévő owner | Konkrét integráció és fejlesztés |
+| --- | --- |
+| Observer / PublicRobotRuntime | A próba ugyanazokat a Brain-, interface-, skill- és producer-eseményeket használja. A `hri.report` is a közös producer/clock/sequence envelope-ban kerül a journalba, sorhelyes drainnel; így a capture follower nem veszti el a report lineage-ét. Queue- vagy írási veszteség után nem ad sikeres kézbesítési nyugtázást. |
+| MCAP capture | Minden próba saját, egyedi `/tmp` capture-t készít a meglévő session/follower úton. A szemantikus minták és az önálló értékelés a valódi skill `run_id`-jához, forráshash-éhez és Brain-céljához kötődnek. A natív V3 rész két STOP-tick, a szükséges szintetikus szenzor- és raw evidence-del; minden final output nulla. |
+| EVI | Az `evi.compile(capture, output)` explicit fejlesztőeszköz, új outputot kér és nem ír felül. A compiler megőrzi saját feldolgozási/integritási jelentését; nem értékeli a skill célját. |
+| DIAG | Az `evidence.feedback` a canonical analyzerektől kért, méretkorlátos mérést ad. A sealed bundle teljes ellenőrzése, az eredeti MCAP hash/méret/CRC/final integrity ellenőrzése és a diagnosztikai admission külön mező. A capture nélkül olvasott bundle nem válik source-checked bizonyítékká. |
+| Replay | A `replay.run` a natív Replayert használja, és külön JSON-verdictet ment. A feedback ellenőrzi a result checksumját és azt, hogy ugyanahhoz a source hash-hez tartozik-e. A V3-tickek `MATCH` eredménye nem jelenti a Python-kód vagy a fizikai cél exact replayét. |
+| Pytest | A mentett opcionális skillteszt a canonical launcherrel fut. A sikeres AgentCore-teszteredmény csak azonos forráshash-nél használható fel a külső ciklusban; ugyanazt a sikeres tesztet nem futtatja rögtön újra. Új packteszt nem lesz permanent gate. |
+| Szimulátor | A [`MotorlessSkillSimulator`](../r2b4_orchestration/skill_simulation.py) a valódi PublicRobotRuntime, Brain-admission, UNIX-socket, async SDK és külön Python-worker útját használja. Fizikai adaptert nem komponál; mozgás és production-config restart nem elérhető. |
+| Közös eszközfelület | `learning.trial`, `evi.compile`, `replay.run`, `evidence.feedback` ugyanazokkal a handlerökkel elérhetők AgentCore-ból és a RobotInterface/SDK software capability-ként. A hosszú tanulási ciklus a fejlesztő CLI-ben fut; nem költözik a control interpreterbe vagy a rövid socketkérésekbe. |
+
+A szimulátor két konkrét igényt fed le: `threshold_detection` teljes, lineage-et
+megőrző szemantikus detektálást mér; `semantic_trace` megadott
+`simulation.*` resource-ok mintasorát és független expected result/reportokat
+ellenőriz. A trace eredeti measurement time, sequence/revision és lineage
+változatlan; régi recorded időből nem keletkezik élő freshness vagy motion
+authority. Ez elegendő custom Python-algoritmus, report és observation-válasz
+próbájához. Fizikai jelenet-, kamera-, recognition- vagy mozgásszimuláció nincs
+ráállítva a már meglévő V3-rendszerre.
+
+```bash
+r learn "Készíts skillt: simulation.scenario alapján olvasd végig a simulation.sample mintákat; a legalább 4 értékű teljes mintákat add vissza detections és samples_checked mezővel" \
+  --scenario docs/examples/skill_learning_threshold.json --provider gemini --json
+r learn "Értékeld és szükség szerint javítsd a detektálást" \
+  --skill SKILL_NEVE --scenario docs/examples/skill_learning_threshold.json --json
+r learn "A szemantikus observation labeljét egyszer jelentsd hri.reporttal; return reports=1" \
+  --scenario docs/examples/skill_learning_semantic_trace.json --json
+```
+
+A `--evidence BUNDLE --capture SOURCE.mcap` explicit, ellenőrzött korábbi
+robot-evidence-et adhat háttérként. Ez nem lesz a friss skillpróba eredménye.
+Az iterációk teljes eredménye `learning.json`, a próba mérése `measured.json`,
+a capture/EVI/replay azonos próbakönyvtárban marad; a provider a javításhoz
+szükséges konkrét hibát és kis evidence-szeletet kapja, a teljes adat
+query-on-demand elérhető. Nincs háttérben induló compiler vagy runtime
+postprocessor. Az offline műveletek a meglévő resident-runtime guardot tartják.
+
+`LEARNED` csak a megadott forgatókönyv független feltételeinek teljesülésekor
+adható. A skill `success` flagje, a pytest PASS, a compiler COMPLETE és a
+replay MATCH külön állítás. Forgatókönyv vagy szükséges evidence hiányában
+`INCOMPLETE`; source-változás, timeout, worker/process/cleanup vagy safety-hiba
+megszakítja a ciklust. Ilyen megszakítás után nincs automatikus robotikai retry.
+A modell elérhetetlensége explicit `FAILED`, a már mentett helyi skill
+futtatása továbbra sem függ az LLM-től.
+
+A [`skill_learning_probe.py`](../tools/skill_learning_probe.py) reprodukálható
+motor nélküli integrációs próba: szkriptelt provider létrehoz egy hiányosan
+tesztelt programot, a mért határeset-hiba javítást vált ki, a javított fájl
+megfelel, és újrafuttatása nulla modellhívást használ. A provider-double
+önmagában nem bizonyít hálózati LLM-generálást.
+
+### 17.1. Elvégzett motor nélküli bizonyítás — 2026-10-11
+
+* A célzott SDK/learning/simulator/evidence/launcher tesztek: **70 külön teszt PASS**
+  (69 az első körben; a journal-hibajavítás után 28 érintett teszt PASS,
+  közöttük egy új hibás tárolási próba);
+  a canonical `./r test`: **14 PASS**; `./r test release`: **23 PASS**.
+* A reprodukálható `python3 -m tools.skill_learning_probe --json` két
+  szkriptelt providerhívással generált és javított; a mentett skill újrapróbája
+  nulla providerhívással megfelelt. Mindhárom natív replay `MATCH`.
+  Helyi eredmény: `/tmp/r2b4-learning-proof-_p5qg5nd/proof.json`.
+* A valódi hálózati LLM két iterációban létrehozott, majd javított egy új
+  skillt. Az első program a rendelkezésre álló négy minta után tovább olvasott:
+  `SIMULATION_SOURCE_EXHAUSTED`. A visszaadott konkrét hiba alapján a javítás
+  a `simulation.scenario` mintaszámát használta. Ezután a teljes detektálás,
+  mintaszám és eredeti measurement lineage független ellenőrzése PASS lett.
+  A konfigurált Gemini után a meglévő failover OpenAI OAuth modellt használt;
+  a tényleges provider/modell az iteráció eseményeiben szerepel.
+  A mentett program újrafutása **nulla LLM-hívással** megfelelt.
+  Helyi eredmény: `/tmp/r2b4-real-llm-generation-b3ui9q85/proof.json`;
+  teljes iterációk: `/tmp/r2b4-learn-sim-c79kdhex/learning.json`.
+* Külön valódi Gemini-próba javította a már mentett `>` versus `>=`
+  határeset-hibát: a baseline sikeresen futott, de a független célmérés
+  FAILED lett; egy LLM-javítás után PASS. Teljes eredmény:
+  `/tmp/r2b4-learn-sim-rdvvnrsz/learning.json`.
+
+A valódi generálás és újrafutás mindhárom capture-je source-checked,
+COMPLETE, native replay `MATCH`, és minden offline final output nulla.
+A semantic-trace/report teszt külön bizonyítja a supplied measurement
+time/sequence/lineage változatlanságát és a report capture-envelope-ját.
+Hibás journal-path esetén a socketes report hibával tér vissza, és nem
+publikál sikeres reporteseményt.
+Összesített helyi evidence: `/tmp/r2b4-learning-final-j198jcxe/validation.json`
+(nyolc ellenőrzött capture és natív replay; a teljes artifactokra hivatkozik).
+Fizikai adapter vagy motor nem indult. A sikertelen korábbi provider- és
+bemenetértelmezési próbák nem kaptak `LEARNED` minősítést; artifactjaik
+megmaradtak. A bemeneti leírás most explicit SDK-read contractot ad, és a
+javítási prompt a skill visszatérési hibáját is megőrzi, méretkorláttal.
+
+Az authority- és async contract nem változott: a fejlesztői eredmények a felső
+célgazda információi; nem hoznak létre ALLOW-t, nem módosítanak lezárt
+TickInputs-ot, és nem térítenek vissza nagy raw payloadot a control islandbe.
+A motor nélküli bizonyítás nem bizonyít fizikai recognitiont, terepi
+célmegvalósulást, nyolcórás üzemet vagy RPi5 live CPU/GIL/jitter viselkedést.

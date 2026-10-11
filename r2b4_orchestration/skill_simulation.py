@@ -183,9 +183,13 @@ class MotorlessSkillSimulator:
     @staticmethod
     def scenario_descriptor(value=None):
         scenario = resolve_scenario(value)
+        input_contract = {"scenario_read": 'await robot.read("simulation.scenario")',
+                          "samples": "Each await robot.read(resource) consumes one current sample; preserve the returned object unchanged.",
+                          "parameters": "Only explicit skill parameters are passed as kwargs; the scenario is read through the SDK."}
         if scenario["kind"] == "semantic_trace":
-            return {**scenario, "source": "simulation", "scope": "Recorded semantic trace; original sample lineage/time retained, no live freshness claim."}
+            return {**scenario, "input_contract": input_contract, "source": "simulation", "scope": "Recorded semantic trace; original sample lineage/time retained, no live freshness claim."}
         return {**scenario, "resource": "simulation.sample", "source": "simulation",
+                "input_contract": input_contract,
                 "output": "Return {detections: [complete samples with value >= threshold], samples_checked: len(values)}",
                 "scope": "Semantic scalar detection and SDK/worker/Brain integration; no physical perception or motion."}
 
@@ -223,7 +227,8 @@ class MotorlessSkillSimulator:
                     except (OSError, ValueError):
                         connection.close()
                         continue
-                    priority = request.get("operation") in {"stop", "preempt", "revoke"}
+                    priority = (request.get("operation") in {"stop", "preempt", "revoke"}
+                                or request.get("action") in {"skill.stop", "skill.revoke", "v3.command.stop"})
                     slots = self._priority if priority else self._requests
                     if not slots.acquire(blocking=False):
                         connection.close()

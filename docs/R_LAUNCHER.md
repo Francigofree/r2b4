@@ -10,6 +10,7 @@ nem birtokol robotállapotot vagy külön végrehajtási utat.
 r skill /home/alba/project_r2b4/robot_skills/terkepesz_r2b4.py
 r skill terkepesz_r2b4 --parameters '{"duration_s": 30}' --json
 r skill                         # mentett skillek listája
+r learn "TELJES CÉL" --scenario docs/examples/skill_learning_threshold.json --json
 r evi                           # legutolsó lezárt MCAP feldolgozása
 r diag                          # legutolsó evidence teljes diagnosztikája
 r help skill
@@ -72,12 +73,13 @@ Az aktuális teljes lista: `r commands`; a részletes opciók: `r help PARANCS`.
 | Offline evidence és diagnosztika | `evi`, `diag`, `tune` |
 | Kamera | `cam` / `camera`: `status`, `on`, `off`, `photo`, `video` |
 | AI és voice | szöveges kérés, `--` sima LLM-prompt, `route`, `er2`, `chatgpt`, `voice` / `wake` |
-| Fejlesztés | `test`, `pytest`, `git`, `gitre`, `tools`, `tool` |
+| Fejlesztés | `learn`, `test`, `pytest`, `git`, `gitre`, `tools`, `tool` |
 | Host és telepítés | `host`, `sys`, `cpu`, `cpu2`, `disc`, `mem`, `temp`, `ps`, `net`, `usb`, `i2c`, `install`, `where`, `root`, `version` |
 
 Az új LCE-felületek a canonical `read` / `execute` útján is elérhetők:
 `skill.list`, `skill.*`, `observe.*`, `media.recorder.*`, `hri.report`,
-`source.*`, `docs.*`, `config.*`, `evi.*`, `diag.*`. A katalógus ezeket az owning
+`source.*`, `docs.*`, `config.*`, `evi.*`, `diag.*`, `learning.trial`,
+`replay.run`, `evidence.feedback`. A katalógus ezeket az owning
 capability-definíciókból követi, a mentett skillneveket forrásimport nélkül
 fedezi fel. Az élő elérhetőséget külön a `r caps` mutatja.
 A régebbi operator/control CLI-k és a privát runtime-worker nem kapnak új

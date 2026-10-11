@@ -900,8 +900,13 @@ class PublicRobotRuntime:
             # Reports share the producer sequence/clock envelope consumed by
             # the canonical capture follower. Drain the queue in order before
             # acknowledging journal delivery; a raw report row loses lineage.
+            with self._evidence_lock:
+                dropped_before = self._evidence_dropped
             self._queue_evidence("report", result)
             self._flush_evidence()
+            with self._evidence_lock:
+                if self._evidence_dropped != dropped_before:
+                    raise RuntimeError("REPORT_JOURNAL_DELIVERY_FAILED")
             self._sdk_event("report", result)
             return result
         if action.startswith("skill."):

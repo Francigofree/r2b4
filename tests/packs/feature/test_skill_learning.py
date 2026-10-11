@@ -46,6 +46,7 @@ class RepairProvider:
         feedback = json.loads(context.split("R2B4_LEARNING_CONTEXT_JSON=", 1)[1])
         assert feedback["previous_iteration"]["assessment"]["checks"][0]["actual"] == [5]
         assert feedback["previous_iteration"]["assessment"]["checks"][0]["expected"] == [4, 5]
+        assert feedback["previous_iteration"]["trial"]["runtime"]["result"]["matches"] == [5]
         assert feedback["selected_skill"]["source_hash"]
         assert feedback["selected_skill"]["source"] == FAULTY
         return AgentModelReply(self.model, skill_proposal={"kind": "update_skill",

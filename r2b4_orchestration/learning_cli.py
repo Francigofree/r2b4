@@ -62,8 +62,9 @@ def run_learning(project_root, goal, *, model=None, provider=None, skill=None, p
         raise ValueError("--capture requires --evidence")
     with MotorlessSkillSimulator(root, library) as simulator:
         simulator.goal_text = goal
+        descriptor = None
         if scenario is not None:
-            simulator.scenario_descriptor(scenario)
+            descriptor = simulator.scenario_descriptor(scenario)
             simulator.source.prepare(scenario, "simulation-discovery")
         # A simulation has no production-config restart capability. The same
         # owning read/evidence/skill tools remain available in this experiment.
@@ -79,6 +80,7 @@ def run_learning(project_root, goal, *, model=None, provider=None, skill=None, p
                                  test_runner=lambda name, **kwargs: test_skill(library, name, **kwargs),
                                  system_prompt=PromptAssembler(root / "conf" / "r2b4_agent_system.md").system_prompt)
         summary = loop.run(goal, skill=skill, parameters=parameters, scenario=scenario,
+                           scenario_descriptor=descriptor,
                            max_iterations=max_iterations, timeout_s=timeout_s,
                            evidence=background, cancel_event=cancel_event, event_sink=event_sink)
         summary["artifact_directory"] = str(simulator.root)

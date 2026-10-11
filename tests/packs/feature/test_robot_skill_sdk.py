@@ -601,3 +601,17 @@ def test_hri_report_journal_records_delivery_and_rejects_unavailable_audio(tmp_p
             assert events["events"][0]["event"]["text"] == text
             assert backend.calls == []
     asyncio.run(scenario())
+
+
+def test_failed_report_storage_never_acknowledges_delivery_or_publishes_a_report(tmp_path):
+    async def scenario():
+        async with robot_service(tmp_path) as (owner, backend, sdk):
+            journal = tmp_path / "runtime" / "public_world" / "events.ndjson"
+            journal.mkdir(parents=True)
+            with pytest.raises(RuntimeError, match="REPORT_JOURNAL_DELIVERY_FAILED"):
+                await sdk.call("hri.report", text="This report could not be stored.")
+            assert owner._health_error.startswith("EVIDENCE_WRITE_FAILED:")
+            events = await sdk.request("events", kinds=["report"])
+            assert events["events"] == []
+            assert backend.calls == []
+    asyncio.run(scenario())
