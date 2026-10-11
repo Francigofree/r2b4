@@ -1,0 +1,3231 @@
+{
+  "admission": {
+    "analyzer_id": "navigation",
+    "applicable": true,
+    "checked": {
+      "missing_topics": [],
+      "missing_views": [],
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "layers/L4"
+      ],
+      "required_topics": [
+        "/r2b4/tick"
+      ],
+      "required_views": [
+        "layers/L5",
+        "layers/L6",
+        "layers/L7",
+        "layers/L8"
+      ],
+      "verification_status": "PASS"
+    },
+    "coverage": {
+      "optional": "COMPLETE",
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "layers/L4"
+      ],
+      "required": "COMPLETE"
+    },
+    "reasons": [],
+    "state": "APPLICABLE"
+  },
+  "analyzer_id": "navigation",
+  "contract": {
+    "analyzer_id": "navigation",
+    "contract_version": 2,
+    "description": "L4-L8 navigation goals, candidates, selections and requested motion distribution.",
+    "optional_views": [
+      "layers/L4"
+    ],
+    "required_topics": [
+      "/r2b4/tick"
+    ],
+    "required_views": [
+      "layers/L5",
+      "layers/L6",
+      "layers/L7",
+      "layers/L8"
+    ]
+  },
+  "coverage": {
+    "optional": "COMPLETE",
+    "optional_views_missing": [],
+    "optional_views_present": [
+      "layers/L4"
+    ],
+    "required": "COMPLETE"
+  },
+  "episodes": [
+    {
+      "duration_ns": 200001340,
+      "end_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7923496420126,
+        "message_id": "msg-000000000254",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1386,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "episode_type": "NAVIGATION_STOP_REASON",
+      "field_path": "/stop_reason",
+      "row_count": 3,
+      "start_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7923296418786,
+        "message_id": "msg-000000000246",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1376,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "value": "LOCALIZATION_HOLD",
+      "view": "layers/L8"
+    },
+    {
+      "duration_ns": 0,
+      "end_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7923596410768,
+        "message_id": "msg-000000000255",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1391,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "episode_type": "NAVIGATION_STOP_REASON",
+      "field_path": "/stop_reason",
+      "row_count": 1,
+      "start_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7923596410768,
+        "message_id": "msg-000000000255",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1391,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "value": "LOCAL_COSTMAP_STALE",
+      "view": "layers/L8"
+    },
+    {
+      "duration_ns": 0,
+      "end_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7923698323198,
+        "message_id": "msg-000000000264",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1396,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "episode_type": "NAVIGATION_STOP_REASON",
+      "field_path": "/stop_reason",
+      "row_count": 1,
+      "start_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7923698323198,
+        "message_id": "msg-000000000264",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1396,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "value": "PLANNER_PENDING_NO_VALID_OBJECTIVE",
+      "view": "layers/L8"
+    },
+    {
+      "duration_ns": 2796601513,
+      "end_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7926896483380,
+        "message_id": "msg-000000000380",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1555,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "episode_type": "NAVIGATION_STOP_REASON",
+      "field_path": "/stop_reason",
+      "row_count": 29,
+      "start_ref": {
+        "field_path": "/stop_reason",
+        "log_time_ns": 7924099881867,
+        "message_id": "msg-000000000279",
+        "source_pointer": "/expected/layers/L8",
+        "tick_id": 1416,
+        "topic": "/r2b4/tick",
+        "view": "layers/L8"
+      },
+      "value": "COMMAND_STOP",
+      "view": "layers/L8"
+    }
+  ],
+  "evidence": {
+    "compiler_git_commit": "09867e14163790294765917831658d7daed99580",
+    "compiler_git_dirty": true,
+    "compiler_status": "COMPLETE",
+    "field_path_count": 1701,
+    "json_decoded_messages": 381,
+    "message_count": 381,
+    "message_end_time_ns": 8085980769800,
+    "message_start_time_ns": 7916899804851,
+    "normalized_views": 1593,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20261011_123721_7312_capture.evidence",
+    "quarantined_messages": 0,
+    "source_integrity": "COMPLETE",
+    "source_path": "/home/alba/project_r2b4/runtime/captures/v3_20261011_123721_7312_capture.mcap",
+    "source_sha256": "321d36212fe957f9faa5407ceba9c41bc410f808fd0990650146ff26472e89bb",
+    "source_snapshot_size": 1470860,
+    "tick_rate_hz_estimate": 10.003322574583512,
+    "topics": {
+      "/r2b4/event": 279,
+      "/r2b4/runtime": 1,
+      "/r2b4/tick": 101
+    },
+    "verification_source_checked": false,
+    "verification_status": "PASS",
+    "view_counts": {
+      "events": 279,
+      "layers/L1": 101,
+      "layers/L10": 101,
+      "layers/L11": 101,
+      "layers/L12": 101,
+      "layers/L2": 101,
+      "layers/L3": 101,
+      "layers/L4": 101,
+      "layers/L5": 101,
+      "layers/L6": 101,
+      "layers/L7": 101,
+      "layers/L8": 101,
+      "layers/L9": 101,
+      "runtime": 1,
+      "ticks": 101
+    }
+  },
+  "metrics": {
+    "profiles": {
+      "layers/L4": {
+        "distinct_message_count": 101,
+        "field_count": 0,
+        "fields": {},
+        "first_log_time_ns": 7916899804851,
+        "last_log_time_ns": 7926896483380,
+        "row_count": 101,
+        "view": "layers/L4"
+      },
+      "layers/L5": {
+        "distinct_message_count": 101,
+        "field_count": 11,
+        "fields": {
+          "/constraints/corridor_radius_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/constraints/corridor_radius_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.3
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 0.3,
+              "mean": 0.3000000000000005,
+              "min": 0.3,
+              "nonzero_count": 101
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "float": 101
+            }
+          },
+          "/constraints/goal_tolerance_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/constraints/goal_tolerance_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.08
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 0.08,
+              "mean": 0.08000000000000006,
+              "min": 0.08,
+              "nonzero_count": 101
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "float": 101
+            }
+          },
+          "/constraints/max_omega_rad_s": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/constraints/max_omega_rad_s",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 1.4
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 1.4,
+              "mean": 1.4000000000000026,
+              "min": 1.4,
+              "nonzero_count": 101
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "float": 101
+            }
+          },
+          "/explore_preferences/explore_local_goal_distance_weight": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 72,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/explore_preferences/explore_local_goal_distance_weight",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.05
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 72,
+              "max": 0.05,
+              "mean": 0.04999999999999993,
+              "min": 0.05,
+              "nonzero_count": 72
+            },
+            "rows_present": 72,
+            "top_values": [],
+            "types": {
+              "float": 72
+            }
+          },
+          "/explore_preferences/explore_local_goal_max_distance_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 72,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/explore_preferences/explore_local_goal_max_distance_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.55
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 72,
+              "max": 0.55,
+              "mean": 0.5499999999999998,
+              "min": 0.55,
+              "nonzero_count": 72
+            },
+            "rows_present": 72,
+            "top_values": [],
+            "types": {
+              "float": 72
+            }
+          },
+          "/explore_preferences/explore_local_goal_min_distance_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 72,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/explore_preferences/explore_local_goal_min_distance_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.4
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 72,
+              "max": 0.4,
+              "mean": 0.39999999999999947,
+              "min": 0.4,
+              "nonzero_count": 72
+            },
+            "rows_present": 72,
+            "top_values": [],
+            "types": {
+              "float": 72
+            }
+          },
+          "/explore_preferences/local_goal_clearance_weight": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 72,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/explore_preferences/local_goal_clearance_weight",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.35
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 72,
+              "max": 0.35,
+              "mean": 0.35000000000000037,
+              "min": 0.35,
+              "nonzero_count": 72
+            },
+            "rows_present": 72,
+            "top_values": [],
+            "types": {
+              "float": 72
+            }
+          },
+          "/explore_preferences/local_goal_forward_weight": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 72,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/explore_preferences/local_goal_forward_weight",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.0
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 72,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "nonzero_count": 0
+            },
+            "rows_present": 72,
+            "top_values": [],
+            "types": {
+              "float": 72
+            }
+          },
+          "/explore_preferences/local_goal_novelty_weight": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 72,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/explore_preferences/local_goal_novelty_weight",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": 0.1
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 72,
+              "max": 0.1,
+              "mean": 0.09999999999999987,
+              "min": 0.1,
+              "nonzero_count": 72
+            },
+            "rows_present": 72,
+            "top_values": [],
+            "types": {
+              "float": 72
+            }
+          },
+          "/stop_reason": {
+            "categorical_distinct_values": 2,
+            "change_count": 1,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/stop_reason",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 72,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 72,
+                "value": "null"
+              },
+              {
+                "count": 29,
+                "value": "\"COMMAND_STOP\""
+              }
+            ],
+            "types": {
+              "null": 72,
+              "str": 29
+            }
+          },
+          "/velocity_target": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/velocity_target",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L5",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L5"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 101,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 101,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 101
+            }
+          }
+        },
+        "first_log_time_ns": 7916899804851,
+        "last_log_time_ns": 7926896483380,
+        "row_count": 101,
+        "view": "layers/L5"
+      },
+      "layers/L6": {
+        "distinct_message_count": 101,
+        "field_count": 28,
+        "fields": {
+          "/corridor_radius_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/corridor_radius_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 0.0
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "nonzero_count": 0
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "float": 101
+            }
+          },
+          "/goal_selected_ns": {
+            "categorical_distinct_values": 1,
+            "change_count": 4,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/goal_selected_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 7912056860914
+              }
+            ],
+            "null_count": 34,
+            "numeric": {
+              "count": 67,
+              "max": 7920098221710.0,
+              "mean": 7916137551467.194,
+              "min": 7912056860914.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 34,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "int": 67,
+              "null": 34
+            }
+          },
+          "/goal_selection_reason": {
+            "categorical_distinct_values": 2,
+            "change_count": 3,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/goal_selection_reason",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "GOAL_MAX_AGE"
+              }
+            ],
+            "null_count": 34,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"GOAL_MAX_AGE\""
+              },
+              {
+                "count": 34,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 34,
+              "str": 67
+            }
+          },
+          "/local_goal": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 34,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/local_goal",
+                  "log_time_ns": 7923296418786,
+                  "message_id": "msg-000000000246",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1376,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 34,
+            "rows_present": 34,
+            "top_values": [
+              {
+                "count": 34,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 34
+            }
+          },
+          "/local_goal/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/local_goal/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "Waypoint"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"Waypoint\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/local_goal/x_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 1,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/local_goal/x_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 1.2288717119072157
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 1.2288717119072157,
+              "mean": 0.9962730953519775,
+              "min": 0.7705156145777735,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/local_goal/y_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 1,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/local_goal/y_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": -0.5163805987482167
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 0.06277632381837828,
+              "mean": -0.22248007087860128,
+              "min": -0.5163805987482167,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/local_goal/yaw_rad": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/local_goal/yaw_rad",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 67,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 67
+            }
+          },
+          "/motion_validity": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 33,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity",
+                  "log_time_ns": 7923296418786,
+                  "message_id": "msg-000000000246",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1376,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 33,
+            "rows_present": 33,
+            "top_values": [
+              {
+                "count": 33,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 33
+            }
+          },
+          "/motion_validity/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "MotionValidity"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "\"MotionValidity\""
+              }
+            ],
+            "types": {
+              "str": 68
+            }
+          },
+          "/motion_validity/frame_id": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/frame_id",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "R2B4_ODOM_LOCAL"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "\"R2B4_ODOM_LOCAL\""
+              }
+            ],
+            "types": {
+              "str": 68
+            }
+          },
+          "/motion_validity/geometry_captured_ns": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/geometry_captured_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 68,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 68
+            }
+          },
+          "/motion_validity/geometry_revision": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/geometry_revision",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 68,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 68
+            }
+          },
+          "/motion_validity/localization_requirement/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "LocalizationRequirement"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "\"LocalizationRequirement\""
+              }
+            ],
+            "types": {
+              "str": 68
+            }
+          },
+          "/motion_validity/localization_requirement/global_position": {
+            "boolean": {
+              "false": 68,
+              "true": 0
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/global_position",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": false
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "false"
+              }
+            ],
+            "types": {
+              "bool": 68
+            }
+          },
+          "/motion_validity/localization_requirement/heading": {
+            "boolean": {
+              "false": 0,
+              "true": 68
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/heading",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": true
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "true"
+              }
+            ],
+            "types": {
+              "bool": 68
+            }
+          },
+          "/motion_validity/localization_requirement/local_translation": {
+            "boolean": {
+              "false": 0,
+              "true": 68
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/local_translation",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": true
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "true"
+              }
+            ],
+            "types": {
+              "bool": 68
+            }
+          },
+          "/motion_validity/scope": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/scope",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "EXPLORE:odom0"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "\"EXPLORE:odom0\""
+              }
+            ],
+            "types": {
+              "str": 68
+            }
+          },
+          "/motion_validity/source_context/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/source_context/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "TickContext"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 68,
+            "top_values": [
+              {
+                "count": 68,
+                "value": "\"TickContext\""
+              }
+            ],
+            "types": {
+              "str": 68
+            }
+          },
+          "/motion_validity/source_context/monotonic_ns": {
+            "categorical_distinct_values": 0,
+            "change_count": 59,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/source_context/monotonic_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 7916856431805
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 68,
+              "max": 7923900110936.0,
+              "mean": 7920172394525.985,
+              "min": 7916856431805.0,
+              "nonzero_count": 68
+            },
+            "rows_present": 68,
+            "top_values": [],
+            "types": {
+              "int": 68
+            }
+          },
+          "/motion_validity/source_context/tick_id": {
+            "categorical_distinct_values": 0,
+            "change_count": 59,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/source_context/tick_id",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 1056
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 68,
+              "max": 1406.0,
+              "mean": 1220.8088235294117,
+              "min": 1056.0,
+              "nonzero_count": 68
+            },
+            "rows_present": 68,
+            "top_values": [],
+            "types": {
+              "int": 68
+            }
+          },
+          "/motion_validity/valid_until_ns": {
+            "categorical_distinct_values": 0,
+            "change_count": 59,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 68,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/valid_until_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 7917206431805
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 68,
+              "max": 7924250110936.0,
+              "mean": 7920522394525.985,
+              "min": 7917206431805.0,
+              "nonzero_count": 68
+            },
+            "rows_present": 68,
+            "top_values": [],
+            "types": {
+              "int": 68
+            }
+          },
+          "/progress": {
+            "categorical_distinct_values": 0,
+            "change_count": 5,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/progress",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 0.0234375
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 0.02734375,
+              "mean": 0.017307394801980198,
+              "min": 0.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "float": 101
+            }
+          },
+          "/reason": {
+            "categorical_distinct_values": 5,
+            "change_count": 5,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/reason",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 67,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "null"
+              },
+              {
+                "count": 29,
+                "value": "\"COMMAND_STOP\""
+              },
+              {
+                "count": 3,
+                "value": "\"LOCALIZATION_HOLD\""
+              },
+              {
+                "count": 1,
+                "value": "\"LOCAL_COSTMAP_STALE\""
+              },
+              {
+                "count": 1,
+                "value": "\"PLANNER_PENDING\""
+              }
+            ],
+            "types": {
+              "null": 67,
+              "str": 34
+            }
+          },
+          "/route_waypoint_count": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/route_waypoint_count",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 0
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "nonzero_count": 0
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "int": 101
+            }
+          },
+          "/status": {
+            "categorical_distinct_values": 4,
+            "change_count": 5,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/status",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": "ACTIVE"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"ACTIVE\""
+              },
+              {
+                "count": 32,
+                "value": "\"IDLE\""
+              },
+              {
+                "count": 1,
+                "value": "\"INVALIDATED\""
+              },
+              {
+                "count": 1,
+                "value": "\"PENDING\""
+              }
+            ],
+            "types": {
+              "str": 101
+            }
+          },
+          "/trajectory_candidate_count": {
+            "categorical_distinct_values": 0,
+            "change_count": 3,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory_candidate_count",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": 54
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 54.0,
+              "mean": 35.82178217821782,
+              "min": 0.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "int": 101
+            }
+          },
+          "/velocity_target": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/velocity_target",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L6",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L6"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 101,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 101,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 101
+            }
+          }
+        },
+        "first_log_time_ns": 7916899804851,
+        "last_log_time_ns": 7926896483380,
+        "row_count": 101,
+        "view": "layers/L6"
+      },
+      "layers/L7": {
+        "distinct_message_count": 101,
+        "field_count": 20,
+        "fields": {
+          "/priority": {
+            "categorical_distinct_values": 0,
+            "change_count": 3,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/priority",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 100
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 100.0,
+              "mean": 66.33663366336634,
+              "min": 0.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "int": 101
+            }
+          },
+          "/selected_source": {
+            "categorical_distinct_values": 2,
+            "change_count": 3,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/selected_source",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": "navigation.trajectory"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"navigation.trajectory\""
+              },
+              {
+                "count": 34,
+                "value": "\"stop\""
+              }
+            ],
+            "types": {
+              "str": 101
+            }
+          },
+          "/selection_reason": {
+            "categorical_distinct_values": 11,
+            "change_count": 18,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/selection_reason",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": "BEST_TRAJECTORY:trajectory-02-00"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 30,
+                "value": "\"BEST_TRAJECTORY:trajectory-02-00\""
+              },
+              {
+                "count": 29,
+                "value": "\"COMMAND_STOP\""
+              },
+              {
+                "count": 10,
+                "value": "\"BEST_TRAJECTORY:trajectory-01-00\""
+              },
+              {
+                "count": 10,
+                "value": "\"BEST_TRAJECTORY:trajectory-00-08\""
+              },
+              {
+                "count": 8,
+                "value": "\"BEST_TRAJECTORY:trajectory-02-08\""
+              },
+              {
+                "count": 6,
+                "value": "\"BEST_TRAJECTORY:trajectory-01-08\""
+              },
+              {
+                "count": 3,
+                "value": "\"LOCALIZATION_HOLD\""
+              },
+              {
+                "count": 2,
+                "value": "\"CONTINUITY_HOLD:trajectory-01-08\""
+              },
+              {
+                "count": 1,
+                "value": "\"CONTINUITY_HOLD:trajectory-02-08\""
+              },
+              {
+                "count": 1,
+                "value": "\"LOCAL_COSTMAP_STALE\""
+              },
+              {
+                "count": 1,
+                "value": "\"PLANNER_PENDING_NO_VALID_OBJECTIVE\""
+              }
+            ],
+            "types": {
+              "str": 101
+            }
+          },
+          "/target_waypoint": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/target_waypoint",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 101,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 101,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 101
+            }
+          },
+          "/trajectory": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 34,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory",
+                  "log_time_ns": 7923296418786,
+                  "message_id": "msg-000000000246",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1376,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 34,
+            "rows_present": 34,
+            "top_values": [
+              {
+                "count": 34,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 34
+            }
+          },
+          "/trajectory/candidate_id": {
+            "categorical_distinct_values": 5,
+            "change_count": 11,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/candidate_id",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": "trajectory-02-00"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 30,
+                "value": "\"trajectory-02-00\""
+              },
+              {
+                "count": 10,
+                "value": "\"trajectory-01-00\""
+              },
+              {
+                "count": 10,
+                "value": "\"trajectory-00-08\""
+              },
+              {
+                "count": 9,
+                "value": "\"trajectory-02-08\""
+              },
+              {
+                "count": 8,
+                "value": "\"trajectory-01-08\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/trajectory/collision": {
+            "boolean": {
+              "false": 67,
+              "true": 0
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/collision",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": false
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "false"
+              }
+            ],
+            "types": {
+              "bool": 67
+            }
+          },
+          "/trajectory/horizon_ns": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/horizon_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 1000000000
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 1000000000.0,
+              "mean": 1000000000.0,
+              "min": 1000000000.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "int": 67
+            }
+          },
+          "/trajectory/min_clearance_m": {
+            "categorical_distinct_values": 0,
+            "change_count": 58,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/min_clearance_m",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 0.18379762595145951
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 0.4631043262268737,
+              "mean": 0.33959728846502507,
+              "min": 0.1629421611371079,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/trajectory/novelty_score": {
+            "categorical_distinct_values": 0,
+            "change_count": 58,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/novelty_score",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 1.0
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 1.0,
+              "mean": 0.20934818471767466,
+              "min": 0.008264462809917356,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/trajectory/omega_rad_s": {
+            "categorical_distinct_values": 0,
+            "change_count": 11,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/omega_rad_s",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": -1.012088838909193
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 1.0683159966263704,
+              "mean": -0.1737167410068017,
+              "min": -1.012088838909193,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/trajectory/progress_potential_score": {
+            "categorical_distinct_values": 0,
+            "change_count": 56,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/progress_potential_score",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 0.7687520811196076
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 1.0,
+              "mean": 0.7368516864901311,
+              "min": 0.06835339872794954,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/trajectory/progress_score": {
+            "categorical_distinct_values": 0,
+            "change_count": 51,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/progress_score",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 0.21820980920064725
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 0.755534295063034,
+              "mean": 0.33317647087332947,
+              "min": 0.0,
+              "nonzero_count": 57
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/trajectory/progress_viable": {
+            "boolean": {
+              "false": 0,
+              "true": 67
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/progress_viable",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": true
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "true"
+              }
+            ],
+            "types": {
+              "bool": 67
+            }
+          },
+          "/trajectory/sample_count": {
+            "categorical_distinct_values": 0,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/sample_count",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 10
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 10.0,
+              "mean": 10.0,
+              "min": 10.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "int": 67
+            }
+          },
+          "/trajectory/smoothness_score": {
+            "categorical_distinct_values": 0,
+            "change_count": 51,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/smoothness_score",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 0.9916139542523598
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 0.9939540241637908,
+              "mean": 0.49345356139621127,
+              "min": 0.0,
+              "nonzero_count": 54
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/trajectory/total_score": {
+            "categorical_distinct_values": 0,
+            "change_count": 58,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/total_score",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 0.628241891728456
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 0.6666910163505176,
+              "mean": 0.4542491427417734,
+              "min": 0.12832275407933816,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/trajectory/v_mps": {
+            "categorical_distinct_values": 0,
+            "change_count": 11,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/trajectory/v_mps",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": 0.18
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 0.18,
+              "mean": 0.13029850746268648,
+              "min": 0.0,
+              "nonzero_count": 57
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/transition_allowed": {
+            "boolean": {
+              "false": 34,
+              "true": 67
+            },
+            "categorical_distinct_values": 2,
+            "change_count": 3,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/transition_allowed",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": true
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "true"
+              },
+              {
+                "count": 34,
+                "value": "false"
+              }
+            ],
+            "types": {
+              "bool": 101
+            }
+          },
+          "/velocity_target": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/velocity_target",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L7",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L7"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 101,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 101,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 101
+            }
+          }
+        },
+        "first_log_time_ns": 7916899804851,
+        "last_log_time_ns": 7926896483380,
+        "row_count": 101,
+        "view": "layers/L7"
+      },
+      "layers/L8": {
+        "distinct_message_count": 101,
+        "field_count": 22,
+        "fields": {
+          "/approved_velocity": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 34,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/approved_velocity",
+                  "log_time_ns": 7923296418786,
+                  "message_id": "msg-000000000246",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1376,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 34,
+            "rows_present": 34,
+            "top_values": [
+              {
+                "count": 34,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 34
+            }
+          },
+          "/approved_velocity/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/approved_velocity/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": "VelocityTarget"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"VelocityTarget\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/approved_velocity/omega_rad_s": {
+            "categorical_distinct_values": 0,
+            "change_count": 11,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/approved_velocity/omega_rad_s",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": -1.012088838909193
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 1.0683159966263704,
+              "mean": -0.1737167410068017,
+              "min": -1.012088838909193,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/approved_velocity/v_mps": {
+            "categorical_distinct_values": 0,
+            "change_count": 11,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/approved_velocity/v_mps",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": 0.18
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 0.18,
+              "mean": 0.13029850746268648,
+              "min": 0.0,
+              "nonzero_count": 57
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "float": 67
+            }
+          },
+          "/motion_validity": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 34,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity",
+                  "log_time_ns": 7923296418786,
+                  "message_id": "msg-000000000246",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1376,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 34,
+            "rows_present": 34,
+            "top_values": [
+              {
+                "count": 34,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 34
+            }
+          },
+          "/motion_validity/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": "MotionValidity"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"MotionValidity\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/motion_validity/frame_id": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/frame_id",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": "R2B4_ODOM_LOCAL"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"R2B4_ODOM_LOCAL\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/motion_validity/geometry_captured_ns": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/geometry_captured_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 67,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 67
+            }
+          },
+          "/motion_validity/geometry_revision": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/geometry_revision",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 67,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "null"
+              }
+            ],
+            "types": {
+              "null": 67
+            }
+          },
+          "/motion_validity/localization_requirement/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": "LocalizationRequirement"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"LocalizationRequirement\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/motion_validity/localization_requirement/global_position": {
+            "boolean": {
+              "false": 67,
+              "true": 0
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/global_position",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": false
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "false"
+              }
+            ],
+            "types": {
+              "bool": 67
+            }
+          },
+          "/motion_validity/localization_requirement/heading": {
+            "boolean": {
+              "false": 0,
+              "true": 67
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/heading",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": true
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "true"
+              }
+            ],
+            "types": {
+              "bool": 67
+            }
+          },
+          "/motion_validity/localization_requirement/local_translation": {
+            "boolean": {
+              "false": 0,
+              "true": 67
+            },
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/localization_requirement/local_translation",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": true
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "true"
+              }
+            ],
+            "types": {
+              "bool": 67
+            }
+          },
+          "/motion_validity/scope": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/scope",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": "EXPLORE:odom0"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"EXPLORE:odom0\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/motion_validity/source_context/__type__": {
+            "categorical_distinct_values": 1,
+            "change_count": 0,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/source_context/__type__",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": "TickContext"
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 67,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "\"TickContext\""
+              }
+            ],
+            "types": {
+              "str": 67
+            }
+          },
+          "/motion_validity/source_context/monotonic_ns": {
+            "categorical_distinct_values": 0,
+            "change_count": 58,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/source_context/monotonic_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": 7916856431805
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 7923900110936.0,
+              "mean": 7920119768724.91,
+              "min": 7916856431805.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "int": 67
+            }
+          },
+          "/motion_validity/source_context/tick_id": {
+            "categorical_distinct_values": 0,
+            "change_count": 58,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/source_context/tick_id",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": 1056
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 1406.0,
+              "mean": 1218.1940298507463,
+              "min": 1056.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "int": 67
+            }
+          },
+          "/motion_validity/valid_until_ns": {
+            "categorical_distinct_values": 0,
+            "change_count": 58,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 67,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/motion_validity/valid_until_ns",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": 7917206431805
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 67,
+              "max": 7924250110936.0,
+              "mean": 7920469768724.91,
+              "min": 7917206431805.0,
+              "nonzero_count": 67
+            },
+            "rows_present": 67,
+            "top_values": [],
+            "types": {
+              "int": 67
+            }
+          },
+          "/requested_omega_rad_s": {
+            "categorical_distinct_values": 0,
+            "change_count": 26,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/requested_omega_rad_s",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": -1.0080345300570535
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 1.4,
+              "mean": -0.07487727270900403,
+              "min": -1.012088838909193,
+              "nonzero_count": 67
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "float": 101
+            }
+          },
+          "/requested_v_mps": {
+            "categorical_distinct_values": 0,
+            "change_count": 21,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/requested_v_mps",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": 0.17927894117064697
+              }
+            ],
+            "null_count": 0,
+            "numeric": {
+              "count": 101,
+              "max": 0.18,
+              "mean": 0.0841219426574493,
+              "min": 0.0,
+              "nonzero_count": 57
+            },
+            "rows_present": 101,
+            "top_values": [],
+            "types": {
+              "float": 101
+            }
+          },
+          "/stop_reason": {
+            "categorical_distinct_values": 5,
+            "change_count": 5,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/stop_reason",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": null
+              }
+            ],
+            "null_count": 67,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "null"
+              },
+              {
+                "count": 29,
+                "value": "\"COMMAND_STOP\""
+              },
+              {
+                "count": 3,
+                "value": "\"LOCALIZATION_HOLD\""
+              },
+              {
+                "count": 1,
+                "value": "\"LOCAL_COSTMAP_STALE\""
+              },
+              {
+                "count": 1,
+                "value": "\"PLANNER_PENDING_NO_VALID_OBJECTIVE\""
+              }
+            ],
+            "types": {
+              "null": 67,
+              "str": 34
+            }
+          },
+          "/transition_allowed": {
+            "boolean": {
+              "false": 34,
+              "true": 67
+            },
+            "categorical_distinct_values": 2,
+            "change_count": 3,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
+            "count": 101,
+            "examples": [
+              {
+                "evidence_ref": {
+                  "field_path": "/transition_allowed",
+                  "log_time_ns": 7916899804851,
+                  "message_id": "msg-000000000002",
+                  "source_pointer": "/expected/layers/L8",
+                  "tick_id": 1058,
+                  "topic": "/r2b4/tick",
+                  "view": "layers/L8"
+                },
+                "value": true
+              }
+            ],
+            "null_count": 0,
+            "rows_present": 101,
+            "top_values": [
+              {
+                "count": 67,
+                "value": "true"
+              },
+              {
+                "count": 34,
+                "value": "false"
+              }
+            ],
+            "types": {
+              "bool": 101
+            }
+          }
+        },
+        "first_log_time_ns": 7916899804851,
+        "last_log_time_ns": 7926896483380,
+        "row_count": 101,
+        "view": "layers/L8"
+      }
+    },
+    "requested_motion_classification": {
+      "classified_motion_rows": 101,
+      "missing_pair_rows": 0,
+      "motion_mode_counts": {
+        "forward_straight": 0,
+        "forward_turning": 57,
+        "pivot": 10,
+        "reverse_straight": 0,
+        "reverse_turning": 0,
+        "stopped": 34,
+        "unclassified_missing_pair": 0
+      },
+      "omega_sign_counts": {
+        "near_zero": 34,
+        "negative": 40,
+        "positive": 27
+      },
+      "thresholds": {
+        "angular_epsilon_rad_s": 0.02,
+        "linear_epsilon_mps": 0.005
+      }
+    },
+    "stop_reason_counts": {
+      "COMMAND_STOP": 29,
+      "LOCALIZATION_HOLD": 3,
+      "LOCAL_COSTMAP_STALE": 1,
+      "PLANNER_PENDING_NO_VALID_OBJECTIVE": 1
+    }
+  },
+  "observations": [
+    {
+      "code": "NAVIGATION_REQUESTED_MOTION_DISTRIBUTION",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [
+            "/requested_v_mps",
+            "/requested_omega_rad_s"
+          ],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L8"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        {
+          "field_path": "/requested_omega_rad_s",
+          "log_time_ns": 7916899804851,
+          "message_id": "msg-000000000002",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 1058,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        {
+          "field_path": "/requested_omega_rad_s",
+          "log_time_ns": 7916997541055,
+          "message_id": "msg-000000000009",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 1063,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        {
+          "field_path": "/requested_omega_rad_s",
+          "log_time_ns": 7917097639142,
+          "message_id": "msg-000000000010",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 1068,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        {
+          "field_path": "/requested_omega_rad_s",
+          "log_time_ns": 7917197678507,
+          "message_id": "msg-000000000017",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 1073,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        {
+          "field_path": "/requested_omega_rad_s",
+          "log_time_ns": 7917297722520,
+          "message_id": "msg-000000000018",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 1078,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        {
+          "field_path": "/requested_omega_rad_s",
+          "log_time_ns": 7917398668316,
+          "message_id": "msg-000000000025",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 1083,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        }
+      ],
+      "kind": "DERIVED_MEASUREMENT",
+      "message": "L8 requested linear/angular velocities are classified into independent motion-mode and omega-sign distributions by explicit numeric thresholds.",
+      "values": {
+        "classified_motion_rows": 101,
+        "missing_pair_rows": 0,
+        "motion_mode_counts": {
+          "forward_straight": 0,
+          "forward_turning": 57,
+          "pivot": 10,
+          "reverse_straight": 0,
+          "reverse_turning": 0,
+          "stopped": 34,
+          "unclassified_missing_pair": 0
+        },
+        "omega_sign_counts": {
+          "near_zero": 34,
+          "negative": 40,
+          "positive": 27
+        },
+        "thresholds": {
+          "angular_epsilon_rad_s": 0.02,
+          "linear_epsilon_mps": 0.005
+        }
+      }
+    },
+    {
+      "code": "NAVIGATION_STOP_REASON_EPISODES",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [
+            "/stop_reason"
+          ],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L8"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "DERIVED_MEASUREMENT",
+      "message": "Contiguous non-null L8 stop_reason runs are represented as time-bounded diagnostic episodes.",
+      "values": {
+        "episode_count": 4,
+        "reason_counts": {
+          "COMMAND_STOP": 29,
+          "LOCALIZATION_HOLD": 3,
+          "LOCAL_COSTMAP_STALE": 1,
+          "PLANNER_PENDING_NO_VALID_OBJECTIVE": 1
+        }
+      }
+    }
+  ],
+  "producer": {
+    "diag_source_dirty": false,
+    "diag_source_sha256": "abf424c56c5a905679ca7505f72e9fe1c5bd9e22de908059f4bb4cbc9db02c41",
+    "generated_at_utc": "2026-10-11T10:56:19.069283Z",
+    "git_commit": "09867e14163790294765917831658d7daed99580",
+    "platform": "Linux-6.12.47+rpt-rpi-2712-aarch64-with-glibc2.36",
+    "python_version": "3.11.2",
+    "schema": "R2B4_DIAG_PRODUCER_V1",
+    "source_files": [
+      "tools/diag/__init__.py",
+      "tools/diag/__main__.py",
+      "tools/diag/admission.py",
+      "tools/diag/analyzers/__init__.py",
+      "tools/diag/analyzers/drive.py",
+      "tools/diag/analyzers/evidence_health.py",
+      "tools/diag/analyzers/execution_chain.py",
+      "tools/diag/analyzers/lifecycle.py",
+      "tools/diag/analyzers/lineage.py",
+      "tools/diag/analyzers/localization.py",
+      "tools/diag/analyzers/navigation.py",
+      "tools/diag/analyzers/recovery.py",
+      "tools/diag/analyzers/safety.py",
+      "tools/diag/analyzers/world_model.py",
+      "tools/diag/basis.py",
+      "tools/diag/cli.py",
+      "tools/diag/context.py",
+      "tools/diag/contracts.py",
+      "tools/diag/episodes.py",
+      "tools/diag/persistence.py",
+      "tools/diag/profiling.py",
+      "tools/diag/provenance.py",
+      "tools/diag/registry.py",
+      "tools/mcap_evidence/reader.py"
+    ]
+  },
+  "purpose": "DIAGNOSTIC_DATA_ONLY",
+  "root_cause_inferred": false,
+  "schema": "R2B4_DIAG_RESULT_V3",
+  "source": "EVI_EVIDENCE_ONLY",
+  "summary": {
+    "motion_mode_counts": {
+      "forward_straight": 0,
+      "forward_turning": 57,
+      "pivot": 10,
+      "reverse_straight": 0,
+      "reverse_turning": 0,
+      "stopped": 34,
+      "unclassified_missing_pair": 0
+    },
+    "omega_sign_counts": {
+      "near_zero": 34,
+      "negative": 40,
+      "positive": 27
+    },
+    "stop_episode_count": 4,
+    "stop_reason_counts": {
+      "COMMAND_STOP": 29,
+      "LOCALIZATION_HOLD": 3,
+      "LOCAL_COSTMAP_STALE": 1,
+      "PLANNER_PENDING_NO_VALID_OBJECTIVE": 1
+    }
+  }
+}
