@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from r2b4_orchestration.agent_contracts import AgentModelReply
+from r2b4_orchestration.agent_contracts import AgentModelReply, AgentToolRequest
 from r2b4_orchestration.agent_core import AgentCore, AgentToolBroker
-from r2b4_voice.conversation_contracts import RobotContextSnapshot, UserTextTurn
+from r2b4_orchestration.agent_source_tools import build_source_tools
+from r2b4_voice.conversation_contracts import ConversationMemoryTurn, RobotContextSnapshot, UserTextTurn
 from r2b4_voice.prompting import PromptAssembler, PromptBudgetError
 
 
@@ -92,3 +93,69 @@ def test_agent_core_emits_provider_prompt_size_and_rejects_over_budget() -> None
     assert model.calls == 1
     payload = next(payload for kind, payload in rejected if kind == "agent_prompt_rejected")
     assert payload["provider_request_chars_estimate"] > payload["provider_request_budget_chars"]
+
+
+def test_default_prompt_preserves_large_requested_layers_and_user_goal(tmp_path: Path) -> None:
+    import json
+
+    assembler = _prompt(tmp_path)
+    policy = (assembler.system_prompt + "\n" + "policy " * 4_000).strip()
+    assembler.path.write_text(policy, encoding="utf-8")
+    assembler = PromptAssembler(assembler.path)
+    goal = "Hozz létre slow skillt: 10s alatt 0→0.2m/s 5s alatt, majd 0.2→0 5s alatt."
+    host = {"requested_state": "állapot " * 3_000, "revision": 19, "measurement_time_ns": 123}
+    knowledge = {"requested_source": "forrás " * 3_000, "lineage": ["source-19"]}
+    history = ConversationMemoryTurn("előző cél " * 2_000, "előző eredmény " * 2_000)
+    messages = assembler.build_messages(
+        UserTextTurn("large", goal, "test", 1), _context(host=host), (history,),
+        self_knowledge=knowledge,
+    )
+    assert messages[0]["content"] == policy
+    assert json.loads(messages[1]["content"].split("ROBOT_CONTEXT_JSON=", 1)[1])["host"] == host
+    assert json.loads(messages[2]["content"].split("SELF_KNOWLEDGE_JSON=", 1)[1]) == knowledge
+    assert messages[-3:] == [
+        {"role": "user", "content": history.user_text},
+        {"role": "assistant", "content": history.assistant_text},
+        {"role": "user", "content": goal},
+    ]
+    metrics = assembler.validate_messages(messages)
+    assert metrics["prompt_text_chars"] > 64_000
+    assert metrics["assembled_prompt_budget_chars"] is None
+
+
+def test_requested_source_range_reaches_model_without_character_clipping(tmp_path: Path) -> None:
+    import json
+
+    # A valid, explicitly requested two-line read exceeds both former cutoffs:
+    # source.read's 20k text clip and the broker's 30k JSON preview.
+    source = 'PAYLOAD = "' + ('escaped \\" value ' * 4_000) + '"\nTAIL_LINEAGE = "source-revision-19"\n'
+    (tmp_path / "large.py").write_text(source, encoding="utf-8")
+    broker = AgentToolBroker(build_source_tools(tmp_path))
+    request = AgentToolRequest("source.read", {"path": "large.py", "start_line": 1, "end_line": 2})
+    result = broker.execute(request)
+    assert result.status == "COMPLETED"
+    expected = "\n".join(f"{index}: {line}" for index, line in enumerate(source.splitlines(), 1))
+    assert result.data["content"] == expected
+
+    class Model:
+        model = "offline"
+        calls = 0
+
+        def complete_agent_step(self, messages, *_catalogs, **_options):
+            self.calls += 1
+            if self.calls == 1:
+                return AgentModelReply(self.model, tool_request=request)
+            data_message = next(item["content"] for item in messages if "R2B4_TOOL_RESULT_JSON=" in item["content"])
+            decoded = json.loads(data_message.split("R2B4_TOOL_RESULT_JSON=", 1)[1])
+            assert decoded == result.to_jsonable()
+            return AgentModelReply(self.model, spoken_text="complete")
+
+    events = []
+    decision = AgentCore(Model(), broker).run(
+        [{"role": "user", "content": "read the complete requested source range"}], (),
+        event_sink=lambda kind, fields: events.append((kind, fields)),
+    )
+    assert decision.spoken_text == "complete"
+    second_request = [fields for kind, fields in events if kind == "agent_llm_started"][1]
+    assert second_request["provider_request_chars_estimate"] > 64_000
+    assert second_request["provider_request_budget_chars"] is None

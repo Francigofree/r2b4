@@ -103,8 +103,6 @@ def _read(root: Path, value: Mapping[str, object], *, docs: bool) -> object:
     lines = path.read_text(encoding="utf-8").splitlines()
     selected = lines[start - 1 : end]
     text = "\n".join(f"{start + index}: {line}" for index, line in enumerate(selected))
-    if len(text) > 20_000:
-        text = text[:20_000] + "\n...[truncated]"
     return {
         "path": str(path.relative_to(root)),
         "start_line": start,

@@ -12,21 +12,25 @@ from .conversation_contracts import ConversationMemoryTurn, RobotContextSnapshot
 PROMPT_VERSION = "R2B4_AGENT_SYSTEM_V3"
 PROMPT_HIERARCHY_VERSION = "R2B4_PROMPT_HIERARCHY_V1"
 
-# Character limits are deterministic host-side admission limits, not token
-# estimates. Provider-reported input_tokens remains the post-request truth.
-DEFAULT_SYSTEM_PROMPT_CHAR_LIMIT = 24_000
-DEFAULT_ROBOT_CONTEXT_CHAR_LIMIT = 16_000
-DEFAULT_SELF_KNOWLEDGE_CHAR_LIMIT = 16_000
-DEFAULT_HISTORY_CHAR_LIMIT = 16_000
-DEFAULT_ASSEMBLED_PROMPT_CHAR_LIMIT = 48_000
-DEFAULT_PROVIDER_REQUEST_CHAR_LIMIT = 64_000
+# Character counts are telemetry, not provider context/token limits. A shared
+# character cap can reject a valid cognitive turn before provider selection.
+# Explicit caller limits remain available; production preserves requested data.
+# Provider-reported input_tokens remains the post-request truth.
+DEFAULT_SYSTEM_PROMPT_CHAR_LIMIT = None
+DEFAULT_ROBOT_CONTEXT_CHAR_LIMIT = None
+DEFAULT_SELF_KNOWLEDGE_CHAR_LIMIT = None
+DEFAULT_HISTORY_CHAR_LIMIT = None
+DEFAULT_ASSEMBLED_PROMPT_CHAR_LIMIT = None
+DEFAULT_PROVIDER_REQUEST_CHAR_LIMIT = None
 
 
 class PromptBudgetError(ValueError):
     """A prompt layer exceeded a deterministic host-side size contract."""
 
 
-def _positive_limit(value: int, name: str) -> int:
+def _positive_limit(value: int | None, name: str) -> int | None:
+    if value is None:
+        return None
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise ValueError(f"{name} must be a positive integer")
     return value
@@ -67,18 +71,18 @@ def prompt_size_telemetry(messages: Sequence[Mapping[str, str]]) -> dict[str, in
 
 
 class PromptAssembler:
-    """Compose stable policy + bounded dynamic robot data + history + user turn."""
+    """Compose stable policy + dynamic robot data + history + complete user turn."""
 
     def __init__(
         self,
         system_prompt_path: Path | str,
         *,
         max_history_turns: int = 8,
-        max_system_chars: int = DEFAULT_SYSTEM_PROMPT_CHAR_LIMIT,
-        max_robot_context_chars: int = DEFAULT_ROBOT_CONTEXT_CHAR_LIMIT,
-        max_self_knowledge_chars: int = DEFAULT_SELF_KNOWLEDGE_CHAR_LIMIT,
-        max_history_chars: int = DEFAULT_HISTORY_CHAR_LIMIT,
-        max_prompt_chars: int = DEFAULT_ASSEMBLED_PROMPT_CHAR_LIMIT,
+        max_system_chars: int | None = DEFAULT_SYSTEM_PROMPT_CHAR_LIMIT,
+        max_robot_context_chars: int | None = DEFAULT_ROBOT_CONTEXT_CHAR_LIMIT,
+        max_self_knowledge_chars: int | None = DEFAULT_SELF_KNOWLEDGE_CHAR_LIMIT,
+        max_history_chars: int | None = DEFAULT_HISTORY_CHAR_LIMIT,
+        max_prompt_chars: int | None = DEFAULT_ASSEMBLED_PROMPT_CHAR_LIMIT,
     ) -> None:
         path = Path(system_prompt_path)
         if not path.is_file():
@@ -103,13 +107,13 @@ class PromptAssembler:
         self.max_history_turns = max_history_turns
 
     @staticmethod
-    def _require_layer(name: str, text: str, limit: int) -> None:
-        if len(text) > limit:
+    def _require_layer(name: str, text: str, limit: int | None) -> None:
+        if limit is not None and len(text) > limit:
             raise PromptBudgetError(f"{name}_PROMPT_BUDGET_EXCEEDED:{len(text)}>{limit}")
 
-    def validate_messages(self, messages: Sequence[Mapping[str, str]]) -> dict[str, int]:
+    def validate_messages(self, messages: Sequence[Mapping[str, str]]) -> dict[str, int | None]:
         metrics = prompt_size_telemetry(messages)
-        if metrics["prompt_text_chars"] > self.max_prompt_chars:
+        if self.max_prompt_chars is not None and metrics["prompt_text_chars"] > self.max_prompt_chars:
             raise PromptBudgetError(
                 f"ASSEMBLED_PROMPT_BUDGET_EXCEEDED:{metrics['prompt_text_chars']}>{self.max_prompt_chars}"
             )
@@ -175,7 +179,7 @@ class PromptAssembler:
             )
         selected = history[-self.max_history_turns :] if self.max_history_turns else ()
         history_chars = sum(len(item.user_text) + len(item.assistant_text) for item in selected)
-        if history_chars > self.max_history_chars:
+        if self.max_history_chars is not None and history_chars > self.max_history_chars:
             raise PromptBudgetError(
                 f"HISTORY_PROMPT_BUDGET_EXCEEDED:{history_chars}>{self.max_history_chars}"
             )

@@ -354,6 +354,18 @@ A meglévő UNIX-socketes kliens köré kis asyncio-adapter készül. Rövid szi
 
 A prompt determinisztikusan összeállított releváns részlet: robotprofil, teljes goal, LCE konkrét kérdése, rövid SDK/capability katalógus, world/spatial helyzet, kiválasztott skill és eddigi eredmény. Saját nyelvtan, AST-instrukciólista, utasításbudget vagy jogosultsági mátrix nem kerül bele.
 
+Az Agent discovery-válasza veszteségmentesen osztja meg az ismétlődő
+capability-mezőket: `capability_defaults`, majd az opcionális
+`action_catalog_ref` által hivatkozott canonical descriptor, végül az adott
+entry felülírásai adják a teljes leírót. Minden képesség, paraméter, leírás,
+élő státusz és bővítőmező megmarad; a közös RobotInterface válasza változatlan.
+A broker nem vágja JSON-szöveg-previewra az eredményt, és a kért source/docs
+sortartomány teljesen jut tovább. A megosztott promptút alapból nem alkalmaz
+szolgáltatófüggetlen karakterlimitet; a mérettelemetria megmarad, explicit
+caller-limit beállítható. A provider saját méretellenőrzése és a failover
+teljes adattal dolgozik. A kvótamegtakarítás redundanciaelhagyásból származik,
+nem az emberi cél vagy a lekért információ elhagyásából.
+
 ```text
 Te az R2B4 LCE tervező és fejlesztő partnere vagy.
 Ugyanazon emberi vagy K&F célon dolgoztok; az LCE kezeli a futást.

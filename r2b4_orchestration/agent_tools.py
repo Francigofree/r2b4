@@ -1,6 +1,7 @@
 """Explicit composition of R2B4 capabilities exposed to AgentCore."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import threading
 import time
@@ -26,7 +27,66 @@ class AgentRobotInterface(Protocol):
 
 def _robot_capabilities(interface: AgentRobotInterface, value: Mapping[str, object]) -> object:
     _strict(value, set())
-    return interface.capabilities()
+    return _capability_prompt(interface.capabilities())
+
+
+def _capability_prompt(value: Mapping[str, object]) -> Mapping[str, object]:
+    """Factor repeated descriptors only in the Agent's discovery result.
+
+    RobotInterface remains the complete public API. This representation preserves
+    every JSON value and tells the model how to reconstruct each descriptor.
+    """
+    capabilities = value.get("capabilities")
+    if (not isinstance(capabilities, Mapping) or not capabilities
+            or {"capability_defaults", "capability_encoding"}.intersection(value)
+            or any(not isinstance(item, Mapping) or "action_catalog_ref" in item
+                   for item in capabilities.values())):
+        return value
+    catalogue = value.get("action_catalog")
+    actions = catalogue.get("actions", {}) if isinstance(catalogue, Mapping) else {}
+    if not isinstance(actions, Mapping):
+        actions = {}
+
+    def encoded(item: object) -> str:
+        # JSON identity distinguishes false/0 and nested null/missing values.
+        return json.dumps(item, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+    items = list(capabilities.values())
+    common = set(items[0]).intersection(*(set(item) for item in items[1:]))
+    defaults: dict[str, object] = {}
+    for key in sorted(common):
+        values: dict[str, tuple[object, int]] = {}
+        for item in items:
+            identity = encoded(item[key])
+            candidate, count = values.get(identity, (item[key], 0))
+            values[identity] = (candidate, count + 1)
+        identity, (candidate, count) = max(values.items(), key=lambda row:
+            (row[1][1] - 1) * (len(encoded(key)) + len(row[0]) + 1))
+        if count > 1:
+            defaults[key] = candidate
+
+    compact = dict(value)
+    compact["capability_defaults"] = defaults
+    compact["capability_encoding"] = (
+        "Lossless descriptors: for each exact capabilities key, start with capability_defaults; "
+        "if its entry has action_catalog_ref, overlay action_catalog.actions[that reference]; "
+        "then overlay all entry fields except action_catalog_ref. This reconstructs the full "
+        "published descriptor including every parameter, description and live status. "
+        "An absent field stays absent; explicit null stays null."
+    )
+    compact_capabilities = {}
+    for name, item in capabilities.items():
+        inherited = dict(defaults)
+        descriptor = actions.get(name)
+        entry = {}
+        if isinstance(descriptor, Mapping) and all(key in item for key in descriptor):
+            inherited.update(descriptor)
+            entry["action_catalog_ref"] = name
+        entry.update({key: field for key, field in item.items()
+                      if key not in inherited or encoded(field) != encoded(inherited[key])})
+        compact_capabilities[name] = entry
+    compact["capabilities"] = compact_capabilities
+    return compact if len(encoded(compact)) < len(encoded(value)) else value
 
 
 def _robot_read(interface: AgentRobotInterface, value: Mapping[str, object]) -> object:

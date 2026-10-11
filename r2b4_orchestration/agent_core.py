@@ -50,11 +50,7 @@ class AgentToolBroker:
     def __init__(
         self,
         tools: Sequence[tuple[AgentToolSpec, Callable[[Mapping[str, object]], object]]],
-        *,
-        max_result_chars: int = 30_000,
     ) -> None:
-        if max_result_chars < 2_000:
-            raise ValueError("max_result_chars is too small")
         self._handlers: dict[str, Callable[[Mapping[str, object]], object]] = {}
         self._specs: dict[str, AgentToolSpec] = {}
         for spec, handler in tools:
@@ -64,7 +60,6 @@ class AgentToolBroker:
                 raise TypeError(f"agent tool handler is not callable: {spec.name}")
             self._specs[spec.name] = spec
             self._handlers[spec.name] = handler
-        self._max_result_chars = int(max_result_chars)
 
     def catalog(self) -> tuple[dict[str, object], ...]:
         return tuple(self._specs[name].to_jsonable() for name in sorted(self._specs))
@@ -86,17 +81,9 @@ class AgentToolBroker:
             result = data if isinstance(data, AgentToolResult) else AgentToolResult(request.name, "COMPLETED", data=data)
             if result.name != request.name:
                 raise ValueError("tool result name does not match request")
-            encoded = json.dumps(result.to_jsonable(), ensure_ascii=False, sort_keys=True, default=str)
-            if len(encoded) > self._max_result_chars:
-                return AgentToolResult(
-                    request.name,
-                    "TRUNCATED",
-                    data={
-                        "original_chars": len(encoded),
-                        "preview_json": encoded[: self._max_result_chars - 1000],
-                        "hint": "Request a narrower query/read range.",
-                    },
-                )
+            # Preserve the complete owner result and image lineage. Serialize
+            # once, as structured JSON in the prompt, never as a clipped JSON
+            # string that loses tail fields and grows through escaping.
             return result
         except Exception as exc:
             return AgentToolResult(
@@ -113,15 +100,16 @@ class AgentCore:
         broker: AgentToolBroker,
         *,
         max_tool_rounds: int = 4,
-        max_provider_prompt_chars: int = DEFAULT_PROVIDER_REQUEST_CHAR_LIMIT,
+        max_provider_prompt_chars: int | None = DEFAULT_PROVIDER_REQUEST_CHAR_LIMIT,
     ) -> None:
         if not callable(getattr(model, "complete_agent_step", None)):
             raise TypeError("agent model must provide complete_agent_step()")
         if not isinstance(max_tool_rounds, int) or isinstance(max_tool_rounds, bool) or not 1 <= max_tool_rounds <= 12:
             raise ValueError("max_tool_rounds must be within [1, 12]")
-        if (not isinstance(max_provider_prompt_chars, int) or isinstance(max_provider_prompt_chars, bool)
+        if max_provider_prompt_chars is not None and (
+                not isinstance(max_provider_prompt_chars, int) or isinstance(max_provider_prompt_chars, bool)
                 or max_provider_prompt_chars < 4_000):
-            raise ValueError("max_provider_prompt_chars must be an integer >= 4000")
+            raise ValueError("max_provider_prompt_chars must be None or an integer >= 4000")
         self._model = model
         self._broker = broker
         self._max_tool_rounds = max_tool_rounds
@@ -192,7 +180,8 @@ class AgentCore:
                 "provider_request_chars_estimate": provider_request_chars,
                 "provider_request_budget_chars": self._max_provider_prompt_chars,
             }
-            if provider_request_chars > self._max_provider_prompt_chars:
+            if (self._max_provider_prompt_chars is not None
+                    and provider_request_chars > self._max_provider_prompt_chars):
                 self._emit(event_sink, "agent_prompt_rejected", {
                     "round": round_index + 1, "configured_model": self.model,
                     "purpose": "initial_interpretation" if round_index == 0 else "tool_result_interpretation",

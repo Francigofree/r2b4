@@ -1,0 +1,3134 @@
+{
+  "assets": [
+    {
+      "bytes": 24018,
+      "name": "map.pgm",
+      "sha256": "6c3d881201a8d45fa763d5d549db6ee6d8fb653cf4ad3101ca846e294c21944d"
+    },
+    {
+      "bytes": 129,
+      "name": "map.yaml",
+      "sha256": "d523cc4cf65751b0c42718734b1a322ca4989bcd0c7b606e053b99d62f497c62"
+    },
+    {
+      "bytes": 13851,
+      "name": "map_data.npz",
+      "sha256": "805cd7dbc2a83156ccbbf52e0a9ab7d128a9dadc6ddf7338b9c36c19a242647a"
+    },
+    {
+      "bytes": 1040,
+      "name": "keyframes.csv",
+      "sha256": "3ced5addae1fae8731c967c18fd3e1fa5887f081eeb364c5d995f37a8c486aab"
+    },
+    {
+      "bytes": 3284,
+      "name": "pose_graph.json",
+      "sha256": "27c72698d0f358bc139a532760f653f592e6ed7c18e91a622c804cfea31843e0"
+    }
+  ],
+  "build": {
+    "calibration": {
+      "applied_transform": "x=d*cos(angle); y=-d*sin(angle)",
+      "extrinsic_identity": null,
+      "extrinsic_measurement_verified": false,
+      "lidar_to_base_convention": "R2B4_RAW_LIDAR_MIRRORED_Y_V1",
+      "source_configuration_sha256": "68334f686d19180143f9b369988bd785ce78214b1ecd4871f0a839ce4220b5d5"
+    },
+    "capture_configuration_sha256": "68334f686d19180143f9b369988bd785ce78214b1ecd4871f0a839ce4220b5d5",
+    "capture_configuration_snapshot_id": "eed651d2705313930fd2a896e902842c9c800b949a372e50bb52803a8da472bf",
+    "capture_runtime": "v3_process_runtime",
+    "numeric_options": {
+      "EXPECTED_CAPTURE_HZ": 50,
+      "FREE_PROB": 0.35,
+      "FUSION_MIN_SCAN_FRACTION": 0.15,
+      "FUSION_VOXEL_M": 0.04,
+      "ICP_K_NEIGHBOURS": 6,
+      "ICP_MAX_CORRESPONDENCE_M": 0.28,
+      "ICP_MAX_ITERS": 24,
+      "ICP_MAX_POINTS": 1600,
+      "LOG_ODDS_FREE": -0.42,
+      "LOG_ODDS_MAX": 4.0,
+      "LOG_ODDS_MIN": -4.0,
+      "LOG_ODDS_OCC": 0.9,
+      "LOOP_MAX_CANDIDATES_PER_NODE": 4,
+      "LOOP_MAX_RMSE_M": 0.05,
+      "LOOP_MAX_SEED_CORRECTION_M": 0.65,
+      "LOOP_MAX_SEED_CORRECTION_RAD": 0.65,
+      "LOOP_MIN_INDEX_SEPARATION": 3,
+      "LOOP_MIN_INLIER_RATIO": 0.45,
+      "LOOP_MIN_OBSERVABILITY": 0.09,
+      "LOOP_RECIPROCAL_MAX_M": 0.07,
+      "LOOP_RECIPROCAL_MAX_RAD": 0.1,
+      "LOOP_SEARCH_RADIUS_M": 2.0,
+      "MAP_MARGIN_M": 0.6,
+      "MAP_RESOLUTION_M": 0.05,
+      "MAX_KEYFRAME_POINTS": 2600,
+      "MAX_RANGE_M": 12.0,
+      "MAX_SCANS_PER_KEYFRAME": 28,
+      "MIN_RANGE_M": 0.08,
+      "MIN_SCANS_PER_KEYFRAME": 4,
+      "OCCUPIED_PROB": 0.65,
+      "SEQUENTIAL_MAX_RMSE_M": 0.065,
+      "SEQUENTIAL_MIN_INLIER_RATIO": 0.32,
+      "SEQUENTIAL_MIN_OBSERVABILITY": 0.045,
+      "STATIONARY_END_GUARD_S": 0.1,
+      "STATIONARY_MAX_OMEGA_RAD_S": 0.05,
+      "STATIONARY_MAX_V_MPS": 0.03,
+      "STATIONARY_MIN_DURATION_S": 1.2,
+      "STATIONARY_SETTLE_S": 0.45,
+      "optimizer": {
+        "f_scale": 1.0,
+        "ftol": 1e-08,
+        "gtol": 1e-08,
+        "loss": "huber",
+        "max_nfev": 500,
+        "xtol": 1e-08
+      }
+    },
+    "numeric_options_sha256": "e56fd5407eff1bb1f8d87e054ada126a81219975f437a32affda46ec1ea995d3",
+    "runtime_pid": null,
+    "session_id": null,
+    "tool": {
+      "name": "mcap50-to-map.py",
+      "numpy_version": "1.24.2",
+      "scipy_version": "1.10.1",
+      "sha256": "b6674616d8633593122151c2a302cdd7466c7347e16546ddd4f6c8ad781a4d00"
+    }
+  },
+  "current_alignment": null,
+  "frame_id": "R2B4_ATLAS:7ee8e1b20e37516470e8f93a80d5dbdb2c01a3b7d2bef21237523259940db96b",
+  "input": {
+    "bytes": 175273913,
+    "capture_hz": 50,
+    "capture_id": "v3_20261011_202126_17244_capture",
+    "captured_raw_lidar_count": 661,
+    "captured_tick_count": 3218,
+    "clock_epoch": "linux_monotonic_boot",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20261011_202126_17244_capture.mcap",
+    "raw_evidence_complete": true,
+    "replay_complete": true,
+    "sha256": "0b179e5c5ff97fabd6191f4389a4c7bef4988c0ba92f8af0790a085fab57022a"
+  },
+  "keyframes": [
+    {
+      "generation": 0,
+      "index": 0,
+      "measurement_time_ns": 8359213463250,
+      "normalized_seed_pose": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "optimized_pose": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "original_pose": [
+        0.0,
+        0.0,
+        0.2977433874110056
+      ],
+      "source_clock_epoch": "linux_monotonic_boot",
+      "source_frame_id": "R2B4_ODOM_LOCAL",
+      "source_scans": [
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8354546550451,
+          "measurement_time_ns": 8354507386304,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8354499869043,
+              "sequence": 58,
+              "tick_id": 58
+            },
+            {
+              "reference_time_ns": 8354519854697,
+              "sequence": 59,
+              "tick_id": 59
+            }
+          ],
+          "revision": 1,
+          "sequence": 1,
+          "start_time_ns": 8354468222158
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8354752541601,
+          "measurement_time_ns": 8354718785782,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8354701175175,
+              "sequence": 68,
+              "tick_id": 68
+            },
+            {
+              "reference_time_ns": 8354719939805,
+              "sequence": 69,
+              "tick_id": 69
+            }
+          ],
+          "revision": 4,
+          "sequence": 4,
+          "start_time_ns": 8354685029963
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8355028806251,
+          "measurement_time_ns": 8354992437329,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8354981037099,
+              "sequence": 82,
+              "tick_id": 82
+            },
+            {
+              "reference_time_ns": 8355000352935,
+              "sequence": 83,
+              "tick_id": 83
+            }
+          ],
+          "revision": 8,
+          "sequence": 8,
+          "start_time_ns": 8354956068407
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8355265343561,
+          "measurement_time_ns": 8355223781062,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8355220651587,
+              "sequence": 94,
+              "tick_id": 94
+            },
+            {
+              "reference_time_ns": 8355241441280,
+              "sequence": 95,
+              "tick_id": 95
+            }
+          ],
+          "revision": 11,
+          "sequence": 11,
+          "start_time_ns": 8355182218564
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8355644491936,
+          "measurement_time_ns": 8355594307422,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8355580218366,
+              "sequence": 112,
+              "tick_id": 112
+            },
+            {
+              "reference_time_ns": 8355599862870,
+              "sequence": 113,
+              "tick_id": 113
+            }
+          ],
+          "revision": 15,
+          "sequence": 15,
+          "start_time_ns": 8355544122908
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8355953640385,
+          "measurement_time_ns": 8355900884972,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8355899863894,
+              "sequence": 128,
+              "tick_id": 128
+            },
+            {
+              "reference_time_ns": 8355919867455,
+              "sequence": 129,
+              "tick_id": 129
+            }
+          ],
+          "revision": 18,
+          "sequence": 18,
+          "start_time_ns": 8355848129559
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8356368290902,
+          "measurement_time_ns": 8356316971161,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8356299894371,
+              "sequence": 148,
+              "tick_id": 148
+            },
+            {
+              "reference_time_ns": 8356319879914,
+              "sequence": 149,
+              "tick_id": 149
+            }
+          ],
+          "revision": 22,
+          "sequence": 22,
+          "start_time_ns": 8356265651421
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8356773284030,
+          "measurement_time_ns": 8356723060951,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8356719901744,
+              "sequence": 169,
+              "tick_id": 169
+            },
+            {
+              "reference_time_ns": 8356739867620,
+              "sequence": 170,
+              "tick_id": 170
+            }
+          ],
+          "revision": 26,
+          "sequence": 26,
+          "start_time_ns": 8356672837872
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8357069664319,
+          "measurement_time_ns": 8357020632244,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8357019872936,
+              "sequence": 184,
+              "tick_id": 184
+            },
+            {
+              "reference_time_ns": 8357039875941,
+              "sequence": 185,
+              "tick_id": 185
+            }
+          ],
+          "revision": 29,
+          "sequence": 29,
+          "start_time_ns": 8356971600170
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8357464459649,
+          "measurement_time_ns": 8357415508991,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8357399873540,
+              "sequence": 203,
+              "tick_id": 203
+            },
+            {
+              "reference_time_ns": 8357420215676,
+              "sequence": 204,
+              "tick_id": 204
+            }
+          ],
+          "revision": 33,
+          "sequence": 33,
+          "start_time_ns": 8357366558333
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8357763021725,
+          "measurement_time_ns": 8357712830442,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8357699877678,
+              "sequence": 218,
+              "tick_id": 218
+            },
+            {
+              "reference_time_ns": 8357719871368,
+              "sequence": 219,
+              "tick_id": 219
+            }
+          ],
+          "revision": 36,
+          "sequence": 36,
+          "start_time_ns": 8357662639159
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8358162748556,
+          "measurement_time_ns": 8358112567662,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8358100135140,
+              "sequence": 238,
+              "tick_id": 238
+            },
+            {
+              "reference_time_ns": 8358119955756,
+              "sequence": 239,
+              "tick_id": 239
+            }
+          ],
+          "revision": 40,
+          "sequence": 40,
+          "start_time_ns": 8358062386768
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8358564929306,
+          "measurement_time_ns": 8358514715347,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8358500263789,
+              "sequence": 258,
+              "tick_id": 258
+            },
+            {
+              "reference_time_ns": 8358520027257,
+              "sequence": 259,
+              "tick_id": 259
+            }
+          ],
+          "revision": 44,
+          "sequence": 44,
+          "start_time_ns": 8358464501388
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8358864105164,
+          "measurement_time_ns": 8358815106858,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8358805008151,
+              "sequence": 273,
+              "tick_id": 273
+            },
+            {
+              "reference_time_ns": 8358819892673,
+              "sequence": 274,
+              "tick_id": 274
+            }
+          ],
+          "revision": 47,
+          "sequence": 47,
+          "start_time_ns": 8358766108552
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8359263575070,
+          "measurement_time_ns": 8359213463250,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8359200042076,
+              "sequence": 293,
+              "tick_id": 293
+            },
+            {
+              "reference_time_ns": 8359219883859,
+              "sequence": 294,
+              "tick_id": 294
+            }
+          ],
+          "revision": 51,
+          "sequence": 51,
+          "start_time_ns": 8359163351430
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8359563036153,
+          "measurement_time_ns": 8359514174606,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8359500199366,
+              "sequence": 308,
+              "tick_id": 308
+            },
+            {
+              "reference_time_ns": 8359520134334,
+              "sequence": 309,
+              "tick_id": 309
+            }
+          ],
+          "revision": 54,
+          "sequence": 54,
+          "start_time_ns": 8359465313060
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8359962062318,
+          "measurement_time_ns": 8359912067554,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8359900151701,
+              "sequence": 328,
+              "tick_id": 328
+            },
+            {
+              "reference_time_ns": 8359919938613,
+              "sequence": 329,
+              "tick_id": 329
+            }
+          ],
+          "revision": 58,
+          "sequence": 58,
+          "start_time_ns": 8359862072790
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8360359773108,
+          "measurement_time_ns": 8360310628754,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8360300080944,
+              "sequence": 348,
+              "tick_id": 348
+            },
+            {
+              "reference_time_ns": 8360319882838,
+              "sequence": 349,
+              "tick_id": 349
+            }
+          ],
+          "revision": 62,
+          "sequence": 62,
+          "start_time_ns": 8360261484401
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8360658471263,
+          "measurement_time_ns": 8360609509771,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8360602453206,
+              "sequence": 363,
+              "tick_id": 363
+            },
+            {
+              "reference_time_ns": 8360619896313,
+              "sequence": 364,
+              "tick_id": 364
+            }
+          ],
+          "revision": 65,
+          "sequence": 65,
+          "start_time_ns": 8360560548280
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8361060552034,
+          "measurement_time_ns": 8361011131133,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8360999919533,
+              "sequence": 383,
+              "tick_id": 383
+            },
+            {
+              "reference_time_ns": 8361020074928,
+              "sequence": 384,
+              "tick_id": 384
+            }
+          ],
+          "revision": 69,
+          "sequence": 69,
+          "start_time_ns": 8360961710233
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8361362122887,
+          "measurement_time_ns": 8361312020150,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8361299928028,
+              "sequence": 398,
+              "tick_id": 398
+            },
+            {
+              "reference_time_ns": 8361319980775,
+              "sequence": 399,
+              "tick_id": 399
+            }
+          ],
+          "revision": 72,
+          "sequence": 72,
+          "start_time_ns": 8361261917413
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8361762315412,
+          "measurement_time_ns": 8361711825469,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8361701827670,
+              "sequence": 418,
+              "tick_id": 418
+            },
+            {
+              "reference_time_ns": 8361719793946,
+              "sequence": 419,
+              "tick_id": 419
+            }
+          ],
+          "revision": 76,
+          "sequence": 76,
+          "start_time_ns": 8361661335527
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8362161199210,
+          "measurement_time_ns": 8362111991976,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8362099920520,
+              "sequence": 438,
+              "tick_id": 438
+            },
+            {
+              "reference_time_ns": 8362119883933,
+              "sequence": 439,
+              "tick_id": 439
+            }
+          ],
+          "revision": 80,
+          "sequence": 80,
+          "start_time_ns": 8362062784742
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8362462139821,
+          "measurement_time_ns": 8362411001681,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8362399949850,
+              "sequence": 453,
+              "tick_id": 453
+            },
+            {
+              "reference_time_ns": 8362419877152,
+              "sequence": 454,
+              "tick_id": 454
+            }
+          ],
+          "revision": 83,
+          "sequence": 83,
+          "start_time_ns": 8362359863541
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8362859865726,
+          "measurement_time_ns": 8362809678932,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8362800221488,
+              "sequence": 473,
+              "tick_id": 473
+            },
+            {
+              "reference_time_ns": 8362819866807,
+              "sequence": 474,
+              "tick_id": 474
+            }
+          ],
+          "revision": 87,
+          "sequence": 87,
+          "start_time_ns": 8362759492139
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8363159234868,
+          "measurement_time_ns": 8363108870250,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8363102995995,
+              "sequence": 488,
+              "tick_id": 488
+            },
+            {
+              "reference_time_ns": 8363120101212,
+              "sequence": 489,
+              "tick_id": 489
+            }
+          ],
+          "revision": 90,
+          "sequence": 90,
+          "start_time_ns": 8363058505632
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8363556124920,
+          "measurement_time_ns": 8363507231067,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8363499986510,
+              "sequence": 508,
+              "tick_id": 508
+            },
+            {
+              "reference_time_ns": 8363519878108,
+              "sequence": 509,
+              "tick_id": 509
+            }
+          ],
+          "revision": 94,
+          "sequence": 94,
+          "start_time_ns": 8363458337214
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8363955778131,
+          "measurement_time_ns": 8363905542717,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8363900292724,
+              "sequence": 528,
+              "tick_id": 528
+            },
+            {
+              "reference_time_ns": 8363919882654,
+              "sequence": 529,
+              "tick_id": 529
+            }
+          ],
+          "revision": 98,
+          "sequence": 98,
+          "start_time_ns": 8363855307303
+        }
+      ],
+      "source_ticks": [
+        {
+          "reference_time_ns": 8359200042076,
+          "sequence": 293,
+          "tick_id": 293
+        },
+        {
+          "reference_time_ns": 8359219883859,
+          "sequence": 294,
+          "tick_id": 294
+        }
+      ],
+      "window_end_ns": 8364039875172,
+      "window_start_ns": 8353342416272
+    },
+    {
+      "generation": 0,
+      "index": 1,
+      "measurement_time_ns": 8374796343911,
+      "normalized_seed_pose": [
+        1.547302854536733,
+        -0.3432849916059013,
+        -1.4194317657874969
+      ],
+      "optimized_pose": [
+        1.558612188774821,
+        -0.3317383868029768,
+        -1.3581071279350947
+      ],
+      "original_pose": [
+        1.5799303009350225,
+        0.12574161326607486,
+        -1.1216883783764913
+      ],
+      "source_clock_epoch": "linux_monotonic_boot",
+      "source_frame_id": "R2B4_ODOM_LOCAL",
+      "source_scans": [
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8370547951683,
+          "measurement_time_ns": 8370497600220,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8370483226385,
+              "sequence": 806,
+              "tick_id": 806
+            },
+            {
+              "reference_time_ns": 8370500976030,
+              "sequence": 807,
+              "tick_id": 807
+            }
+          ],
+          "revision": 164,
+          "sequence": 164,
+          "start_time_ns": 8370447248758
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8370849570436,
+          "measurement_time_ns": 8370799302631,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8370780644140,
+              "sequence": 821,
+              "tick_id": 821
+            },
+            {
+              "reference_time_ns": 8370802664340,
+              "sequence": 822,
+              "tick_id": 822
+            }
+          ],
+          "revision": 167,
+          "sequence": 167,
+          "start_time_ns": 8370749034827
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8371151021616,
+          "measurement_time_ns": 8371101627907,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8371100128836,
+              "sequence": 837,
+              "tick_id": 837
+            },
+            {
+              "reference_time_ns": 8371121704182,
+              "sequence": 838,
+              "tick_id": 838
+            }
+          ],
+          "revision": 170,
+          "sequence": 170,
+          "start_time_ns": 8371052234198
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8371454696749,
+          "measurement_time_ns": 8371403773636,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8371401009606,
+              "sequence": 852,
+              "tick_id": 852
+            },
+            {
+              "reference_time_ns": 8371421172169,
+              "sequence": 853,
+              "tick_id": 853
+            }
+          ],
+          "revision": 173,
+          "sequence": 173,
+          "start_time_ns": 8371352850523
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8371751755004,
+          "measurement_time_ns": 8371701563523,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8371686652963,
+              "sequence": 866,
+              "tick_id": 866
+            },
+            {
+              "reference_time_ns": 8371717954997,
+              "sequence": 867,
+              "tick_id": 867
+            }
+          ],
+          "revision": 176,
+          "sequence": 176,
+          "start_time_ns": 8371651372043
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8372048263349,
+          "measurement_time_ns": 8371999205679,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8371980848651,
+              "sequence": 880,
+              "tick_id": 880
+            },
+            {
+              "reference_time_ns": 8371999887284,
+              "sequence": 881,
+              "tick_id": 881
+            }
+          ],
+          "revision": 179,
+          "sequence": 179,
+          "start_time_ns": 8371950148009
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8372347701596,
+          "measurement_time_ns": 8372298560731,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8372279934230,
+              "sequence": 894,
+              "tick_id": 894
+            },
+            {
+              "reference_time_ns": 8372301187390,
+              "sequence": 895,
+              "tick_id": 895
+            }
+          ],
+          "revision": 182,
+          "sequence": 182,
+          "start_time_ns": 8372249419866
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8372646238099,
+          "measurement_time_ns": 8372597311633,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8372584923185,
+              "sequence": 908,
+              "tick_id": 908
+            },
+            {
+              "reference_time_ns": 8372600073820,
+              "sequence": 909,
+              "tick_id": 909
+            }
+          ],
+          "revision": 185,
+          "sequence": 185,
+          "start_time_ns": 8372548385167
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8372948045819,
+          "measurement_time_ns": 8372897712856,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8372882559629,
+              "sequence": 923,
+              "tick_id": 923
+            },
+            {
+              "reference_time_ns": 8372902978656,
+              "sequence": 924,
+              "tick_id": 924
+            }
+          ],
+          "revision": 188,
+          "sequence": 188,
+          "start_time_ns": 8372847379894
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8373349947593,
+          "measurement_time_ns": 8373299730741,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8373286274428,
+              "sequence": 941,
+              "tick_id": 941
+            },
+            {
+              "reference_time_ns": 8373300442263,
+              "sequence": 942,
+              "tick_id": 942
+            }
+          ],
+          "revision": 192,
+          "sequence": 192,
+          "start_time_ns": 8373249513890
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8373651557406,
+          "measurement_time_ns": 8373601334795,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8373600895201,
+              "sequence": 957,
+              "tick_id": 957
+            },
+            {
+              "reference_time_ns": 8373619948296,
+              "sequence": 958,
+              "tick_id": 958
+            }
+          ],
+          "revision": 195,
+          "sequence": 195,
+          "start_time_ns": 8373551112185
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8373950988839,
+          "measurement_time_ns": 8373900587320,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8373899895244,
+              "sequence": 972,
+              "tick_id": 972
+            },
+            {
+              "reference_time_ns": 8373922812966,
+              "sequence": 973,
+              "tick_id": 973
+            }
+          ],
+          "revision": 198,
+          "sequence": 198,
+          "start_time_ns": 8373850185802
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8374249741549,
+          "measurement_time_ns": 8374199376613,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8374181198253,
+              "sequence": 986,
+              "tick_id": 986
+            },
+            {
+              "reference_time_ns": 8374199904847,
+              "sequence": 987,
+              "tick_id": 987
+            }
+          ],
+          "revision": 201,
+          "sequence": 201,
+          "start_time_ns": 8374149011678
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8374546786141,
+          "measurement_time_ns": 8374497547756,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8374481224375,
+              "sequence": 1001,
+              "tick_id": 1001
+            },
+            {
+              "reference_time_ns": 8374500663936,
+              "sequence": 1002,
+              "tick_id": 1002
+            }
+          ],
+          "revision": 204,
+          "sequence": 204,
+          "start_time_ns": 8374448309372
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8374845576944,
+          "measurement_time_ns": 8374796343911,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8374779871511,
+              "sequence": 1016,
+              "tick_id": 1016
+            },
+            {
+              "reference_time_ns": 8374801527006,
+              "sequence": 1017,
+              "tick_id": 1017
+            }
+          ],
+          "revision": 207,
+          "sequence": 207,
+          "start_time_ns": 8374747110878
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8375144511858,
+          "measurement_time_ns": 8375095492937,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8375089625932,
+              "sequence": 1031,
+              "tick_id": 1031
+            },
+            {
+              "reference_time_ns": 8375100755144,
+              "sequence": 1032,
+              "tick_id": 1032
+            }
+          ],
+          "revision": 210,
+          "sequence": 210,
+          "start_time_ns": 8375046474017
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8375443280273,
+          "measurement_time_ns": 8375394466862,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8375379883090,
+              "sequence": 1046,
+              "tick_id": 1046
+            },
+            {
+              "reference_time_ns": 8375399877190,
+              "sequence": 1047,
+              "tick_id": 1047
+            }
+          ],
+          "revision": 213,
+          "sequence": 213,
+          "start_time_ns": 8375345653452
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8375742523709,
+          "measurement_time_ns": 8375693030536,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8375680186938,
+              "sequence": 1061,
+              "tick_id": 1061
+            },
+            {
+              "reference_time_ns": 8375699888851,
+              "sequence": 1062,
+              "tick_id": 1062
+            }
+          ],
+          "revision": 216,
+          "sequence": 216,
+          "start_time_ns": 8375643537363
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8376142095181,
+          "measurement_time_ns": 8376093082019,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8376080359801,
+              "sequence": 1081,
+              "tick_id": 1081
+            },
+            {
+              "reference_time_ns": 8376099875750,
+              "sequence": 1082,
+              "tick_id": 1082
+            }
+          ],
+          "revision": 220,
+          "sequence": 220,
+          "start_time_ns": 8376044068857
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8376443722738,
+          "measurement_time_ns": 8376393567349,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8376379880961,
+              "sequence": 1096,
+              "tick_id": 1096
+            },
+            {
+              "reference_time_ns": 8376399875357,
+              "sequence": 1097,
+              "tick_id": 1097
+            }
+          ],
+          "revision": 223,
+          "sequence": 223,
+          "start_time_ns": 8376343411961
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8376745278166,
+          "measurement_time_ns": 8376695111675,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8376680881571,
+              "sequence": 1111,
+              "tick_id": 1111
+            },
+            {
+              "reference_time_ns": 8376699896426,
+              "sequence": 1112,
+              "tick_id": 1112
+            }
+          ],
+          "revision": 226,
+          "sequence": 226,
+          "start_time_ns": 8376644945185
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8377044768344,
+          "measurement_time_ns": 8376994303111,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8376979863062,
+              "sequence": 1126,
+              "tick_id": 1126
+            },
+            {
+              "reference_time_ns": 8376999866051,
+              "sequence": 1127,
+              "tick_id": 1127
+            }
+          ],
+          "revision": 229,
+          "sequence": 229,
+          "start_time_ns": 8376943837879
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8377343654929,
+          "measurement_time_ns": 8377294586702,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8377280687414,
+              "sequence": 1141,
+              "tick_id": 1141
+            },
+            {
+              "reference_time_ns": 8377299870770,
+              "sequence": 1142,
+              "tick_id": 1142
+            }
+          ],
+          "revision": 232,
+          "sequence": 232,
+          "start_time_ns": 8377245518475
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8377642185160,
+          "measurement_time_ns": 8377593338767,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8377579877018,
+              "sequence": 1156,
+              "tick_id": 1156
+            },
+            {
+              "reference_time_ns": 8377600166601,
+              "sequence": 1157,
+              "tick_id": 1157
+            }
+          ],
+          "revision": 235,
+          "sequence": 235,
+          "start_time_ns": 8377544492375
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8377944078072,
+          "measurement_time_ns": 8377895421513,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8377880743000,
+              "sequence": 1171,
+              "tick_id": 1171
+            },
+            {
+              "reference_time_ns": 8377899877596,
+              "sequence": 1172,
+              "tick_id": 1172
+            }
+          ],
+          "revision": 238,
+          "sequence": 238,
+          "start_time_ns": 8377846764954
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8378245555112,
+          "measurement_time_ns": 8378195321732,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8378180700812,
+              "sequence": 1186,
+              "tick_id": 1186
+            },
+            {
+              "reference_time_ns": 8378199874149,
+              "sequence": 1187,
+              "tick_id": 1187
+            }
+          ],
+          "revision": 241,
+          "sequence": 241,
+          "start_time_ns": 8378145088352
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8378545095053,
+          "measurement_time_ns": 8378495859436,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8378479916362,
+              "sequence": 1201,
+              "tick_id": 1201
+            },
+            {
+              "reference_time_ns": 8378500050481,
+              "sequence": 1202,
+              "tick_id": 1202
+            }
+          ],
+          "revision": 244,
+          "sequence": 244,
+          "start_time_ns": 8378446623819
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8378945304958,
+          "measurement_time_ns": 8378895752543,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8378879888544,
+              "sequence": 1221,
+              "tick_id": 1221
+            },
+            {
+              "reference_time_ns": 8378899981014,
+              "sequence": 1222,
+              "tick_id": 1222
+            }
+          ],
+          "revision": 248,
+          "sequence": 248,
+          "start_time_ns": 8378846200129
+        }
+      ],
+      "source_ticks": [
+        {
+          "reference_time_ns": 8374779871511,
+          "sequence": 1016,
+          "tick_id": 1016
+        },
+        {
+          "reference_time_ns": 8374801527006,
+          "sequence": 1017,
+          "tick_id": 1017
+        }
+      ],
+      "window_end_ns": 8379059871517,
+      "window_start_ns": 8370039903393
+    },
+    {
+      "generation": 0,
+      "index": 2,
+      "measurement_time_ns": 8393380054316,
+      "normalized_seed_pose": [
+        1.547302854536733,
+        -0.3432849916059013,
+        -1.4194128613183001
+      ],
+      "optimized_pose": [
+        1.5606194131073436,
+        -0.3336441778202965,
+        -1.3554033499200508
+      ],
+      "original_pose": [
+        1.5799303009350225,
+        0.12574161326607486,
+        -1.1216694739072945
+      ],
+      "source_clock_epoch": "linux_monotonic_boot",
+      "source_frame_id": "R2B4_ODOM_LOCAL",
+      "source_scans": [
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8379643041650,
+          "measurement_time_ns": 8379592802667,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8379579890689,
+              "sequence": 1254,
+              "tick_id": 1254
+            },
+            {
+              "reference_time_ns": 8379599868752,
+              "sequence": 1255,
+              "tick_id": 1255
+            }
+          ],
+          "revision": 255,
+          "sequence": 255,
+          "start_time_ns": 8379542563685
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8380541702829,
+          "measurement_time_ns": 8380490689176,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8380480716414,
+              "sequence": 1299,
+              "tick_id": 1299
+            },
+            {
+              "reference_time_ns": 8380499954788,
+              "sequence": 1300,
+              "tick_id": 1300
+            }
+          ],
+          "revision": 264,
+          "sequence": 264,
+          "start_time_ns": 8380439675524
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8381540571142,
+          "measurement_time_ns": 8381491496923,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8381481497382,
+              "sequence": 1348,
+              "tick_id": 1348
+            },
+            {
+              "reference_time_ns": 8381500975703,
+              "sequence": 1349,
+              "tick_id": 1349
+            }
+          ],
+          "revision": 274,
+          "sequence": 274,
+          "start_time_ns": 8381442422704
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8382538255584,
+          "measurement_time_ns": 8382489223995,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8382481474000,
+              "sequence": 1398,
+              "tick_id": 1398
+            },
+            {
+              "reference_time_ns": 8382499987354,
+              "sequence": 1399,
+              "tick_id": 1399
+            }
+          ],
+          "revision": 284,
+          "sequence": 284,
+          "start_time_ns": 8382440192406
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8383538539948,
+          "measurement_time_ns": 8383488363891,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8383480881601,
+              "sequence": 1448,
+              "tick_id": 1448
+            },
+            {
+              "reference_time_ns": 8383500028291,
+              "sequence": 1449,
+              "tick_id": 1449
+            }
+          ],
+          "revision": 294,
+          "sequence": 294,
+          "start_time_ns": 8383438187834
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8384538670908,
+          "measurement_time_ns": 8384488334961,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8384479861927,
+              "sequence": 1498,
+              "tick_id": 1498
+            },
+            {
+              "reference_time_ns": 8384499854990,
+              "sequence": 1499,
+              "tick_id": 1499
+            }
+          ],
+          "revision": 304,
+          "sequence": 304,
+          "start_time_ns": 8384437999015
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8385533594889,
+          "measurement_time_ns": 8385483413183,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8385479857168,
+              "sequence": 1548,
+              "tick_id": 1548
+            },
+            {
+              "reference_time_ns": 8385499857510,
+              "sequence": 1549,
+              "tick_id": 1549
+            }
+          ],
+          "revision": 314,
+          "sequence": 314,
+          "start_time_ns": 8385433231477
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8386536681999,
+          "measurement_time_ns": 8386487500251,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8386479880747,
+              "sequence": 1598,
+              "tick_id": 1598
+            },
+            {
+              "reference_time_ns": 8386499872348,
+              "sequence": 1599,
+              "tick_id": 1599
+            }
+          ],
+          "revision": 324,
+          "sequence": 324,
+          "start_time_ns": 8386438318503
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8387534402184,
+          "measurement_time_ns": 8387484245237,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8387479878275,
+              "sequence": 1648,
+              "tick_id": 1648
+            },
+            {
+              "reference_time_ns": 8387499856783,
+              "sequence": 1649,
+              "tick_id": 1649
+            }
+          ],
+          "revision": 334,
+          "sequence": 334,
+          "start_time_ns": 8387434088291
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8388532201336,
+          "measurement_time_ns": 8388482185195,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8388479906862,
+              "sequence": 1698,
+              "tick_id": 1698
+            },
+            {
+              "reference_time_ns": 8388500277594,
+              "sequence": 1699,
+              "tick_id": 1699
+            }
+          ],
+          "revision": 344,
+          "sequence": 344,
+          "start_time_ns": 8388432169055
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8389434537118,
+          "measurement_time_ns": 8389384374310,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8389380339895,
+              "sequence": 1743,
+              "tick_id": 1743
+            },
+            {
+              "reference_time_ns": 8389399880235,
+              "sequence": 1744,
+              "tick_id": 1744
+            }
+          ],
+          "revision": 353,
+          "sequence": 353,
+          "start_time_ns": 8389334211502
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8390429511878,
+          "measurement_time_ns": 8390380584324,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8390362533491,
+              "sequence": 1792,
+              "tick_id": 1792
+            },
+            {
+              "reference_time_ns": 8390380782473,
+              "sequence": 1793,
+              "tick_id": 1793
+            }
+          ],
+          "revision": 363,
+          "sequence": 363,
+          "start_time_ns": 8390331656771
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8391429997312,
+          "measurement_time_ns": 8391379773179,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8391360676212,
+              "sequence": 1842,
+              "tick_id": 1842
+            },
+            {
+              "reference_time_ns": 8391379863717,
+              "sequence": 1843,
+              "tick_id": 1843
+            }
+          ],
+          "revision": 373,
+          "sequence": 373,
+          "start_time_ns": 8391329549046
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8392427662091,
+          "measurement_time_ns": 8392377890450,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8392360644110,
+              "sequence": 1892,
+              "tick_id": 1892
+            },
+            {
+              "reference_time_ns": 8392379905394,
+              "sequence": 1893,
+              "tick_id": 1893
+            }
+          ],
+          "revision": 383,
+          "sequence": 383,
+          "start_time_ns": 8392328118810
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8393430258875,
+          "measurement_time_ns": 8393380054316,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8393379874852,
+              "sequence": 1943,
+              "tick_id": 1943
+            },
+            {
+              "reference_time_ns": 8393399876268,
+              "sequence": 1944,
+              "tick_id": 1944
+            }
+          ],
+          "revision": 393,
+          "sequence": 393,
+          "start_time_ns": 8393329849757
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8394428082885,
+          "measurement_time_ns": 8394377647556,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8394361591554,
+              "sequence": 1992,
+              "tick_id": 1992
+            },
+            {
+              "reference_time_ns": 8394379876945,
+              "sequence": 1993,
+              "tick_id": 1993
+            }
+          ],
+          "revision": 403,
+          "sequence": 403,
+          "start_time_ns": 8394327212227
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8395428422260,
+          "measurement_time_ns": 8395378012764,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8395360618665,
+              "sequence": 2042,
+              "tick_id": 2042
+            },
+            {
+              "reference_time_ns": 8395379869504,
+              "sequence": 2043,
+              "tick_id": 2043
+            }
+          ],
+          "revision": 413,
+          "sequence": 413,
+          "start_time_ns": 8395327603269
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8396428633454,
+          "measurement_time_ns": 8396378313431,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8396360929248,
+              "sequence": 2092,
+              "tick_id": 2092
+            },
+            {
+              "reference_time_ns": 8396381118054,
+              "sequence": 2093,
+              "tick_id": 2093
+            }
+          ],
+          "revision": 423,
+          "sequence": 423,
+          "start_time_ns": 8396327993408
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8397426244827,
+          "measurement_time_ns": 8397376101693,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8397361271410,
+              "sequence": 2142,
+              "tick_id": 2142
+            },
+            {
+              "reference_time_ns": 8397380090728,
+              "sequence": 2143,
+              "tick_id": 2143
+            }
+          ],
+          "revision": 433,
+          "sequence": 433,
+          "start_time_ns": 8397325958559
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8398323464639,
+          "measurement_time_ns": 8398274475556,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8398263330260,
+              "sequence": 2187,
+              "tick_id": 2187
+            },
+            {
+              "reference_time_ns": 8398281945393,
+              "sequence": 2188,
+              "tick_id": 2188
+            }
+          ],
+          "revision": 442,
+          "sequence": 442,
+          "start_time_ns": 8398225486473
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8399323780197,
+          "measurement_time_ns": 8399273542729,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8399261517031,
+              "sequence": 2237,
+              "tick_id": 2237
+            },
+            {
+              "reference_time_ns": 8399281714374,
+              "sequence": 2238,
+              "tick_id": 2238
+            }
+          ],
+          "revision": 452,
+          "sequence": 452,
+          "start_time_ns": 8399223305261
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8400324218352,
+          "measurement_time_ns": 8400275159750,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8400259872788,
+              "sequence": 2287,
+              "tick_id": 2287
+            },
+            {
+              "reference_time_ns": 8400279871094,
+              "sequence": 2288,
+              "tick_id": 2288
+            }
+          ],
+          "revision": 462,
+          "sequence": 462,
+          "start_time_ns": 8400226101148
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8401321761758,
+          "measurement_time_ns": 8401271523540,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8401259870538,
+              "sequence": 2337,
+              "tick_id": 2337
+            },
+            {
+              "reference_time_ns": 8401279856417,
+              "sequence": 2338,
+              "tick_id": 2338
+            }
+          ],
+          "revision": 472,
+          "sequence": 472,
+          "start_time_ns": 8401221285322
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8402319527910,
+          "measurement_time_ns": 8402269206626,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8402259884402,
+              "sequence": 2387,
+              "tick_id": 2387
+            },
+            {
+              "reference_time_ns": 8402279857782,
+              "sequence": 2388,
+              "tick_id": 2388
+            }
+          ],
+          "revision": 482,
+          "sequence": 482,
+          "start_time_ns": 8402218885343
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8403322005437,
+          "measurement_time_ns": 8403271840043,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8403259881493,
+              "sequence": 2437,
+              "tick_id": 2437
+            },
+            {
+              "reference_time_ns": 8403279866428,
+              "sequence": 2438,
+              "tick_id": 2438
+            }
+          ],
+          "revision": 492,
+          "sequence": 492,
+          "start_time_ns": 8403221674649
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8404317236253,
+          "measurement_time_ns": 8404267026979,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8404259863921,
+              "sequence": 2487,
+              "tick_id": 2487
+            },
+            {
+              "reference_time_ns": 8404279934172,
+              "sequence": 2488,
+              "tick_id": 2488
+            }
+          ],
+          "revision": 502,
+          "sequence": 502,
+          "start_time_ns": 8404216817705
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8405320040105,
+          "measurement_time_ns": 8405270073664,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8405261553823,
+              "sequence": 2536,
+              "tick_id": 2536
+            },
+            {
+              "reference_time_ns": 8405280063067,
+              "sequence": 2537,
+              "tick_id": 2537
+            }
+          ],
+          "revision": 512,
+          "sequence": 512,
+          "start_time_ns": 8405220107224
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8406317873939,
+          "measurement_time_ns": 8406268901669,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8406260468033,
+              "sequence": 2586,
+              "tick_id": 2586
+            },
+            {
+              "reference_time_ns": 8406279983022,
+              "sequence": 2587,
+              "tick_id": 2587
+            }
+          ],
+          "revision": 522,
+          "sequence": 522,
+          "start_time_ns": 8406219929400
+        }
+      ],
+      "source_ticks": [
+        {
+          "reference_time_ns": 8393379874852,
+          "sequence": 1943,
+          "tick_id": 1943
+        },
+        {
+          "reference_time_ns": 8393399876268,
+          "sequence": 1944,
+          "tick_id": 1944
+        }
+      ],
+      "window_end_ns": 8406439891986,
+      "window_start_ns": 8379119882668
+    },
+    {
+      "generation": 0,
+      "index": 3,
+      "measurement_time_ns": 8408466574279,
+      "normalized_seed_pose": [
+        1.547302854536733,
+        -0.3432849916059013,
+        -1.419418208080938
+      ],
+      "optimized_pose": [
+        1.5625445202411683,
+        -0.335368299133813,
+        -1.3527988651923448
+      ],
+      "original_pose": [
+        1.5799303009350225,
+        0.12574161326607486,
+        -1.1216748206699325
+      ],
+      "source_clock_epoch": "linux_monotonic_boot",
+      "source_frame_id": "R2B4_ODOM_LOCAL",
+      "source_scans": [
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407017850161,
+          "measurement_time_ns": 8406966879263,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8406965002848,
+              "sequence": 2619,
+              "tick_id": 2619
+            },
+            {
+              "reference_time_ns": 8406979957262,
+              "sequence": 2620,
+              "tick_id": 2620
+            }
+          ],
+          "revision": 529,
+          "sequence": 529,
+          "start_time_ns": 8406915908365
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407117715283,
+          "measurement_time_ns": 8407067782722,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407060906008,
+              "sequence": 2624,
+              "tick_id": 2624
+            },
+            {
+              "reference_time_ns": 8407080247070,
+              "sequence": 2625,
+              "tick_id": 2625
+            }
+          ],
+          "revision": 530,
+          "sequence": 530,
+          "start_time_ns": 8407017850161
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407217554219,
+          "measurement_time_ns": 8407167634751,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407161108501,
+              "sequence": 2629,
+              "tick_id": 2629
+            },
+            {
+              "reference_time_ns": 8407179881876,
+              "sequence": 2630,
+              "tick_id": 2630
+            }
+          ],
+          "revision": 531,
+          "sequence": 531,
+          "start_time_ns": 8407117715283
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407318175862,
+          "measurement_time_ns": 8407267865040,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407260231509,
+              "sequence": 2634,
+              "tick_id": 2634
+            },
+            {
+              "reference_time_ns": 8407279852794,
+              "sequence": 2635,
+              "tick_id": 2635
+            }
+          ],
+          "revision": 532,
+          "sequence": 532,
+          "start_time_ns": 8407217554219
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407418711505,
+          "measurement_time_ns": 8407368443683,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407359962259,
+              "sequence": 2639,
+              "tick_id": 2639
+            },
+            {
+              "reference_time_ns": 8407381112496,
+              "sequence": 2640,
+              "tick_id": 2640
+            }
+          ],
+          "revision": 533,
+          "sequence": 533,
+          "start_time_ns": 8407318175862
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407519155592,
+          "measurement_time_ns": 8407468933548,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407462678930,
+              "sequence": 2644,
+              "tick_id": 2644
+            },
+            {
+              "reference_time_ns": 8407481697954,
+              "sequence": 2645,
+              "tick_id": 2645
+            }
+          ],
+          "revision": 534,
+          "sequence": 534,
+          "start_time_ns": 8407418711505
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407619712105,
+          "measurement_time_ns": 8407569433848,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407560087708,
+              "sequence": 2649,
+              "tick_id": 2649
+            },
+            {
+              "reference_time_ns": 8407580987184,
+              "sequence": 2650,
+              "tick_id": 2650
+            }
+          ],
+          "revision": 535,
+          "sequence": 535,
+          "start_time_ns": 8407519155592
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407720133544,
+          "measurement_time_ns": 8407669922824,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407660929018,
+              "sequence": 2654,
+              "tick_id": 2654
+            },
+            {
+              "reference_time_ns": 8407679923265,
+              "sequence": 2655,
+              "tick_id": 2655
+            }
+          ],
+          "revision": 536,
+          "sequence": 536,
+          "start_time_ns": 8407619712105
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8407818259695,
+          "measurement_time_ns": 8407769196619,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407762270350,
+              "sequence": 2659,
+              "tick_id": 2659
+            },
+            {
+              "reference_time_ns": 8407780074295,
+              "sequence": 2660,
+              "tick_id": 2660
+            }
+          ],
+          "revision": 537,
+          "sequence": 537,
+          "start_time_ns": 8407720133544
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408019294981,
+          "measurement_time_ns": 8407969129002,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8407962269612,
+              "sequence": 2669,
+              "tick_id": 2669
+            },
+            {
+              "reference_time_ns": 8407981063413,
+              "sequence": 2670,
+              "tick_id": 2670
+            }
+          ],
+          "revision": 539,
+          "sequence": 539,
+          "start_time_ns": 8407918963024
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408120353644,
+          "measurement_time_ns": 8408069824312,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408062132678,
+              "sequence": 2674,
+              "tick_id": 2674
+            },
+            {
+              "reference_time_ns": 8408080960535,
+              "sequence": 2675,
+              "tick_id": 2675
+            }
+          ],
+          "revision": 540,
+          "sequence": 540,
+          "start_time_ns": 8408019294981
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408217799627,
+          "measurement_time_ns": 8408169076635,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408162420265,
+              "sequence": 2679,
+              "tick_id": 2679
+            },
+            {
+              "reference_time_ns": 8408179874116,
+              "sequence": 2680,
+              "tick_id": 2680
+            }
+          ],
+          "revision": 541,
+          "sequence": 541,
+          "start_time_ns": 8408120353644
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408318971976,
+          "measurement_time_ns": 8408268385801,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408259913729,
+              "sequence": 2684,
+              "tick_id": 2684
+            },
+            {
+              "reference_time_ns": 8408279901887,
+              "sequence": 2685,
+              "tick_id": 2685
+            }
+          ],
+          "revision": 542,
+          "sequence": 542,
+          "start_time_ns": 8408217799627
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408416241865,
+          "measurement_time_ns": 8408367606920,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408359884036,
+              "sequence": 2689,
+              "tick_id": 2689
+            },
+            {
+              "reference_time_ns": 8408380667179,
+              "sequence": 2690,
+              "tick_id": 2690
+            }
+          ],
+          "revision": 543,
+          "sequence": 543,
+          "start_time_ns": 8408318971976
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408516906694,
+          "measurement_time_ns": 8408466574279,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408462343910,
+              "sequence": 2694,
+              "tick_id": 2694
+            },
+            {
+              "reference_time_ns": 8408480515338,
+              "sequence": 2695,
+              "tick_id": 2695
+            }
+          ],
+          "revision": 544,
+          "sequence": 544,
+          "start_time_ns": 8408416241865
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408614996994,
+          "measurement_time_ns": 8408565951844,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408559894522,
+              "sequence": 2699,
+              "tick_id": 2699
+            },
+            {
+              "reference_time_ns": 8408580240885,
+              "sequence": 2700,
+              "tick_id": 2700
+            }
+          ],
+          "revision": 545,
+          "sequence": 545,
+          "start_time_ns": 8408516906694
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408715448063,
+          "measurement_time_ns": 8408665222528,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408646969868,
+              "sequence": 2703,
+              "tick_id": 2703
+            },
+            {
+              "reference_time_ns": 8408679875043,
+              "sequence": 2704,
+              "tick_id": 2704
+            }
+          ],
+          "revision": 546,
+          "sequence": 546,
+          "start_time_ns": 8408614996994
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8408813442621,
+          "measurement_time_ns": 8408764445342,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408760835827,
+              "sequence": 2708,
+              "tick_id": 2708
+            },
+            {
+              "reference_time_ns": 8408780588817,
+              "sequence": 2709,
+              "tick_id": 2709
+            }
+          ],
+          "revision": 547,
+          "sequence": 547,
+          "start_time_ns": 8408715448063
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409014507611,
+          "measurement_time_ns": 8408964494522,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8408960097161,
+              "sequence": 2718,
+              "tick_id": 2718
+            },
+            {
+              "reference_time_ns": 8408980472006,
+              "sequence": 2719,
+              "tick_id": 2719
+            }
+          ],
+          "revision": 549,
+          "sequence": 549,
+          "start_time_ns": 8408914481433
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409114884995,
+          "measurement_time_ns": 8409064696303,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409059899116,
+              "sequence": 2723,
+              "tick_id": 2723
+            },
+            {
+              "reference_time_ns": 8409079927219,
+              "sequence": 2724,
+              "tick_id": 2724
+            }
+          ],
+          "revision": 550,
+          "sequence": 550,
+          "start_time_ns": 8409014507611
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409215496657,
+          "measurement_time_ns": 8409165190826,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409164403165,
+              "sequence": 2728,
+              "tick_id": 2728
+            },
+            {
+              "reference_time_ns": 8409180472918,
+              "sequence": 2729,
+              "tick_id": 2729
+            }
+          ],
+          "revision": 551,
+          "sequence": 551,
+          "start_time_ns": 8409114884995
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409315969264,
+          "measurement_time_ns": 8409265732960,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409260071807,
+              "sequence": 2733,
+              "tick_id": 2733
+            },
+            {
+              "reference_time_ns": 8409279889779,
+              "sequence": 2734,
+              "tick_id": 2734
+            }
+          ],
+          "revision": 552,
+          "sequence": 552,
+          "start_time_ns": 8409215496657
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409416743538,
+          "measurement_time_ns": 8409366356401,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409360571654,
+              "sequence": 2738,
+              "tick_id": 2738
+            },
+            {
+              "reference_time_ns": 8409379898513,
+              "sequence": 2739,
+              "tick_id": 2739
+            }
+          ],
+          "revision": 553,
+          "sequence": 553,
+          "start_time_ns": 8409315969264
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409517104940,
+          "measurement_time_ns": 8409466924239,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409460168183,
+              "sequence": 2743,
+              "tick_id": 2743
+            },
+            {
+              "reference_time_ns": 8409479904840,
+              "sequence": 2744,
+              "tick_id": 2744
+            }
+          ],
+          "revision": 554,
+          "sequence": 554,
+          "start_time_ns": 8409416743538
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409617517065,
+          "measurement_time_ns": 8409567311002,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409562011184,
+              "sequence": 2748,
+              "tick_id": 2748
+            },
+            {
+              "reference_time_ns": 8409580041130,
+              "sequence": 2749,
+              "tick_id": 2749
+            }
+          ],
+          "revision": 555,
+          "sequence": 555,
+          "start_time_ns": 8409517104940
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409718437802,
+          "measurement_time_ns": 8409667977433,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409660769301,
+              "sequence": 2753,
+              "tick_id": 2753
+            },
+            {
+              "reference_time_ns": 8409680836571,
+              "sequence": 2754,
+              "tick_id": 2754
+            }
+          ],
+          "revision": 556,
+          "sequence": 556,
+          "start_time_ns": 8409617517065
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8409818577778,
+          "measurement_time_ns": 8409768507790,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409760885628,
+              "sequence": 2758,
+              "tick_id": 2758
+            },
+            {
+              "reference_time_ns": 8409779927208,
+              "sequence": 2759,
+              "tick_id": 2759
+            }
+          ],
+          "revision": 557,
+          "sequence": 557,
+          "start_time_ns": 8409718437802
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8410019742139,
+          "measurement_time_ns": 8409969382409,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8409961071097,
+              "sequence": 2768,
+              "tick_id": 2768
+            },
+            {
+              "reference_time_ns": 8409980359511,
+              "sequence": 2769,
+              "tick_id": 2769
+            }
+          ],
+          "revision": 559,
+          "sequence": 559,
+          "start_time_ns": 8409919022680
+        }
+      ],
+      "source_ticks": [
+        {
+          "reference_time_ns": 8408462343910,
+          "sequence": 2694,
+          "tick_id": 2694
+        },
+        {
+          "reference_time_ns": 8408480515338,
+          "sequence": 2695,
+          "tick_id": 2695
+        }
+      ],
+      "window_end_ns": 8410080143948,
+      "window_start_ns": 8406501930764
+    },
+    {
+      "generation": 0,
+      "index": 4,
+      "measurement_time_ns": 8418162490331,
+      "normalized_seed_pose": [
+        0.4363057798268613,
+        0.14575316605886976,
+        2.891065688419424
+      ],
+      "optimized_pose": [
+        0.4435375683313698,
+        0.058743955654490136,
+        3.0003208508582837
+      ],
+      "original_pose": [
+        0.37435005347825306,
+        0.2673364105155508,
+        -3.0943762313491563
+      ],
+      "source_clock_epoch": "linux_monotonic_boot",
+      "source_frame_id": "R2B4_ODOM_LOCAL",
+      "source_scans": [
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8416514011474,
+          "measurement_time_ns": 8416463642650,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8416460935083,
+              "sequence": 3038,
+              "tick_id": 3038
+            },
+            {
+              "reference_time_ns": 8416480194590,
+              "sequence": 3039,
+              "tick_id": 3039
+            }
+          ],
+          "revision": 624,
+          "sequence": 624,
+          "start_time_ns": 8416413273827
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8416612172573,
+          "measurement_time_ns": 8416563092023,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8416560090872,
+              "sequence": 3043,
+              "tick_id": 3043
+            },
+            {
+              "reference_time_ns": 8416580088753,
+              "sequence": 3044,
+              "tick_id": 3044
+            }
+          ],
+          "revision": 625,
+          "sequence": 625,
+          "start_time_ns": 8416514011474
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8416712407755,
+          "measurement_time_ns": 8416662290164,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8416660197850,
+              "sequence": 3048,
+              "tick_id": 3048
+            },
+            {
+              "reference_time_ns": 8416679983637,
+              "sequence": 3049,
+              "tick_id": 3049
+            }
+          ],
+          "revision": 626,
+          "sequence": 626,
+          "start_time_ns": 8416612172573
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8416810194890,
+          "measurement_time_ns": 8416761301322,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8416760042290,
+              "sequence": 3053,
+              "tick_id": 3053
+            },
+            {
+              "reference_time_ns": 8416779869577,
+              "sequence": 3054,
+              "tick_id": 3054
+            }
+          ],
+          "revision": 627,
+          "sequence": 627,
+          "start_time_ns": 8416712407755
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417008894988,
+          "measurement_time_ns": 8416959876929,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8416941340610,
+              "sequence": 3062,
+              "tick_id": 3062
+            },
+            {
+              "reference_time_ns": 8416959888540,
+              "sequence": 3063,
+              "tick_id": 3063
+            }
+          ],
+          "revision": 629,
+          "sequence": 629,
+          "start_time_ns": 8416910858870
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417109146411,
+          "measurement_time_ns": 8417059020699,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417039886211,
+              "sequence": 3067,
+              "tick_id": 3067
+            },
+            {
+              "reference_time_ns": 8417059878351,
+              "sequence": 3068,
+              "tick_id": 3068
+            }
+          ],
+          "revision": 630,
+          "sequence": 630,
+          "start_time_ns": 8417008894988
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417209845151,
+          "measurement_time_ns": 8417159495781,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417141238028,
+              "sequence": 3072,
+              "tick_id": 3072
+            },
+            {
+              "reference_time_ns": 8417159876625,
+              "sequence": 3073,
+              "tick_id": 3073
+            }
+          ],
+          "revision": 631,
+          "sequence": 631,
+          "start_time_ns": 8417109146411
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417310613724,
+          "measurement_time_ns": 8417260229437,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417259861566,
+              "sequence": 3078,
+              "tick_id": 3078
+            },
+            {
+              "reference_time_ns": 8417279853724,
+              "sequence": 3079,
+              "tick_id": 3079
+            }
+          ],
+          "revision": 632,
+          "sequence": 632,
+          "start_time_ns": 8417209845151
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417511217034,
+          "measurement_time_ns": 8417461107554,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417459861725,
+              "sequence": 3088,
+              "tick_id": 3088
+            },
+            {
+              "reference_time_ns": 8417479856958,
+              "sequence": 3089,
+              "tick_id": 3089
+            }
+          ],
+          "revision": 634,
+          "sequence": 634,
+          "start_time_ns": 8417410998074
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417609362449,
+          "measurement_time_ns": 8417560289741,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417559866721,
+              "sequence": 3093,
+              "tick_id": 3093
+            },
+            {
+              "reference_time_ns": 8417579838454,
+              "sequence": 3094,
+              "tick_id": 3094
+            }
+          ],
+          "revision": 635,
+          "sequence": 635,
+          "start_time_ns": 8417511217034
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417710114559,
+          "measurement_time_ns": 8417659738504,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417640645044,
+              "sequence": 3097,
+              "tick_id": 3097
+            },
+            {
+              "reference_time_ns": 8417659876384,
+              "sequence": 3098,
+              "tick_id": 3098
+            }
+          ],
+          "revision": 636,
+          "sequence": 636,
+          "start_time_ns": 8417609362449
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8417810500298,
+          "measurement_time_ns": 8417760307428,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417760288753,
+              "sequence": 3103,
+              "tick_id": 3103
+            },
+            {
+              "reference_time_ns": 8417779872632,
+              "sequence": 3104,
+              "tick_id": 3104
+            }
+          ],
+          "revision": 637,
+          "sequence": 637,
+          "start_time_ns": 8417710114559
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418011696481,
+          "measurement_time_ns": 8417961359815,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8417959859410,
+              "sequence": 3113,
+              "tick_id": 3113
+            },
+            {
+              "reference_time_ns": 8417979850476,
+              "sequence": 3114,
+              "tick_id": 3114
+            }
+          ],
+          "revision": 639,
+          "sequence": 639,
+          "start_time_ns": 8417911023149
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418112065850,
+          "measurement_time_ns": 8418061881165,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418059881536,
+              "sequence": 3118,
+              "tick_id": 3118
+            },
+            {
+              "reference_time_ns": 8418079862621,
+              "sequence": 3119,
+              "tick_id": 3119
+            }
+          ],
+          "revision": 640,
+          "sequence": 640,
+          "start_time_ns": 8418011696481
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418212914813,
+          "measurement_time_ns": 8418162490331,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418159840552,
+              "sequence": 3123,
+              "tick_id": 3123
+            },
+            {
+              "reference_time_ns": 8418179827636,
+              "sequence": 3124,
+              "tick_id": 3124
+            }
+          ],
+          "revision": 641,
+          "sequence": 641,
+          "start_time_ns": 8418112065850
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418313315848,
+          "measurement_time_ns": 8418263115330,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418260142938,
+              "sequence": 3128,
+              "tick_id": 3128
+            },
+            {
+              "reference_time_ns": 8418279860929,
+              "sequence": 3129,
+              "tick_id": 3129
+            }
+          ],
+          "revision": 642,
+          "sequence": 642,
+          "start_time_ns": 8418212914813
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418511877447,
+          "measurement_time_ns": 8418461675309,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418459901023,
+              "sequence": 3138,
+              "tick_id": 3138
+            },
+            {
+              "reference_time_ns": 8418479889423,
+              "sequence": 3139,
+              "tick_id": 3139
+            }
+          ],
+          "revision": 644,
+          "sequence": 644,
+          "start_time_ns": 8418411473171
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418612468742,
+          "measurement_time_ns": 8418562173094,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418559868446,
+              "sequence": 3143,
+              "tick_id": 3143
+            },
+            {
+              "reference_time_ns": 8418579874993,
+              "sequence": 3144,
+              "tick_id": 3144
+            }
+          ],
+          "revision": 645,
+          "sequence": 645,
+          "start_time_ns": 8418511877447
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418710560898,
+          "measurement_time_ns": 8418661514820,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418659872480,
+              "sequence": 3148,
+              "tick_id": 3148
+            },
+            {
+              "reference_time_ns": 8418679858027,
+              "sequence": 3149,
+              "tick_id": 3149
+            }
+          ],
+          "revision": 646,
+          "sequence": 646,
+          "start_time_ns": 8418612468742
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8418810943303,
+          "measurement_time_ns": 8418760752100,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418759872958,
+              "sequence": 3153,
+              "tick_id": 3153
+            },
+            {
+              "reference_time_ns": 8418779852524,
+              "sequence": 3154,
+              "tick_id": 3154
+            }
+          ],
+          "revision": 647,
+          "sequence": 647,
+          "start_time_ns": 8418710560898
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419009323438,
+          "measurement_time_ns": 8418958938614,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8418939873330,
+              "sequence": 3162,
+              "tick_id": 3162
+            },
+            {
+              "reference_time_ns": 8418959869229,
+              "sequence": 3163,
+              "tick_id": 3163
+            }
+          ],
+          "revision": 649,
+          "sequence": 649,
+          "start_time_ns": 8418908553790
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419107136389,
+          "measurement_time_ns": 8419058229913,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8419039866956,
+              "sequence": 3167,
+              "tick_id": 3167
+            },
+            {
+              "reference_time_ns": 8419059864467,
+              "sequence": 3168,
+              "tick_id": 3168
+            }
+          ],
+          "revision": 650,
+          "sequence": 650,
+          "start_time_ns": 8419009323438
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419207983519,
+          "measurement_time_ns": 8419157559954,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8419139867990,
+              "sequence": 3172,
+              "tick_id": 3172
+            },
+            {
+              "reference_time_ns": 8419159859890,
+              "sequence": 3173,
+              "tick_id": 3173
+            }
+          ],
+          "revision": 651,
+          "sequence": 651,
+          "start_time_ns": 8419107136389
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419308298925,
+          "measurement_time_ns": 8419258141222,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8419239871358,
+              "sequence": 3177,
+              "tick_id": 3177
+            },
+            {
+              "reference_time_ns": 8419259864942,
+              "sequence": 3178,
+              "tick_id": 3178
+            }
+          ],
+          "revision": 652,
+          "sequence": 652,
+          "start_time_ns": 8419207983519
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419507049988,
+          "measurement_time_ns": 8419458016549,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8419440707485,
+              "sequence": 3187,
+              "tick_id": 3187
+            },
+            {
+              "reference_time_ns": 8419459869011,
+              "sequence": 3188,
+              "tick_id": 3188
+            }
+          ],
+          "revision": 654,
+          "sequence": 654,
+          "start_time_ns": 8419408983110
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419607361060,
+          "measurement_time_ns": 8419557205524,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8419539872368,
+              "sequence": 3192,
+              "tick_id": 3192
+            },
+            {
+              "reference_time_ns": 8419559862674,
+              "sequence": 3193,
+              "tick_id": 3193
+            }
+          ],
+          "revision": 655,
+          "sequence": 655,
+          "start_time_ns": 8419507049988
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419708070246,
+          "measurement_time_ns": 8419657715653,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8419639860809,
+              "sequence": 3197,
+              "tick_id": 3197
+            },
+            {
+              "reference_time_ns": 8419659862542,
+              "sequence": 3198,
+              "tick_id": 3198
+            }
+          ],
+          "revision": 656,
+          "sequence": 656,
+          "start_time_ns": 8419607361060
+        },
+        {
+          "clock_epoch": "linux_monotonic_boot",
+          "end_time_ns": 8419909152059,
+          "measurement_time_ns": 8419858802642,
+          "pose_reference_ticks": [
+            {
+              "reference_time_ns": 8419840625844,
+              "sequence": 3207,
+              "tick_id": 3207
+            },
+            {
+              "reference_time_ns": 8419859867758,
+              "sequence": 3208,
+              "tick_id": 3208
+            }
+          ],
+          "revision": 658,
+          "sequence": 658,
+          "start_time_ns": 8419808453226
+        }
+      ],
+      "source_ticks": [
+        {
+          "reference_time_ns": 8418159840552,
+          "sequence": 3123,
+          "tick_id": 3123
+        },
+        {
+          "reference_time_ns": 8418179827636,
+          "sequence": 3124,
+          "tick_id": 3124
+        }
+      ],
+      "window_end_ns": 8420028835880,
+      "window_start_ns": 8415920135932
+    }
+  ],
+  "map_id": "atlas:7ee8e1b20e37516470e8f93a80d5dbdb2c01a3b7d2bef21237523259940db96b",
+  "motion_authority": false,
+  "revision": 1,
+  "schema": "R2B4_ATLAS_REFERENCE_V1",
+  "source_gauge": {
+    "anchor_keyframe_index": 0,
+    "clock_epoch": "linux_monotonic_boot",
+    "frame_id": "R2B4_ODOM_LOCAL",
+    "generation": 0,
+    "kind": "FIRST_KEYFRAME_LOCAL_POSE",
+    "measurement_time_ns": 8359213463250,
+    "original_pose": [
+      0.0,
+      0.0,
+      0.2977433874110056
+    ],
+    "pose_reference_ticks": [
+      {
+        "reference_time_ns": 8359200042076,
+        "sequence": 293,
+        "tick_id": 293
+      },
+      {
+        "reference_time_ns": 8359219883859,
+        "sequence": 294,
+        "tick_id": 294
+      }
+    ],
+    "trajectory_relationship": "PER_KEYFRAME_OPTIMIZED_NONRIGID"
+  }
+}

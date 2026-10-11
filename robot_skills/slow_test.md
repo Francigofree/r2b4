@@ -1,0 +1,1 @@
+10 másodperces egyenes előremeneti sebesség-alapjel: 5 s alatt 0→0,2 m/s, majd 5 s alatt 0,2→0 m/s; végül kanonikus STOP. Csak mentés, most nem futtatjuk. A tényleges sebességet a V3 biztonsági és fizikai korlátai határozzák meg.
