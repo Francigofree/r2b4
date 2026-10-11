@@ -262,3 +262,125 @@ def test_first_read_from_stopped_counter_is_invalid_zero_baseline():
     assert reading.timing_valid is False
     assert reading.diagnostics is not None
     assert reading.diagnostics.rejection_code is EncoderRejectionCode.COUNTER_NOT_RUNNING
+
+
+@pytest.mark.parametrize('speed_mps', (.08, .15, .3, .8))
+@pytest.mark.parametrize('sign', (1, -1))
+@pytest.mark.parametrize('jitter_ns', (0, 75_000))
+def test_production_velocity_range_preserves_accuracy_and_small_pi_output_error(speed_mps, sign, jitter_ns):
+    from dataclasses import replace
+    from rig import resolved_config
+    from v3.contracts import AdmittedFrame, DataField, Observation, WheelVelocitySetpoint
+    from v3.layers.l11_actuator_control import WheelActuatorController
+
+    resolved = resolved_config()
+    inputs = resolved.runtime.sensor_inputs.inputs
+    config = resolved.runtime.composition.live_control.control
+    times = (1_000_000_000,) + tuple(1_120_000_000 + tick * 20_000_000 for tick in range(30))
+    snapshots = {}
+    # Physical edge-time variation is bounded and has no cumulative drift.
+    # Both native wheel geometries and the production 50 Hz PI are exercised.
+    for side in ('left', 'right'):
+        period_ns = getattr(inputs.encoder_backend, f'{side}_step_distance_m') / speed_mps * 1e9
+        edges = tuple(SignedPulseEdge(
+            times[0] + round(pulse * period_ns) + (pulse % 3 - 1) * jitter_ns,
+            sign * pulse,
+        ) for pulse in range(1, int((times[-1] - times[0]) / period_ns) + 2))
+        values = []
+        for now_ns in times:
+            history = tuple(edge for edge in edges if edge.timestamp_ns <= now_ns)[-128:]
+            values.append(SignedPulseCounterSnapshot(history[-1].pulse_count if history else 0,
+                                                     edge_history=history, confirmed_direction=sign))
+        snapshots[side] = tuple(values)
+    source = NativeEncoderSource(NativeCounterEncoderBackend(
+        Counter(snapshots['left']), Counter(snapshots['right']), inputs.encoder_backend), inputs.encoder_source)
+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+    ideal = WheelActuatorController(config.speed_map, config.wheel_pi)
+    for tick, now_ns in enumerate(times):
+        context = TickContext(tick, now_ns)
+        snapshot = source.read(context)
+        if tick == 0:
+            continue
+        sample = snapshot.samples[0]
+        values = {field.key: field.value for field in sample.values}
+        assert snapshot.health.state is DeviceHealthState.OK
+        assert values['trust'] == 1.
+        for side in ('left', 'right'):
+            assert values[f'{side}_mps'] == pytest.approx(sign * speed_mps, rel=.004, abs=1e-8)
+            assert values[f'{side}_estimation_window_ns'] >= inputs.encoder_backend.minimum_estimation_window_ns
+            assert values[f'raw_{side}_distance_m'] == pytest.approx(
+                values[f'raw_{side}_pulse_count'] * getattr(inputs.encoder_backend, f'{side}_step_distance_m'))
+            if jitter_ns:
+                assert values[f'{side}_velocity_uncertainty_mps'] > 0.
+        wheel = Observation(sample.kind, sample.device_id, sample.sequence,
+                            sample.captured_monotonic_ns, sample.values)
+        frame = AdmittedFrame(context, (wheel,), ())
+        exact = replace(wheel, values=tuple(DataField(field.key, sign * speed_mps)
+            if field.key in ('left_mps', 'right_mps') else field for field in wheel.values))
+        wheels = WheelVelocitySetpoint(context, sign * speed_mps, sign * speed_mps)
+        actual = controller(wheels, frame)
+        expected = ideal(wheels, replace(frame, accepted=(exact,)))
+        # At most half a percentage point of normalized motor output differs
+        # from perfect speed feedback, including integral accumulation.
+        assert abs(actual.left_normalized - expected.left_normalized) < .005
+        assert abs(actual.right_normalized - expected.right_normalized) < .005
+
+
+def test_velocity_repair_preserves_scalar_process_mailbox_observation_semantics():
+    import multiprocessing
+    from types import SimpleNamespace
+    from rig import resolved_config
+    from v3.adapters.process_encoder_backend import ProcessEncoderBackend, _EncoderMailbox
+
+    inputs = resolved_config().runtime.sensor_inputs.inputs
+    burst = tuple(SignedPulseEdge(1_015_000_000 + pulse * 250_000, pulse + 1) for pulse in range(5))
+    qualified = burst + tuple(SignedPulseEdge(1_025_000_000 + pulse * 10_000_000, pulse + 6) for pulse in range(9))
+    left = (_snapshot(0), _snapshot(5, edge_history=burst), _snapshot(14, edge_history=qualified))
+    right = tuple(_snapshot(-value.pulse_count, edge_history=tuple(
+        SignedPulseEdge(edge.timestamp_ns, -edge.pulse_count) for edge in value.edge_history)) for value in left)
+    backend = NativeCounterEncoderBackend(Counter(left), Counter(right), inputs.encoder_backend)
+    mailbox = _EncoderMailbox(multiprocessing.get_context('spawn'))
+    # Exercise the real bounded IPC reconstruction and proxy without opening
+    # lgpio or starting a hardware owner. Spawn/crash behavior has separate tests.
+    process = ProcessEncoderBackend.__new__(ProcessEncoderBackend)
+    process._mailbox = mailbox
+    process._transport_revision = 0
+    process._latest = None
+    process._fatal_error = ''
+    process._closed = False
+    process._process = SimpleNamespace(is_alive=lambda: True)
+    direct_values = SimpleNamespace(read=lambda context: direct_values.latest)
+    direct = NativeEncoderSource(direct_values, inputs.encoder_source)
+    transported = NativeEncoderSource(process, inputs.encoder_source)
+    for sequence, measurement_ns in enumerate((1_000_000_000, 1_020_000_000, 1_120_000_000), 7):
+        reading = backend.read(TickContext(sequence, measurement_ns))
+        direct_values.latest = reading
+        assert mailbox.publish(('reading', reading))
+        parent = TickContext(sequence + 100, measurement_ns + 5_000_000)
+        expected = direct.read(parent)
+        actual = transported.read(parent)
+        assert actual == expected
+        sample = actual.samples[0]
+        values = _sample_values(actual)
+        assert (sample.sequence, sample.captured_monotonic_ns) == (sequence, measurement_ns)
+        assert values['raw_left_pulse_count'] == -values['raw_right_pulse_count']
+        assert all(isinstance(value, (str, int, float, bool, type(None))) for value in values.values())
+        assert 'edge_history' not in values
+        if sequence == 8:
+            assert 0. < values['trust'] < 1.
+            assert 0. < values['left_measurement_trust'] < 1.
+            assert values['raw_left_pulse_count'] == 5
+            assert values['computed_left_mps'] > inputs.encoder_backend.maximum_abs_velocity_mps
+            assert values['computed_right_mps'] < -inputs.encoder_backend.maximum_abs_velocity_mps
+            assert values['rejection_code'] == 'BASELINE'
+            assert actual.health.state is DeviceHealthState.OK
+            assert values['left_mps'] == values['right_mps'] == 0.
+        # Contention returns the same cached physical observation promptly;
+        # the parent read time cannot renew its sequence or measurement time.
+        assert mailbox._lock.acquire(False)
+        try:
+            assert not mailbox.publish(('reading', reading))
+            held = transported.read(TickContext(parent.tick_id + 1, parent.monotonic_ns + 1_000_000))
+            assert held.samples == actual.samples
+        finally:
+            mailbox._lock.release()

@@ -304,7 +304,7 @@ def test_native_short_pulse_bursts_preserve_motion_and_independent_feedback(side
         healthy_measured = {side: sign * .25, other: .25}
         healthy_frame = healthy_native.frame(tick, healthy_measured['left'], healthy_measured['right'])
         wheels = WheelVelocitySetpoint(frame.context, targets['left'], targets['right'],
-                                       velocity_transition_until_ns=2_000_000_000)
+            velocity_transition_until_ns=2_000_000_000 if now_ns <= 2_000_000_000 else None)
         output = controller(wheels, frame)
         expected = healthy(wheels, healthy_frame)
         assert getattr(output, f'{side}_normalized') == pytest.approx(

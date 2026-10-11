@@ -210,12 +210,10 @@ class _WheelVelocityEstimate:
 class NativeCounterEncoderBackend:
     """Derive bounded wheel velocity from physical edge timing.
 
-    Raw signed counts and distance always remain authoritative.  Edge-timed
-    velocity becomes control-grade only after sufficient pulse or time
-    coverage.  A direction-change boundary is stricter: the new direction must
-    remain observable for the configured minimum time before it can receive
-    full trust.  This prevents a very short opposite-sign edge burst from
-    becoming a high-confidence velocity.
+    Raw signed counts and distance always remain authoritative. Velocity is
+    the signed displacement over a bounded physical edge interval. Every
+    moving-wheel estimate needs the configured minimum time coverage before
+    receiving full trust; a short pulse burst cannot establish a reliable speed.
 
     A fresh counter snapshot with no new pulse is *not* a device-stale event.
     Once the last fitted edge becomes old, the wheel transitions to a bounded
@@ -506,13 +504,12 @@ class NativeCounterEncoderBackend:
         after_ns: int,
         now_ns: int,
     ) -> _WheelVelocityEstimate | None:
-        """Fit edge time against signed count with explicit evidence quality.
+        """Estimate interval velocity without weighting densely spaced pulses.
 
-        A normal same-direction fit can become fully trusted when either enough
-        pulse span or enough physical time span has accumulated.  A fit cut by
-        a direction reversal cannot use pulse count alone: it must span the
-        configured minimum physical time.  This is the important anti-spike
-        rule for short opposite-sign edge bursts.
+        The edge window stays within one physical direction. Its count delta
+        and duration determine the mean velocity exactly, including slow gaps.
+        Regression residuals describe timing variability only: inverting the
+        regression slope would overestimate uneven, clustered slow rotation.
         """
 
         edges = snapshot.edge_history
@@ -543,7 +540,6 @@ class NativeCounterEncoderBackend:
         selected = newest
         n = 1
         sum_x = sum_t = sum_xx = sum_xt = sum_tt = 0.0
-        direction_boundary = False
 
         for i in range(
             len(edges) - 2,
@@ -563,16 +559,13 @@ class NativeCounterEncoderBackend:
             ):
                 break
             if newer.pulse_count - candidate.pulse_count != direction:
-                direction_boundary = True
                 break
             # Candidate itself can be the physical turning point.  Do not use
-            # it in the new-direction fit; remember that this fit is reversal-
-            # bounded so pulse count alone cannot qualify it.
+            # it in the new-direction interval.
             if (
                 i > 0
                 and candidate.pulse_count - edges[i - 1].pulse_count != direction
             ):
-                direction_boundary = True
                 break
 
             selected = candidate
@@ -601,28 +594,23 @@ class NativeCounterEncoderBackend:
         if slope * direction <= 0.0:
             return None
 
-        velocity = step_distance_m / slope
+        pulse_delta = newest.pulse_count - selected.pulse_count
+        window_ns = newest.timestamp_ns - selected.timestamp_ns
+        window_s = window_ns / 1_000_000_000.0
+        velocity = pulse_delta * step_distance_m / window_s
         residual = max(
             0.0,
             sum_tt - sum_t * sum_t / n - slope * slope * variance_x,
         )
         uncertainty = (
-            abs(velocity / slope)
-            * math.sqrt(residual / ((n - 2) * variance_x))
+            # Propagate the residual timestamp variance of the two endpoints
+            # into the interval rate, rather than the inverse fitted slope.
+            abs(velocity) / window_s * math.sqrt(2.0 * residual / (n - 2))
             if n > 2
             else None
         )
-        pulse_delta = newest.pulse_count - selected.pulse_count
-        window_ns = newest.timestamp_ns - selected.timestamp_ns
-        pulse_coverage = abs(pulse_delta) / self._config.minimum_estimation_pulses
         time_coverage = window_ns / self._config.minimum_estimation_window_ns
-        if direction_boundary:
-            trust = min(1.0, time_coverage)
-        else:
-            # Slow motion may have few edges but a long physical interval;
-            # faster motion may have many edges before 40 ms.  Either is
-            # valid evidence when no reversal boundary truncated the fit.
-            trust = min(1.0, max(pulse_coverage, time_coverage))
+        trust = min(1.0, time_coverage)
 
         return _WheelVelocityEstimate(
             velocity_mps=velocity,
