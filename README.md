@@ -1,293 +1,125 @@
-# R2B4 V3
+# R2B4
 
-Az R2B4 Raspberry Pi 5 alapú, beltéri differenciálhajtású robot natív,
-determinisztikus V3 vezérlő- és diagnosztikai rendszere.
+### A physical research platform for embodied AI, adaptive robot behavior, and reusable machine-generated skills
 
-A production control canonical útja az L1–L12 pipeline. Az L12 az egyetlen normál
-motor-write authority; capture, telemetry, GUI, agent és offline evidence tool nem kerülheti meg
-a production control- és safety-utat.
+**Raspberry Pi 5 · Autonomous mobile robotics · Local Cognitive Executive · Python skill synthesis · Evidence-driven development**
 
-## Authority
+R2B4 is an experimental indoor mobile robot and an open-ended research project exploring how **language-guided intelligence can become persistent, executable robot behavior**.
 
-- Architekturális invariánsok: `STRUKTURALIS_RETEGEK_V3.md`
-- Pillanatnyi implementáció: `v3/` production source + aktív config
-- Konkrét futás szoftveres evidence-e: finalizált, integritás-ellenőrzött capture +
-  canonical Replayer + explicit MCAP Evidence Compiler
-- Történeti dokumentáció és nyers log: háttéranyag
+Its central premise is simple: a robot should not need to consult a large language model at every control step. Higher-level intelligence can interpret goals, compose or write new behaviors, test and refine them, and leave behind **reusable local Python skills**. The robot then executes those skills through a common interface while a deterministic control system remains responsible for physical motion.
 
-Aktív konfigurációk:
+**Project status:** an actively developed research prototype, not a production-ready autonomous assistant. Working software architecture and automated integration tests are not presented as proof of robust real-world autonomy.
 
-- `conf/hardver.json`
-- `conf/fizika.json`
-- `conf/speed_map.json`
-- `conf/vezerles.json`
+## Research questions
 
-## CPU-ütemezés
+R2B4 investigates four connected problems:
 
-<!-- SCHEDULER_MANAGED_AFFINITY_POLICY_V1 -->
-A `conf/vezerles.json` `runtime_affinity` szekciója két üzemmódot támogat.
+1. **From language to action.** Can a cognitive agent translate an unconstrained human goal into an executable program grounded in the robot's *actual* capabilities and observations?
+2. **From a single solution to a reusable skill.** Can generated behaviors be saved, tested, improved, and executed later without continuous LLM participation?
+3. **From control to embodied intelligence.** How can higher-level experimentation remain flexible without coupling unpredictable AI workloads to time-critical robot control?
+4. **From observations to trustworthy improvement.** Can recordings, replay, diagnostics, and a persistent world model support reproducible analysis rather than unverified success claims?
 
-- `enabled: true`: az R2B4 szerepenként explicit Linux CPU-affinity maszkokat
-  alkalmaz és ellenőriz. A `control_cpus` pontosan egyelemű, és egyik másik
-  szerep maszkja sem fedheti át.
-- `enabled: false`: az R2B4 **nem alkalmaz saját CPU-pinninget**. A runtime,
-  matcher, LiDAR, planner, capture, szenzor- és szolgáltatásfolyamatok az
-  örökölt host/cgroup CPU-készleten maradnak, elhelyezésüket a Linux scheduler
-  végzi.
+These questions guide an intentionally small, hardware-grounded architecture rather than a general-purpose agent framework.
 
-A jelenlegi production baseline `enabled: false`, tehát scheduler-managed mód.
-A konfigurációban megmaradó `*_cpus` mezők ilyenkor nem aktív elhelyezési
-parancsok; schema/replay kompatibilitási értékek. A schema ettől még szigorú:
-`control_cpus` egyetlen CPU, a többi szerep vele diszjunkt, a CPU-listák nem
-lehetnek üresek, duplikáltak, negatívak vagy nem egészek. Ez lehetővé teszi,
-hogy a policy később egyetlen `enabled` váltással ismét aktiválható legyen.
+## The system today
 
-`strict: true` csak bekapcsolt affinity-policy mellett kényszeríti az OS/cgroup
-maszkok alkalmazását és visszaellenőrzését. `enabled: false` mellett nincs
-R2B4-affinity alkalmazás. Ez nem jelent OS-szintű CPU-izolációt: más Linux
-folyamatok, kernel threadek és IRQ-k ütemezését az R2B4 nem szabályozza.
+| Research area | Current implementation | Important boundary |
+| --- | --- | --- |
+| **Mobile robot control** | Native V3 L0–L12 execution architecture, approximately 50 Hz control, sensor integration, navigation, safety and canonical motor ownership | Real-world movement quality and robustness remain experimental |
+| **Local cognitive control** | `BrainCore` / Local Cognitive Executive (LCE), goals, priorities, behavior lifecycle, cancellation and result tracking | A completed software operation does not prove that the human's physical goal was achieved |
+| **Robot capability interface** | Shared `RobotInterface`, discoverable capabilities and an asynchronous Python SDK | Capability coverage is growing; availability depends on live owners and sensors |
+| **Executable skill system** | File-based `.py` library, separate CPython worker, versioned source identity, runtime status and cancellation | Integration is tested; general unattended operation needs further field validation |
+| **LLM collaboration** | Provider-facing proposals can select, create, update and optionally test Python skills; failed saved tests can prompt a bounded repair attempt | An autonomous, open-ended learning loop has not yet been demonstrated end-to-end in the physical world |
+| **Perception and memory** | Camera/person perception, public temporal world model, person identity and spatial references | Mouse/door recognition, reliable room semantics and global localization are not implied |
+| **Research instrumentation** | Passive observer, MCAP flight recording, explicit Evidence Compiler, diagnostic tools and native V3 replay | Exact decision replay needs complete, valid 50 Hz capture evidence |
+| **Mapping and simulation** | Offline 50 Hz MCAP-to-map tool and targeted synthetic/replay tests | A general integrated learning simulator and autonomous IDLE mapping cycle are future work |
 
-Futó rendszer ellenőrzése: `python3 tools/v3_performance_audit.py live`.
-Scheduler-managed módban az affinity-rész `NOT_APPLICABLE` /
-`SCHEDULER_MANAGED` eredménnyel, sikeres exit kóddal tér vissza; `enabled: true`
-mellett a tényleges `/proc` affinity-layoutot auditálja.
+The first local observation skill, [`monitor_region.py`](robot_skills/monitor_region.py), watches an **image-space region for people**, responds to local detector events and requests video clips. It is not a general mouse detector, room-aware observer or field-proven eight-hour surveillance system.
 
-## Használat
+## Architecture: intelligence above, physical authority below
 
-Publikus Brain/world/behavior API, időszemantika, shared host ownership és a
-személykeresés aktuális bizonyítási határa: [PUBLIC_ROBOT_SYSTEM.md](docs/PUBLIC_ROBOT_SYSTEM.md).
+```mermaid
+flowchart TD
+    H[Human goals / research experiments] --> L[LCE / BrainCore<br/>Goals, decisions, supervision]
+    L <--> A[LLM or VLM<br/>On demand, not in the control loop]
+    L <--> K[Reusable Python skill library]
+    K --> W[Local Python skill worker]
+    L --> I[Common RobotInterface]
+    W --> S[Asynchronous robot SDK]
+    S --> I
+    I --> V[V3 L0–L12<br/>Navigation, motion, physical safety]
+    I <--> P[Perception, World, Spatial, Media]
+    V --> O[Motors and physical sensors]
+    V -.-> E[Passive observation / MCAP]
+    P -.-> E
+    L -.-> E
+    E --> R[Evidence, diagnostics, native replay]
+    R -.-> H
+```
 
-Az egyetlen ajánlott ember/agent belépő a gyökér `r` launcher. A `r` nem robotikai
-authority: a robotparancsokat változtatás nélkül a `v3.interface_cli` felé delegálja,
-a host/developer segédek pedig külön launcher-infrastruktúrában maradnak.
+**V3** is the real-time physical execution owner. **LCE** owns semantic goals and upper-level decisions. **Python skills** can express loops, conditions, state, perception-driven reactions and composition using ordinary Python. The **LLM** can act as a planner and skill-development partner, but is not part of the 50 Hz control cycle. **The SDK does not provide direct motor/GPIO authority**; accepted physical actions follow the existing canonical V3 path, including STOP handling.
+
+This separation is central to the experiment. Isolating a skill in a separate process is failure isolation, **not** an operating-system security sandbox.
+
+## One idea, two execution modes
+
+**When a capability is already known:** the LCE can choose an installed behavior or saved Python skill, run it locally, inspect its result and proceed without repeated model calls.
+
+**When a new behavior is required:** the cognitive system can request a new or revised Python program, save it in the shared skill library, optionally run saved tests, and initiate an LCE-owned execution. The source can also be edited using ordinary developer tools. A running invocation retains the source version it loaded; changes take effect on a later invocation.
+
+The supported research loop is:
+
+**Goal → capability discovery → plan or Python skill → test → local execution → observed outcome → possible revision → reuse.**
+
+Parts of this loop are implemented and integration-tested. Continuous autonomous skill evolution in unstructured physical environments remains a research objective.
+
+## Physical platform
+
+- **Compute:** Raspberry Pi 5 (4 GB); Linux and Python.
+- **Drive:** differential-drive chassis, wheel encoders and two DRV8871 motor drivers.
+- **Sensing:** RPLIDAR C1, BNO055 IMU and Raspberry Pi Camera Module 3 / IMX708.
+- **Control:** native V3 layered execution, independent sensor/compute workers where appropriate, canonical motion and STOP paths.
+- **Operating environment:** small indoor spaces; real-world sensing, floor conditions, occlusion and motor behavior are active experimental constraints.
+
+Active parameters are defined in [`conf/`](conf/), not in this overview.
+
+## Evidence is part of the experiment
+
+R2B4 distinguishes **a requested action, an accepted command, a completed operation and a demonstrated physical outcome**. They are not interchangeable.
+
+Its passive observation and recording pipeline links host/Brain/Interface events with robot runtime information. MCAP captures can be compiled into queryable evidence and, where the required raw inputs are present, replayed through the native V3 execution path. Offline global map reconstruction from suitable 50 Hz recordings is provided as a separate research tool.
+
+This instrumentation enables investigations of timing, sensor quality, localization, decision provenance and failures. A successful unit test, simulator trace or replay verdict only establishes what that test actually measured.
+
+## Current research frontier
+
+The next major investigations are **capability-grounded skill creation in live settings**, reproducible skill evaluation and improvement, long-running local perception tasks, richer semantic and spatial grounding, and an efficient simulation/experimentation loop suited to Raspberry Pi 5. A further challenge is making physical navigation and person interaction consistently reliable across realistic indoor conditions.
+
+The project draws inspiration from **[SayCan](https://arxiv.org/abs/2204.01691)**, **[SayPlan](https://arxiv.org/abs/2307.06135)**, **[Code as Policies](https://arxiv.org/abs/2209.07753)** and **[Voyager](https://arxiv.org/abs/2305.16291)**. R2B4 is a hardware-specific experiment inspired by these ideas, **not** a reproduction of their published results or a claim of comparable benchmark performance.
+
+## Explore the repository
+
+| Start here | What it documents |
+| --- | --- |
+| [`robot_skills/README.md`](robot_skills/README.md) | Existing local Python skill workflow and its concrete limitations |
+| [`docs/LCE_LLM_COOPERATION_PLAN.md`](docs/LCE_LLM_COOPERATION_PLAN.md) | Research direction for open skills and LCE–LLM cooperation; some status text predates the implementation |
+| [`docs/PUBLIC_ROBOT_SYSTEM.md`](docs/PUBLIC_ROBOT_SYSTEM.md) | Public world, Brain, behavior and interface semantics |
+| [`STRUKTURALIS_RETEGEK_V3.md`](STRUKTURALIS_RETEGEK_V3.md) | Normative physical architecture and ownership boundaries |
+| [`ASZINKRON_RUNTIME_CONTRACT_V3.md`](ASZINKRON_RUNTIME_CONTRACT_V3.md) | Asynchronous device, compute and control boundary |
+| [`docs/MCAP_EVIDENCE.md`](docs/MCAP_EVIDENCE.md) | Evidence Compiler and recording analysis |
+| [`tools/mcap50-to-map.py`](tools/mcap50-to-map.py) | Offline global occupancy-map reconstruction from recorded data |
+| [`docs/PYTEST_POLICY.md`](docs/PYTEST_POLICY.md) | Test scopes and evidence requirements |
+
+For a first inspection in a configured R2B4 environment:
 
 ```bash
 ./r help
-./r help fp
-./r help er2 stream
-./r commands
-./r commands --json
-./r s --json
-
-./r s
-./r d
-./r rc 30
-./r fp 20
-./r f 10 0.15
-./r x
-./r sd
-```
-
-A `r` argumentum nélkül csoportosított súgót ad. A `r help PARANCS` és a
-`r PARANCS --help` megmutatja a használatot; robotparancsoknál a rövidítések is
-működnek, és a mozgássúgó tartalmazza a mértékegységeket, alapértékeket és
-capture-választókat. Elírt parancsnál a launcher javítási javaslatot ad, és hibával
-kilép; a javasolt parancsot nem hajtja végre.
-
-A robotparancsok `--json` kapcsolója a parancs előtt és után is használható
-(`r --json s`, `r s --json`). Sikeres futáskor stdout-on egyetlen JSON-eredmény
-jelenik meg; a folyamatjelzések stderr-re kerülnek. Az ER2, Git és nyers pytest
-saját opciókezelése megmarad.
-
-A timed mozgásparancsok a szükséges runtime-ot automatikusan elindítják, majd STOP
-következik. A parancs által indított runtime leáll, és a capture
-finalizálása látható; a már előzőleg futó runtime és annak capture-beállításai
-megmaradnak. `0` másodperc folyamatos módot jelent, ilyenkor a runtime futva marad
-explicit STOP/shutdown kérésig. A pozicionális argumentumok sorrendje változatlan:
-először az idő, utána a sebességértékek.
-
-Capture mintavétel alapértelmezése 10 Hz. Választható: `c 50`, `c 10`, `c 5`,
-`c 1`; a capture mód továbbra is `c alap`, `c full` vagy `c nincs`. Példák:
-
-Az 1/5/10 Hz-es capture kompakt rendszerállapot-napló: health, pose, mission,
-navigáció, mozgás és safety. Nem készít replay-checkpointot, és nem továbbít
-nyers szenzorpayloadot vagy teljes térkép/rollout-geometriát. A `c 50` explicit
-sensor-debug: teljes tick-input, checkpoint és közvetlen LiDAR → capture raw
-evidence; ez több CPU-t és tárhelyet igényel. A `c full` a rögzítési ablakot
-választja, önmagában nem kapcsolja be a raw adatokat. Pontos replay csak teljes
-50 Hz-es evidence-ből lehetséges.
-
-```bash
-./r rc 30 c 10
-./r rc 30 c 50
-./r fp 20 c nincs
-./r cap status
-```
-
-Offline evidence és pytest:
-
-```bash
-./r evi runtime/captures/<capture>.mcap
-./r evi query <capture>.evidence --tick-id 1505
+./r caps --json
 ./r test
-./r test release
-./r test pack feature
-./r test all
 ```
 
-A permanent pytest authority két kis manifest: `tests/gate/manifest.json` és
-`tests/scenarios/manifest.json`. A `tests/packs/` fejlesztői evidence, nem
-automatikus release-követelmény. Policy: `docs/PYTEST_POLICY.md`; canonical
-runner: `v3/test_runner.py`. Nyers pytest továbbra is elérhető: `./r pytest ...`.
+`./r test` is a small contract gate, not a full physical acceptance test. Motion requires an appropriately prepared live robot and explicit operator authorization.
 
-Fejlesztő/host segédek például: `r git`, `r gitre`, `r tools`, `r tool NAME`,
-`r cpu`, `r cpu2`, `r disc`, `r mem`, `r temp`, `r ps`, `r net`, `r usb`, `r i2c`,
-`r host`, `r version`. A teljes aktuális felület agent-barát JSON formában:
-`r commands --json`; az élő RobotInterface capability-k: `r caps`.
+---
 
-A régi gyökér `r2b4` launcher megszűnt. A belső `v3.operator_cli` modul megmarad,
-mert a resident runtime-session technikai child-process entrypointja használja; ez
-nem második felhasználói launcher.
-
-Közvetlen production entrypoint:
-
-```bash
-python3 v3_process_runtime.py --approval native-resident-v3
-```
-
-A processz headless. A command és status edge alapértelmezett helye:
-
-- `runtime/v3_command.json`
-- `runtime/v3_status.json`
-
-A `runtime/` könyvtár generált, nem verziózott adat.
-
-Közvetlen command kliens:
-
-```bash
-python3 -m v3.control_cli --help
-```
-
-## Passzív observation / flight recorder és MCAP capture
-
-A production eredményekből passzív, data-blind `ObservationHub` fan-out készül:
-
-```text
-HRI / Agent ── host journal ──────────┐
-Brain / Public World / Behavior ──────┤
-RobotInterface request/result/error ─┤
-V3 L0–L12 / command / mission ────────┤──► ObservationHub
-Safety / health / actuator output ───┘       ├──► telemetry / GUI: LATEST
-                                            └──► flight recorder: RELIABLE
-                                                     │
-                                                     ▼
-                                                    MCAP
-                                                     │
-                                                     ▼
-                                               EVI / DIAG / replay
-```
-
-A felső host runtime saját ObservationHubja V3 és capture nélkül is él.
-`r2b4.brain` és `r2b4.behavior` immutable eventjei goal/subtask/decision és
-command/mission identity szerint kapcsolódnak. A meglévő passzív journal
-follower ugyanezt a lineage-et `v3.public_runtime_event` témán viszi MCAP-ba.
-Az `r2b4.interface` request/result/error eventek egy request identityhoz kötik
-a kért és a feloldott akciót, valamint az elérhető goal/subtask/decision,
-behavior/command/mission identityt. Az alias egyetlen végrehajtást jelent;
-a STOP megfigyelése a fizikai STOP után történik.
-Observation-, capture- és journal-hiba nem módosítja a Brain végrehajtását.
-
-A capture-sidecar a HRI-journalt már futás közben követi `v3.hri_event` témán,
-induláskor legfeljebb 60 másodperc / 512 esemény előzménnyel. Az Agent turn- és
-tool-eseményei ugyanitt, `observation_topic=r2b4.agent` jelöléssel jelennek meg.
-A külön bounded host writer kompakt scalar lineage-et ír; tool argumentum,
-teljes eredmény, kép és provider-transcript nem kerül ezen az élen a recorderbe.
-A live journal sérülése, compactionje, producer sequence-gapje és jelzett
-adatvesztése explicit capture-integrity hiba. A close az elfogadott eseményeket
-draineli, új journal-adatból csak a lezáráskor látott EOF-ig olvas.
-
-Az MCAP event envelope megőrzi a `source_topic`, `hub_sequence` és
-`published_monotonic_ns` adatokat az eredeti payload mellett. HRI/public runtime
-source idő és hub publication idő külön marad; a measurement idő, domain
-sequence/revision és lineage továbbra is a source payload saját adata.
-
-A recorder a meglévő V3 capture-sessiont bővíti. `c alap` bounded trigger-ablak,
-`c full` a teljes session rögzítése; `c nincs` kikapcsolja a capture-t.
-A host események V3 nélkül is keletkeznek, de külön, folyamatosan futó
-MCAP-szolgáltatás nincs. Teljes session evidence-hez például:
-
-```bash
-./r rt start c full c 10
-./r cap status
-./r rt stop
-./r evi runtime/captures/<capture>.mcap --output /tmp/flight.evidence
-```
-
-A runtime indítása önmagában nem mozgatja a robotot. Az 1/5/10 Hz-es recorder
-állapot- és eseményevidence; exact motor-döntési replayhez `c 50` szükséges.
-
-A normál voice és természetes nyelvű CLI-kérés a Brainhez kerül; az Agent
-csak tervet javasol. A `brain.adopt` gyors STARTING/ACTIVE választ ad, és az
-egyetlen host dispatcher a Brainnél tartott tervet hajtja végre. A valódi
-eredmény `read("brain.state")` és `read("brain.history")` útján olvasható;
-az elfogadás még nem jelenti a feladat teljesülését.
-
-A capture consumer nem része a control authoritynak. A required capture delivery
-adatvesztése explicit integrity failure; ilyen artifact nem nevezhető teljesnek és
-nem használható exact replay `MATCH` bizonyítékként.
-
-A final capture authority MCAP:
-
-```text
-runtime/captures/*.mcap
-```
-
-A finalizálás atomi: a partial artifact csak sikeres drain/integrity/finalize után
-válik canonical capture-ré.
-
-Az RPi5 runtime saját standard-library MCAP writer/readert használ. Az
-`mcap` Python csomag **nem runtime dependency**, ezért az MCAP használatához nem
-kell külön venv vagy `pip install mcap` a roboton.
-
-Az opcionális `requirements-interop.txt` csak fejlesztői/CI interoperabilitási
-ellenőrzéshez tartalmaz független MCAP implementációt; robot-runtime-ra nem kell
-telepíteni.
-
-## MCAP Evidence Compiler
-
-A `r evi` explicit offline developer tool: MCAP → teljes, strukturált evidence.
-A runtime leállása capture-finalizálással véget ér; nincs automatikus feldolgozás.
-
-```bash
-./r evi capture.mcap --output /tmp/capture.evidence --workers auto
-./r evi verify /tmp/capture.evidence --source capture.mcap
-./r evi query /tmp/capture.evidence --tick-id 1505 --field 'expected.layers.L11.*'
-```
-
-A tool minden recoverelhető message-et, teljes raw LiDAR payloadot és minden JSON
-leaf pathot megőriz/indexel. Sérült inputból `PARTIAL` bundle is készülhet. Nem
-futtat diagnózist, replayt vagy pytestet. Részletek: [MCAP Evidence Compiler](docs/MCAP_EVIDENCE.md).
-
-## Canonical replay
-
-Az MCAP marad az authority artifact. A Replay Bridge csak a szükséges bounded
-ablakot materializálja ideiglenes kompatibilitási formába, majd a meglévő canonical
-V3 Replayer ugyanazt a production composition/TickEngine utat futtatja offline.
-
-Ha a validation scope replayt kér, csak tényleges `MATCH` teljesíti a replay gate-et.
-`MISMATCH`, replay error vagy el nem végzett kért replay nem `PASS`.
-
-Hiányos capture nem software divergence; capture/evidence integrity és replay
-verdict külön fogalom.
-
-## Evidence és diagnosztikai állítások
-
-Az MCAP Evidence Compiler nem általános truth authority és nem ad diagnózist.
-
-- Közvetlen capture-tény: evidence a saját capture-scope-jában.
-- Artifact-integrity eredmény: ellenőrzött integrity verdict.
-- Canonical replay `MATCH`/`MISMATCH`: ellenőrzött replay verdict a vizsgált scope-ban.
-- Root-cause rangsor, anomáliaértelmezés és javítási javaslat: derived diagnosis.
-
-Diagnosztikai következtetés csak közvetlen kauzális evidence mellett lehet
-`PROVEN`; egyébként `INDICATED`, `NOT_PROVEN` vagy `EVIDENCE_BLOCKED`.
-
-## Offline validáció
-
-```bash
-python3 -m v3.import_guard
-python3 -m pytest -q
-```
-
-Az offline tesztek, MCAP inspection, evidence compilation és replay nem nyitnak GPIO- vagy
-motor-capabilityt. Live motorfutás csak explicit approval-lal indítható.
+**R2B4 is a research platform for investigating the transition from language-guided planning to persistent, physically grounded robot skills — with reproducibility and honest evidence boundaries as part of the design.**
