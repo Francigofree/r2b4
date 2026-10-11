@@ -11,8 +11,9 @@ from v3.operator_controller import OperatorController
 
 class CameraInterfaceAdapter:
     name = "camera"
-    capability_names = frozenset({
-        "camera.status", "camera.on", "camera.off", "camera.photo", "camera.video", "vision.observe",
+    read_capability_names = frozenset({"camera.status"})
+    capability_names = read_capability_names | frozenset({
+        "camera.on", "camera.off", "camera.photo", "camera.video", "vision.observe",
     })
 
     def __init__(self, controller: OperatorController, *, vision_client: VisionClient | None = None) -> None:

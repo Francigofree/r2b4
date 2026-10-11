@@ -36,14 +36,14 @@ ALIASES = {
 
 # Usage and descriptions are shared by help and command discovery.
 COMMAND_HELP = {
-    "install": ("", "Az r parancs telepítése a felhasználó bin könyvtárába."),
+    "install": ("", "Az r launcher, Bash TAB-kiegészítés és voice user-service unit telepítése; a voice wake-et nem kapcsolja be."),
     "where": ("", "A launcher és a projekt elérési útja."),
     "root": ("", "A projekt gyökérkönyvtára."),
     "version": ("", "Git branch, commit és módosítottság."),
     "gitre": ("[ARGS...]", "A projekt gitre segédprogramja."),
     "git": ("[ARGS...]", "Git a projekt könyvtárában; az argumentumok változatlanul továbbmennek."),
     "pytest": ("[ARGS...]", "Nyers pytest; az argumentumok változatlanul továbbmennek."),
-    "test": ("[MODE|TEST_NODE] [PYTEST_ARGS...]", "Célzott tesztek; alapértelmezés: gyors CORE kapu. Hosszú próba: endurance. Módok: r test list."),
+    "test": ("[MODE|TEST_NODE] [PYTEST_ARGS...]", "Célzott tesztek; alapértelmezés: kis robot-contract gate. Hosszú próba: endurance. Módok: r test list."),
     "tune": ("roomcruise [ARGS...]", "Offline, non-actuating RoomCruise hangolás; artifact: runtime/tunes/."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
@@ -293,6 +293,9 @@ def host(root: Path) -> int:
 
 def execute(command: str, argv: list[str], root: Path) -> int:
     command = ALIASES.get(command, command)
+    if command == "diag" and (argv[:1] == ["help"] or any(arg in {"-h", "--help"} for arg in argv)):
+        from tools.diag.cli import main as diag_main
+        return diag_main(["--help"], project_root=root)
     # Keep native help/argument semantics for passthrough programs.
     if argv in (["-h"], ["--help"]) and command not in {"git", "gitre", "pytest", "test", "cpu2", "diag"}:
         print_help(command)

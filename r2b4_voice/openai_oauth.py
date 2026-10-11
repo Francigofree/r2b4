@@ -798,7 +798,7 @@ def logout(project_root: Path | str | None = None, *, urlopen: UrlOpen = urllib.
     return revoked
 
 
-def cli_main(argv: list[str] | None = None, *, project_root: Path | str | None = None) -> int:
+def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="r chatgpt", description="R2B4 Sign in with ChatGPT OAuth")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status", help="show local OAuth state without a network request")
@@ -808,6 +808,11 @@ def cli_main(argv: list[str] | None = None, *, project_root: Path | str | None =
     import_p = sub.add_parser("import", help="import a credential file created on another computer for this host ID")
     import_p.add_argument("file")
     sub.add_parser("logout", help="revoke the renewable session when possible and clear local tokens")
+    return parser
+
+
+def cli_main(argv: list[str] | None = None, *, project_root: Path | str | None = None) -> int:
+    parser = cli_parser()
     args = parser.parse_args(argv)
     root = _root(project_root)
     try:

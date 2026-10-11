@@ -13,6 +13,7 @@ from pathlib import Path
 class SystemInterfaceAdapter:
     name = "system"
     capability_names = frozenset({"system.status"})
+    read_capability_names = capability_names
 
     def __init__(self, root: Path) -> None:
         self.root = root

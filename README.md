@@ -102,6 +102,7 @@ The project draws inspiration from **[SayCan](https://arxiv.org/abs/2204.01691)*
 | Start here | What it documents |
 | --- | --- |
 | [`robot_skills/README.md`](robot_skills/README.md) | Existing local Python skill workflow and its concrete limitations |
+| [`docs/R_LAUNCHER.md`](docs/R_LAUNCHER.md) | Simple skill/evidence/diagnostics commands and parser-driven launcher discovery |
 | [`docs/LCE_LLM_COOPERATION_PLAN.md`](docs/LCE_LLM_COOPERATION_PLAN.md) | Research direction for open skills and LCE–LLM cooperation; some status text predates the implementation |
 | [`docs/PUBLIC_ROBOT_SYSTEM.md`](docs/PUBLIC_ROBOT_SYSTEM.md) | Public world, Brain, behavior and interface semantics |
 | [`STRUKTURALIS_RETEGEK_V3.md`](STRUKTURALIS_RETEGEK_V3.md) | Normative physical architecture and ownership boundaries |

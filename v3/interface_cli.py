@@ -184,6 +184,17 @@ def _parser() -> argparse.ArgumentParser:
     public_execute = add_command("execute", help="Canonical RobotInterface-képesség végrehajtása.")
     public_execute.add_argument("action")
     public_execute.add_argument("--parameters", default="{}", help="paraméterek JSON-objektumként")
+    skill = add_command("skill", help="Mentett Python-skill indítása névvel vagy fájlúttal; argumentum nélkül lista.")
+    skill.add_argument("target", nargs="?", help="skill neve vagy robot_skills/*.py fájlút")
+    skill.add_argument("--parameters", default="{}", help="skillparaméterek JSON-objektumként")
+    skill.epilog = (
+        "Példa: r skill robot_skills/terkepesz_r2b4.py --parameters '{}' --json\n"
+        "A skill a canonical host külön interpreterében fut tovább; az indítás futásazonosítót ad.\n"
+        "Állapot: r execute skill.status --parameters '{\"run_id\":\"ID\"}' --json\n"
+        "Leállítás: r execute skill.stop --parameters '{\"run_id\":\"ID\"}' --json; STOP: r x\n"
+        "Forrás / teszt: r execute skill.source vagy skill.test --parameters '{\"name\":\"NAME\"}'\n"
+        "Lista: r read skill.list --json"
+    )
     add_command("stop", help="Mozgás STOP; a runtime futva marad, ha jelen van.")
     add_command("shutdown", help="STOP + capture-finalizálás + runtime-leállítás.")
     add_command("panic", help="Fail-safe STOP és runtime-leállítás.")
@@ -238,6 +249,34 @@ def _parser() -> argparse.ArgumentParser:
 
 def _canonical(command: str) -> str:
     return ALIASES.get(command, command)
+
+
+def _prepare_skill(args: argparse.Namespace, root: Path) -> None:
+    """Validate the saved-library reference without importing skill code."""
+    from r2b4_orchestration.skill_library import SkillLibrary
+
+    parameters = json.loads(args.parameters)
+    if not isinstance(parameters, dict):
+        raise ValueError("--parameters must be a JSON object")
+    args.skill_parameters = parameters
+    if args.target is None:
+        if parameters:
+            raise ValueError("skill parameters require a skill name or path")
+        args.skill_name = None
+        return
+
+    library = SkillLibrary(root / "robot_skills")
+    target = Path(args.target).expanduser()
+    if not target.is_absolute() and target.name == args.target:
+        name = target.stem if target.suffix == ".py" else args.target
+    else:
+        path = target if target.is_absolute() else root / target
+        if path.suffix != ".py" or path.is_symlink() or path.parent.resolve() != library.root:
+            raise ValueError("skill path must reference a saved robot_skills/*.py file")
+        name = path.stem
+    if not (library.root / f"{name}.py").is_file():
+        raise ValueError("skill target must be a regular saved robot_skills/*.py file")
+    args.skill_name = library.load(name).name
 
 
 def _validate_seconds(value: float) -> float:
@@ -468,6 +507,13 @@ def _execute(
         output = interface.execute(args.action, **parameters)
         if not args.json:
             _print_json(output)
+    elif command == "skill":
+        output = (
+            interface.read("skill.list") if args.skill_name is None
+            else interface.execute("skill.run", name=args.skill_name, parameters=args.skill_parameters)
+        )
+        if not args.json:
+            _print_json(output)
     elif command == "stop":
         output = interface.stop()
         print("robot: IDLE (runtime kept running if present)")
@@ -536,8 +582,15 @@ def main(
 ) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
     try:
-        clean, capture_mode, capture_hz, no_trigger = _extract_capture_selector(raw)
+        if raw[:1] == ["skill"] or raw[:2] == ["--json", "skill"]:
+            # Saved skill names/parameters are not motion capture shorthand.
+            clean, capture_mode, capture_hz, no_trigger = raw, DEFAULT_CAPTURE_MODE, DEFAULT_CAPTURE_HZ, False
+        else:
+            clean, capture_mode, capture_hz, no_trigger = _extract_capture_selector(raw)
         args = _parser().parse_args(clean)
+        if _canonical(args.command) == "skill":
+            root = Path(project_root) if project_root is not None else Path(__file__).resolve().parents[1]
+            _prepare_skill(args, root.resolve())
         # Progress, including shutdown/capture messages, stays visible
         # on stderr in JSON mode. stdout contains exactly one final document.
         with contextlib.redirect_stdout(sys.stderr if args.json else sys.stdout):

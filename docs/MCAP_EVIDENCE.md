@@ -5,7 +5,10 @@ kivezetésre került. Runtime shutdown → capture finalize → sidecar exit →
 exit; ezután nincs automatikus evidence-feldolgozás vagy RobotInterface capability.
 
 ```bash
+./r evi
+./r evi latest --workers 1
 ./r evi capture.mcap
+./r evi compile capture.mcap
 ./r evi capture.mcap --output /tmp/run.evidence --workers auto
 ./r evi verify /tmp/run.evidence --source capture.mcap
 ./r evi query /tmp/run.evidence --tick-id 1505 --layer L11
@@ -13,8 +16,17 @@ exit; ezután nincs automatikus evidence-feldolgozás vagy RobotInterface capabi
 python3 -m tools.mcap_evidence --help
 ```
 
-Nincs implicit „latest capture”, batch, diagnosis, triage, tuning, replay vagy
-pytest. Ezek külön fogyasztók/feladatok. A compiler-státusz nem robotikai verdict.
+A forrás elhagyásakor vagy `latest` esetén az `r evi` a repo
+`runtime/captures/*.mcap` fájljai közül a legutóbb módosított valódi, nem symlink
+fájlt választja. Azonos módosítási időnél a fájlnév dönt. A production capture
+csak finalizálás után publikálja a `.mcap` fájlt; a `.partial` fájlok kimaradnak.
+A választott abszolút út stderr-en látható. Ha nincs capture, a parancs hibával
+leáll; explicit forrás továbbra is megadható, sérült MCAP mentéséhez is.
+Meglévő evidence-t ez a kényelmi alapértelmezés sem ír felül; új feldolgozáshoz
+adj másik célkönyvtárat a `--output` opcióval.
+
+Nincs automatikus batch, diagnosis, triage, tuning, replay vagy pytest. Ezek külön
+fogyasztók/feladatok. A compiler-státusz nem robotikai verdict.
 Canonical replay továbbra is külön: `python3 -m v3.replay replay ...`.
 
 ## Feldolgozás és státusz

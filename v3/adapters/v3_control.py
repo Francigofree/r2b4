@@ -19,7 +19,8 @@ from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
 class V3ControlInterfaceAdapter:
     name = "v3_control"
-    capability_names = frozenset({"v3.status", "v3.pose", "v3.safety", "v3.health"}) | frozenset(
+    read_capability_names = frozenset({"v3.status", "v3.pose", "v3.safety", "v3.health"})
+    capability_names = read_capability_names | frozenset(
         name for name in ACTION_CATALOG if name.startswith("v3.command.")
     )
 

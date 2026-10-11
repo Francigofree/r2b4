@@ -23,6 +23,12 @@ ALIASES = {
     "quick": "gate",
     "full": "release",
 }
+PACK_ALIASES = ("core", "feature", "deep")
+
+
+def command_modes() -> tuple[str, ...]:
+    """Owning command metadata for launcher discovery; no test selection."""
+    return ("gate", *FOCUSED, *ALIASES, *PACK_ALIASES, "list", "help")
 
 
 def _load_manifest(name: str) -> tuple[str, ...]:
@@ -125,7 +131,7 @@ def main(argv=None) -> int:
             print(f"Unknown pytest pack: {name}", file=sys.stderr)
             return 2
         return _run([str(path)], extra=args)
-    if mode in {"core", "feature", "deep"}:
+    if mode in PACK_ALIASES:
         path = PACKS / mode
         if not path.is_dir():
             print(f"Missing compatibility pack: {mode}", file=sys.stderr)

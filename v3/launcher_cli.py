@@ -16,14 +16,10 @@ from collections.abc import Sequence
 
 from v3 import host_cli, interface_cli, launcher_extras
 from v3.capture_rate import CAPTURE_HZ_VALUES, DEFAULT_CAPTURE_HZ
-from v3.test_runner import FOCUSED
 
 
 class LauncherError(RuntimeError):
     pass
-
-
-_ER2_CANONICAL_COMMANDS = frozenset({"status", "preview", "stream", "-h", "--help"})
 
 
 def project_root() -> Path:
@@ -46,7 +42,8 @@ def _normalize_er2_args(args: list[str]) -> list[str]:
     """
     if len(args) < 2 or args[0] != "er2":
         return args
-    if args[1] in _ER2_CANONICAL_COMMANDS:
+    from r2b4_er2.cli import _parser
+    if args[1] in launcher_extras._subparsers(_parser()).choices or args[1] in {"-h", "--help"}:
         return args
     return ["er2", "stream", *args[1:]]
 
@@ -58,10 +55,10 @@ def _robot_catalog() -> list[dict[str, object]]:
         if isinstance(action, argparse._SubParsersAction)
     )
     aliases = dict(interface_cli.ALIASES)
-    # Top-level r diag is owned by the offline DIAG facade; the existing
-    # detailed runtime status remains reachable through the d alias.
-    canonical = sorted((set(subparsers.choices) - set(aliases)) - {"diag"})
-    return [
+    # These routes are owned by the offline host DIAG and standalone camera
+    # facade. Runtime diagnostics remains explicitly discoverable as r d.
+    canonical = sorted((set(subparsers.choices) - set(aliases)) - {"diag", "camera"})
+    rows = [
         {
             "name": name,
             "aliases": sorted(alias for alias, target in aliases.items() if target == name),
@@ -71,13 +68,61 @@ def _robot_catalog() -> list[dict[str, object]]:
         }
         for name in canonical
     ]
+    child = subparsers.choices["d"]
+    rows.append({"name": "d", "aliases": [], "motion": False,
+                 "description": "Részletes élő runtime-diagnosztika.",
+                 "usage": child.format_usage().strip().replace("r diag", "r d", 1)})
+    return sorted(rows, key=lambda row: row["name"])
 
 
-def command_catalog() -> dict[str, object]:
-    from r2b4_orchestration.person_skills import PERSON_SKILLS
-    from r2b4_orchestration.robot_runtime import READS, QUERIES, ACTIONS
+def command_entries() -> list[dict[str, object]]:
+    """Effective launcher routes shared by help, catalog and completion.
+
+    Robot additions come from the owning parser, host additions from COMMAND_HELP.
+    Only launcher-specific routes are declared here; no plugin discovery/import.
+    """
+    from r2b4_er2.cli import _parser as er2_parser
+    from r2b4_voice.openai_oauth import cli_parser as chatgpt_parser
+    from tools.mcap_evidence.cli import parser as evidence_parser
+
+    rows = [{**item, "usage": item["usage"].removeprefix("usage: "), "group": "robot"}
+            for item in _robot_catalog()]
+    rows.extend({"name": name, "aliases": sorted(alias for alias, target in host_cli.ALIASES.items()
+                                                 if target == name),
+                 "usage": f"r {name} {usage}".rstrip(), "description": description,
+                 "group": "host"}
+                for name, (usage, description) in host_cli.COMMAND_HELP.items())
+    for name, aliases, parser in (
+        ("er2", [], er2_parser()), ("chatgpt", [], chatgpt_parser()),
+        ("evi", [], evidence_parser()), ("cam", ["camera"], launcher_extras.camera_parser()),
+    ):
+        rows.append({"name": name, "aliases": aliases, "usage": parser.format_usage().strip().removeprefix("usage: "),
+                     "description": parser.description, "group": "launcher"})
+    rows.extend({"name": name, "aliases": aliases, "usage": usage,
+                 "description": description, "group": "launcher"}
+                for name, aliases, usage, description in (
+                    ("voice", ["wake"], "r voice [" + "|".join(launcher_extras.VOICE_OPERATIONS) + "]",
+                     "Voice wake user-service kezelése; alap: status."),
+                    ("route", [], 'r route "KÉRÉS" [--json]', "Belépési route megtekintése."),
+                    ("help", [], "r help [PARANCS]", "Áttekintés vagy a parancs saját részletes súgója."),
+                    ("commands", [], "r commands [--json]", "Teljes, source-ból követett parancskatalógus."),
+                ))
+    return sorted(rows, key=lambda row: row["name"])
+
+
+def _catalog_root(root: Path | str | None) -> Path:
+    return Path(root).expanduser().resolve() if root is not None else project_root()
+
+
+def command_catalog(*, project_root: Path | str | None = None) -> dict[str, object]:
+    from r2b4_er2.cli import _parser as er2_parser
+    from r2b4_voice.openai_oauth import cli_parser as chatgpt_parser
+    from tools.mcap_evidence.cli import OPERATIONS
+    root = _catalog_root(project_root)
+    entries = command_entries()
     return {
         "launcher": "r",
+        "commands": entries,
         "robot": _robot_catalog(),
         "capture": {
             "default_hz": DEFAULT_CAPTURE_HZ,
@@ -85,24 +130,23 @@ def command_catalog() -> dict[str, object]:
             "modes": ["alap", "full", "nincs"],
         },
         "tests": {
-            "modes": ["quick", *FOCUSED, "full", "core", "feature", "deep"],
+            "modes": launcher_extras.test_modes(),
+            "packs": list(launcher_extras.test_runner._pack_names()),
         },
-        "evidence": {"command": "evi", "operations": ["compile", "verify", "query"]},
-        "public_robot": {
-            "resources": sorted(READS), "queries": sorted(QUERIES), "actions": sorted(ACTIONS),
-            "person_skills": [skill.to_jsonable() for skill in PERSON_SKILLS],
-        },
+        "evidence": {"command": "evi", "operations": list(OPERATIONS), "default_source": "latest"},
+        "public_robot": launcher_extras.public_catalog(root),
         "er2": {
-            "commands": ["status", "preview", "stream"],
+            "commands": sorted(launcher_extras._subparsers(er2_parser()).choices),
             "default_command": "stream",
             "stream_defaults": ["camera", "tools", "speak", "json"],
-            "stream_options": ["--camera", "--tools", "--speak", "--json", "--seconds"],
+            "stream_options": sorted(option for action in launcher_extras._subparsers(er2_parser()).choices["stream"]._actions
+                                     for option in action.option_strings if option not in {"-h", "--help"}),
             "execution": "REAL_ONLY",
         },
         "camera": {
             "command": "cam",
             "aliases": ["camera"],
-            "operations": list(launcher_extras.CAMERA_OPERATIONS),
+            "operations": sorted(launcher_extras._subparsers(launcher_extras.camera_parser()).choices),
             "runtime": "NONE",
             "images": "CALIBRATED_ONLY",
         },
@@ -121,7 +165,7 @@ def command_catalog() -> dict[str, object]:
         },
         "chatgpt": {
             "command": "chatgpt",
-            "operations": ["status", "login", "host-id", "import", "logout"],
+            "operations": sorted(launcher_extras._subparsers(chatgpt_parser()).choices),
             "auth": "OAUTH_PRIMARY_API_KEY_OPTIONAL",
             "runtime": "NONE",
         },
@@ -136,22 +180,10 @@ def command_catalog() -> dict[str, object]:
             "shell": "bash",
             "source": "deploy/bash-completion/r",
             "install": "r install",
-            "ssot": "launcher/interface/ER2 parsers",
+            "ssot": "command_entries + owning parsers/capability catalogs",
         },
-        "local": sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES)),
-        "local_details": [
-            {
-                "name": name,
-                "usage": f"r {name} {usage}".rstrip(),
-                "description": (
-                    "Az r launcher, Bash TAB help/completion és voice user-service unit telepítése; "
-                    "a voice wake-et nem kapcsolja be."
-                    if name == "install" else description
-                ),
-                "aliases": sorted(alias for alias, target in host_cli.ALIASES.items() if target == name),
-            }
-            for name, (usage, description) in sorted(host_cli.COMMAND_HELP.items())
-        ],
+        "local": sorted(host_cli.COMMAND_HELP),
+        "local_details": [item for item in entries if item["group"] == "host"],
     }
 
 
@@ -159,55 +191,31 @@ def print_help() -> None:
     print(
         "R2B4 — robot, diagnosztika, fejlesztés\n"
         "Használat: r PARANCS [ARGUMENTUMOK]\n"
-        "\nÁllapot és leállítás:\n"
-        "  r s / r d                  Rövid állapot / részletes diagnosztika\n"
-        "  r x                        Mozgás STOP, runtime megmarad\n"
-        "  r sd / r panic             STOP és runtime-leállítás\n"
-        "\nMozgás — az első szám mindig az idő másodpercben:\n"
-        "  r rc 30                    Room Cruise, 30 s\n"
-        "  r fp 20 / r fa 20          Személykövetés / személy felé fordulás\n"
-        "  r f 10 0.15 / r b 10 0.15  Előre / hátra, 10 s, 0.15 m/s\n"
-        "  r t 10 0.15 -0.20          Haladás [m/s] és fordulás [rad/s]\n"
+        "\nGyakori parancsok:\n"
+        "  r s / r d                 Rövid állapot / részletes élő runtime-diagnosztika\n"
+        "  r x / r sd                STOP / STOP és runtime-leállítás\n"
+        "  r skill robot_skills/terkepesz_r2b4.py   Mentett Python-skill indítása\n"
+        "  r skill                   Mentett skillek listája\n"
+        "  r evi                     Legutolsó lezárt MCAP → evidence\n"
+        "  r diag                    Legutolsó evidence → teljes offline diagnosztika\n"
+        "  r help PARANCS            A parancs saját részletes súgója\n"
+        "  r commands [--json]       Teljes parancs- és capability-katalógus\n"
+        "\nMozgás — az első szám az idő másodpercben:\n"
+        "  r rc 30 / r fp 20 / r fa 20\n"
+        "  r f 10 0.15 / r b 10 0.15  Előre / hátra [m/s]\n"
+        "  r t 10 0.15 -0.20          Haladás [m/s], fordulás [rad/s]\n"
         "  r m 8 0.10 0.20            Bal/jobb keréksebesség-cél [m/s]\n"
-        "  r pr                       Integrált fizikai mozgásteszt\n"
-        "  0 s = folyamatos. Időzített futás végén STOP; a saját runtime leáll,\n"
-        "  a már futó runtime megmarad. Folyamatos mód leállítása: r x / r sd.\n"
-        "\nRuntime, capture és elemzés:\n"
-        "  r rt start|stop|status|diag Kézi runtime-kezelés\n"
-        "  r cap start|stop|status     Capture-kezelés\n"
-        f"  r rc 30 c 10               Capture Hz: {' / '.join(map(str, CAPTURE_HZ_VALUES))}; alap: {DEFAULT_CAPTURE_HZ} Hz\n"
-        "  c alap / c full / c nincs  Capture-mód; nc = mozgás-trigger kihagyása\n"
-        "  r evi CAPTURE.mcap         Offline MCAP Evidence Compiler\n"
-        "  r diag [full|ANALYZER]     EVI diagnosztikai adat; alap: full/latest; artifact: runtime/diag/\n"
-        "  r cam status|on|off        Kameraállapot / manuális igény be / ki; V3 nélkül\n"
-        "  r cam photo OUTPUT         Kalibrált JPEG; videó: r cam video OUTPUT [SECONDS]\n"
-        "\nAI, voice, fejlesztés és gépállapot:\n"
-        "  r \"KÉRÉS\"                 Agent Core: LLM + R2B4 toolok; exact STOP lokális\n"
-        "  r route \"KÉRÉS\" --json    Belépési route: STOP vagy AGENT\n"
-        "  r -- \"s\"                   Sima LLM prompt (ChatGPT OAuth + failover)\n"
-        "  r er2 \"FELADAT\"            ER2 stream; camera/tools/speak/json bekapcsolva\n"
-        "  r er2 status|preview|stream ER2 részletes parancsok\n"
-        "  r voice status|on|off      Voice wake állapot / bekapcsolás / kikapcsolás\n"
-        "  r voice restart|check      Voice service újraindítás / diagnosztika\n"
-        "  r chatgpt status|login     ChatGPT OAuth állapot / böngészős belépés\n"
-        "  r test [MODE]              Tesztek; alap: kis gate; release: r test release\n"
-        "  r tune roomcruise [OPCIÓK] Offline RoomCruise hangolás; runtime/tunes/\n"
-        "  r pytest [ARGS...]         Nyers pytest\n"
-        "  r git / r gitre            Git-segédek\n"
-        "  r tools / r tool NAME      Python segédprogramok\n"
-        "  r host / r sys             Gépállapot\n"
-        "  r cpu / cpu2 / disc / mem / temp / ps / net / usb / i2c\n"
-        "  r install / where / root / version\n"
-        "\nSegítség és gépi használat:\n"
-        "  TAB                        Kontextusfüggő gyors help + kiegészítés (r install után)\n"
-        "  r help PARANCS             Célzott súgó; például: r help fp\n"
-        "  r commands [--json]        Teljes parancslista és rövidítések\n"
-        "  r caps                     Élő robotképességek\n"
-        "  r read brain.history --json Korrelált részfeladat- és céleredmények\n"
-        "  r read world.snapshot --json Tudás, binding, tanulás és megőrzési keretek\n"
-        "  r execute person.teach --parameters JSON --json Explicit név–track tanítás\n"
-        "  r s --json                 Robotparancs JSON-eredménye; folyamatjelzés stderr-en"
+        "  0 s = folyamatos; leállítás: r x / r sd. Időzített futás végén STOP;\n"
+        "  a parancs saját runtime-ja leáll, a már futó runtime megmarad.\n"
+        f"  Capture: c HZ ({'/'.join(map(str, CAPTURE_HZ_VALUES))}; alap: {DEFAULT_CAPTURE_HZ} Hz)\n"
+        "  c alap / c full / c nincs; nc = mozgás-trigger kihagyása.\n"
+        "\nSzöveges kérés: r \"KÉRÉS\"; sima LLM: r -- \"PROMPT\"\n"
+        "TAB: kontextusfüggő súgó és kiegészítés az r install után."
     )
+    print("\nElérhető parancsok (az aktuális source alapján):")
+    for item in command_entries():
+        aliases = f" ({', '.join(item['aliases'])})" if item["aliases"] else ""
+        print(f"  {item['name'] + aliases:<30} {item['description']}")
 
 
 def _commands(argv: list[str]) -> int:
@@ -220,11 +228,11 @@ def _commands(argv: list[str]) -> int:
     if argv == ["--json"]:
         print(json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
-    print("Robot commands:")
-    for item in catalog["robot"]:
+    print("R2B4 parancsok:")
+    for item in catalog["commands"]:
         aliases = f" ({', '.join(item['aliases'])})" if item["aliases"] else ""
-        motion = " [motion]" if item["motion"] else ""
-        print(f"  {item['name']}{aliases}{motion}\n    {item['description']}")
+        motion = " [motion]" if item.get("motion") else ""
+        print(f"  {item['usage']}{aliases}{motion}\n    {item['description']}")
     capture = catalog["capture"]
     print(
         f"\nCapture: default {capture['default_hz']} Hz | rates "
@@ -232,17 +240,18 @@ def _commands(argv: list[str]) -> int:
         + " | modes " + "/".join(capture["modes"])
     )
     print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
-    print("Evidence: r evi MCAP | r evi verify BUNDLE | r evi query BUNDLE")
-    print("\nER2: r er2 status|preview|stream; röviden: r er2 \"FELADAT\"")
-    print("Camera: r cam status|on|off|photo OUTPUT|video OUTPUT [SECONDS]; V3 nélkül")
+    print("Evidence: r evi [MCAP|latest] | r evi verify BUNDLE | r evi query BUNDLE")
+    print("\nER2: r er2 " + "|".join(catalog["er2"]["commands"]) + '; röviden: r er2 "FELADAT"')
+    print("Camera: r cam " + "|".join(catalog["camera"]["operations"]) + "; r help cam")
     print('Agent route: r "REQUEST"; dry-run: r route "REQUEST" --json')
     print('Plain LLM escape: r -- "PROMPT"')
-    print("Voice wake: r voice status|on|off|restart|check  (alias: r wake ...)")
+    print("Voice wake: r voice " + "|".join(catalog["voice"]["operations"]) + " (alias: r wake ...)")
     print("TAB help: r install telepíti a Bash completiont")
-    print("\nHost / fejlesztés:")
-    for item in catalog["local_details"]:
-        aliases = f" ({', '.join(item['aliases'])})" if item["aliases"] else ""
-        print(f"  {item['usage']}{aliases}\n    {item['description']}")
+    public = catalog["public_robot"]
+    print("\nPublikus capability-k (élő elérhetőség: r caps):")
+    print("  r read RESOURCE --json\n    " + ", ".join(public["resources"]))
+    print("  r execute ACTION --parameters JSON --json\n    " + ", ".join(public["actions"]))
+    print("  Mentett Python-skillek: " + (", ".join(item["skill_name"] for item in public["python_skills"]) or "(nincs)"))
     return 0
 
 
@@ -264,6 +273,9 @@ def _auto_prompt(argv: Sequence[str], root: Path) -> int:
 
 def _route(argv: Sequence[str], root: Path) -> int:
     args = list(argv)
+    if any(arg in {"-h", "--help"} for arg in args):
+        print('Használat: r route "KÉRÉS" [--json]\nBelépési route megtekintése a kérés végrehajtása nélkül.')
+        return 0
     json_output = "--json" in args
     args = [item for item in args if item != "--json"]
     prompt = " ".join(args).strip()
@@ -284,9 +296,7 @@ def _route(argv: Sequence[str], root: Path) -> int:
 
 
 def _command_names() -> set[str]:
-    known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
-    known |= set(host_cli.COMMANDS) | {"chatgpt", "er2", "voice", "wake", "help", "commands", "route", "evi"}
-    return known
+    return {name for item in command_entries() for name in (item["name"], *item["aliases"])}
 
 
 def _looks_like_command_typo(command: str) -> bool:
@@ -334,9 +344,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             # Ask the owning parser for help; never execute a help topic.
             args = args[1:]
-            if args[0] in host_cli.COMMANDS:
+            if args[0] not in _command_names():
+                return _unknown_command(args[0])
+            if args[0] == "route":
+                return _route(["--help"], root)
+            if args[0] in {"voice", "wake"}:
+                return launcher_extras.voice_command(["--help"], root)
+            if host_cli.ALIASES.get(args[0], args[0]) in host_cli.COMMAND_HELP:
                 if len(args) != 1:
                     raise LauncherError("Használat: r help PARANCS")
+                if args[0] == "diag":
+                    from tools.diag.cli import main as diag_main
+                    return diag_main(["--help"], project_root=root)
                 if args[0] == "install":
                     print(
                         "Használat: r install\n\n"
@@ -353,7 +372,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise LauncherError("A Test Hub megszűnt. Offline evidence: r evi CAPTURE.mcap")
         if args[0] == "evi":
             from tools.mcap_evidence.cli import main as evidence_main
-            return evidence_main(args[1:])
+            return evidence_main(args[1:], project_root=root)
         if args[0] == "commands":
             return _commands(args[1:])
         if args[0] == "route":
@@ -375,10 +394,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if rc == 0 and not args[1:]:
                 return launcher_extras.install_extras(root)
             return rc
-        if args[0] in host_cli.COMMANDS:
+        if host_cli.ALIASES.get(args[0], args[0]) in host_cli.COMMAND_HELP:
             return host_cli.execute(args[0], args[1:], root)
         if not args[0].startswith("-"):
-            known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
+            known = _command_names()
             if args[0] not in known:
                 if _looks_like_command_typo(args[0]):
                     return _unknown_command(args[0])

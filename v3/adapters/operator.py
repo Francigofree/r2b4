@@ -10,8 +10,8 @@ from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
 class OperatorInterfaceAdapter:
     name = "operator"
-    capability_names = frozenset({
-        "operator.status", "operator.diagnostics", "capture.status",
+    read_capability_names = frozenset({"operator.status", "operator.diagnostics", "capture.status"})
+    capability_names = read_capability_names | frozenset({
         "operator.runtime.start", "operator.runtime.stop", "operator.shutdown",
         "operator.panic", "capture.start", "capture.stop", "operator.proba",
     })

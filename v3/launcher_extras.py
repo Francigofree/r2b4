@@ -15,7 +15,7 @@ import sys
 from collections.abc import Sequence
 
 from v3 import host_cli, interface_cli
-from v3.test_runner import FOCUSED
+from v3 import test_runner
 
 VOICE_UNIT = "r2b4-wake.service"
 VOICE_OPERATIONS = ("status", "on", "off", "restart", "check")
@@ -44,11 +44,46 @@ def _canonical_robot_commands() -> list[str]:
 
 
 def _top_level_commands() -> list[str]:
-    host = sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES))
-    return sorted({
-        *_canonical_robot_commands(), *host,
-        "commands", "er2", "help", "voice", "evi", "cam",
-    })
+    from v3.launcher_cli import command_entries
+    return sorted({name for item in command_entries() for name in (item["name"], *item["aliases"])})
+
+
+def test_modes() -> list[str]:
+    return sorted(set(test_runner.command_modes()))
+
+
+def public_catalog(root: Path) -> dict[str, object]:
+    """Supported public names from their owners, without runtime/device queries.
+
+    Local skill discovery parses source metadata only. Live availability remains
+    the explicit r caps operation; completion never starts or queries an owner.
+    """
+    from r2b4_orchestration.person_skills import PERSON_SKILLS
+    from r2b4_orchestration.robot_runtime import READS, QUERIES, ACTIONS, SKILL_READS, skill_capabilities
+    from r2b4_orchestration.skill_library import SkillLibrary
+    from r2b4_orchestration.skill_observation import SkillObservationAdapter
+    from r2b4_orchestration.software_interface import SoftwareInterfaceAdapter
+    from v3.action_catalog import ACTION_CATALOG
+    from v3.interface_adapters import build_adapters
+
+    descriptors = skill_capabilities(SkillLibrary(root / "robot_skills"))
+    descriptors.update(SoftwareInterfaceAdapter(root).capabilities())
+    actions = set(ACTIONS) | set(ACTION_CATALOG) | SkillObservationAdapter.capability_names
+    actions |= {name for name, item in descriptors.items() if item["kind"] == "action"}
+    reads = set(READS | SKILL_READS)
+    # The existing composition only constructs thin adapters. Inspect their
+    # static names, never capabilities(), which would query live owner state.
+    for adapter in build_adapters(None, root):
+        reads.update(adapter.read_capability_names)
+        actions.update(adapter.capability_names - adapter.read_capability_names)
+    return {
+        "resources": sorted(reads), "queries": sorted(QUERIES),
+        "actions": sorted(actions),
+        "person_skills": [skill.to_jsonable() for skill in PERSON_SKILLS],
+        "python_skills": [item for item in descriptors.values() if "skill_name" in item],
+        "descriptors": descriptors,
+        "discovery": "LOCAL_SOURCE_ONLY; live availability: r caps",
+    }
 
 
 def _filter(candidates: Sequence[str], current: str) -> list[str]:
@@ -94,7 +129,21 @@ def _parser_candidates(
     return _filter(candidates, current)
 
 
-def _robot_completion(command: str, before: Sequence[str], current: str) -> tuple[str, list[str]]:
+def _subcommand_completion(
+    parser: argparse.ArgumentParser, before: Sequence[str], current: str,
+) -> tuple[str, list[str]]:
+    """Follow selected subparsers so their own operations/options stay current."""
+    tail = list(before)
+    while True:
+        sub = next((action for action in parser._actions
+                    if isinstance(action, argparse._SubParsersAction)), None)
+        if sub is None or not tail or tail[0] not in sub.choices:
+            return parser.format_usage().strip(), _parser_candidates(parser, tail, current)
+        parser = sub.choices[tail.pop(0)]
+
+
+def _robot_completion(command: str, before: Sequence[str], current: str,
+                      *, root: Path | None = None) -> tuple[str, list[str]]:
     canonical = interface_cli.ALIASES.get(command, command)
     parser = interface_cli._parser()
     child = _subparsers(parser).choices.get(canonical)
@@ -103,9 +152,11 @@ def _robot_completion(command: str, before: Sequence[str], current: str) -> tupl
 
     extra: list[str] = []
     if canonical in {"read", "execute"} and not before:
-        from r2b4_orchestration.robot_runtime import READS, ACTIONS
-        from v3.action_catalog import ACTION_CATALOG
-        extra.extend(sorted(READS if canonical == "read" else ACTIONS | set(ACTION_CATALOG)))
+        catalog = public_catalog(root or Path(__file__).resolve().parents[1])
+        extra.extend(catalog["resources" if canonical == "read" else "actions"])
+    if canonical == "skill" and not before:
+        catalog = public_catalog(root or Path(__file__).resolve().parents[1])
+        extra.extend(item["skill_name"] for item in catalog["python_skills"])
     capture_commands = set(interface_cli.MOTION_COMMANDS) | {"runtime", "capture", "proba"}
     if canonical in capture_commands:
         if before and before[-1] in {"c", "--capture"}:
@@ -125,9 +176,9 @@ def _er2_completion(before: Sequence[str], current: str) -> tuple[str, list[str]
 
     parser = er2_parser()
     sub = _subparsers(parser)
-    commands = ("status", "preview", "stream")
+    commands = tuple(sub.choices)
     if not before:
-        return "r er2 status|preview|stream  |  r er2 \"FELADAT\"", _filter(commands, current)
+        return parser.format_usage().strip() + ' | r er2 "FELADAT"', _filter(commands, current)
 
     first = before[0]
     if first in commands:
@@ -186,7 +237,7 @@ def camera_command(argv: Sequence[str], root: Path) -> int:
 def _camera_completion(before: Sequence[str], current: str) -> tuple[str, list[str]]:
     parser = camera_parser()
     if not before:
-        return "r cam status|on|off|photo|video", _filter(CAMERA_OPERATIONS, current)
+        return parser.format_usage().strip(), _filter(tuple(_subparsers(parser).choices), current)
     child = _subparsers(parser).choices.get(before[0])
     if child is None:
         return parser.format_usage().strip(), []
@@ -201,8 +252,9 @@ def _host_completion(command: str, before: Sequence[str], current: str, root: Pa
         hint += f" — {description}"
 
     if canonical == "test":
-        modes = ["quick", *FOCUSED, "full", "core", "feature", "deep", "list", "help"]
-        return hint, _filter(modes, current)
+        if before and before[0] == "pack" and len(before) == 1:
+            return hint, _filter(test_runner._pack_names(), current)
+        return hint, _filter(test_modes(), current) if not before else []
     if canonical == "tool" and not before:
         names: set[str] = set()
         for parent in (root / "tools", root):
@@ -275,10 +327,20 @@ def completion(cword: int, words: Sequence[str], root: Path) -> tuple[str, list[
             return _er2_completion(tail[1:], current)
         if tail[0] in {"cam", "camera"}:
             return _camera_completion(tail[1:], current)
+        if tail[0] == "chatgpt":
+            from r2b4_voice.openai_oauth import cli_parser
+            return _subcommand_completion(cli_parser(), tail[1:], current)
         return "r help PARANCS", []
 
     if command == "commands":
         return "r commands [--json] — teljes parancskatalógus", _filter(["--json"], current)
+
+    if command == "route":
+        return 'r route "KÉRÉS" [--json]', _filter(["--json"], current)
+
+    if command == "chatgpt":
+        from r2b4_voice.openai_oauth import cli_parser
+        return _subcommand_completion(cli_parser(), tail, current)
 
     if command in {"voice", "wake"}:
         if not tail:
@@ -292,18 +354,18 @@ def completion(cword: int, words: Sequence[str], root: Path) -> tuple[str, list[
         return _camera_completion(tail, current)
 
     if command == "evi":
-        from tools.mcap_evidence.cli import parser
-        operation = tail[0] if tail and tail[0] in {"verify", "verify-evidence", "query"} else None
+        from tools.mcap_evidence.cli import OPERATIONS, VERIFY_OPERATIONS, parser
+        operation = tail[0] if tail and tail[0] in {*OPERATIONS, *VERIFY_OPERATIONS} else None
         selected = parser(operation)
-        hint = selected.format_usage().strip() if operation else "r evi MCAP | verify BUNDLE | query BUNDLE"
+        hint = selected.format_usage().strip() if operation else "r evi [MCAP|latest] | compile | verify BUNDLE | query BUNDLE"
         return hint, _parser_candidates(selected, tail[1:] if operation else tail, current,
-                                        extra=() if operation else ("verify", "query"))
-    if command in host_cli.COMMANDS:
+                                        extra=() if operation else (*OPERATIONS, "latest"))
+    if host_cli.ALIASES.get(command, command) in host_cli.COMMAND_HELP:
         return _host_completion(command, tail, current, root)
 
     canonical = interface_cli.ALIASES.get(command, command)
     if canonical in _canonical_robot_commands():
-        return _robot_completion(command, tail, current)
+        return _robot_completion(command, tail, current, root=root)
 
     return "", []
 

@@ -4,6 +4,19 @@ Each skill is an ordinary `.py` module with `async def run(robot, **parameters)`
 The common library discovers the file without importing it in the host. A fresh
 worker loads the saved source; editing it affects the next run.
 
+From the launcher:
+
+```bash
+r skill                         # list saved skills
+r skill robot_skills/monitor_region.py --parameters '{"duration_hours": 0.01}' --json
+r execute skill.status --parameters '{"run_id":"ID"}' --json
+r execute skill.stop --parameters '{"run_id":"ID"}' --json
+```
+
+The existing LCE supervises the worker after the launcher returns its `run_id`.
+Names and absolute paths under the saved library also work. See
+[`docs/R_LAUNCHER.md`](../docs/R_LAUNCHER.md) for discovery and evidence commands.
+
 `monitor_region` observes locally and records person-presence events using the
 installed camera and person detector. `region` is `None` for the entire image or
 a normalized box with `xmin`, `ymin`, `xmax`, `ymax`, all within `[0, 1]`.
