@@ -241,7 +241,9 @@ class AgentCore:
                         test_data.get("status") == "PASSED" and test_data.get("returncode") == 0
                         and test_data.get("timeout") is not True)
                     self._emit(event_sink, "agent_skill_tested", {"name": name,
-                        "status": "PASSED" if passed else "FAILED", "error": test_result.error})
+                        "status": "PASSED" if passed else "FAILED", "error": test_result.error,
+                        "source_hash": test_data.get("source_hash") if isinstance(test_data, Mapping) else None,
+                        "test_result": test_result.to_jsonable()})
                     if not passed:
                         if round_index >= self._max_tool_rounds:
                             raise RuntimeError("AGENT_SKILL_TEST_FAILED:REPAIR_ROUND_LIMIT")

@@ -8,7 +8,7 @@ Usage:
   python3 mcap50-to-map.py xyz.mcap
 
 Default strategy:
-- require a finalized, integrity-valid 50 Hz capture with complete raw LiDAR;
+- require a finalized, structurally valid 50 Hz capture with complete raw LiDAR;
 - extract the complete /r2b4/raw_lidar stream and every-tick L3 local trajectory;
 - detect stable stationary windows (the intended map-survey stop-and-scan mode);
 - reject the settling prefix of each stop, then fuse repeated scans into a
@@ -19,9 +19,9 @@ Default strategy:
 - ray-trace the optimized static keyframes into a 5 cm occupancy map;
 - write ROS-compatible PGM+YAML plus NPZ/JSON/CSV provenance artifacts.
 
-This tool intentionally prefers correctness over forcing a map from bad data.
-By default it rejects raw-LiDAR loss, truncation, queue supersede, discontinuous
-localization, and captures that are not 50 Hz sensor-debug captures.
+Mapping ignores unrelated runtime/replay-event failures while retaining structural,
+raw-LiDAR, localization, and geometry checks. The ignored replay problem is recorded
+as a warning in report.json. Incomplete/corrupt mapping evidence is still rejected.
 """
 
 from __future__ import annotations
@@ -1091,11 +1091,22 @@ def build(input_path: Path, output_dir: Path | None = None) -> Path:
         raise MapBuildError(f"requires a 50 Hz capture, got {hz} Hz")
     if meta.get("raw_evidence_requested", "false") != "true":
         raise MapBuildError("capture was not recorded with raw sensor evidence")
+    # A runtime/replay event error must not discard otherwise usable LiDAR
+    # and pose samples. Keep MCAP CRC/structure checks and geometry gates.
+    capture_warning = None
     try:
         final = reader.capture_integrity(require_raw_evidence=True)
     except McapReadError as exc:
-        raise MapBuildError(f"capture integrity gate failed: {exc}") from exc
+        capture_warning = str(exc)
+        final = None
+        for _, event in reader.iter_json_messages(topics=("/r2b4/event",)):
+            if isinstance(event, Mapping) and event.get("event_type") == "capture_finalized":
+                final = event
+        if final is None:
+            raise MapBuildError("no finalized capture record: " + capture_warning) from exc
     integrity = _as_mapping(final.get("integrity"))
+    if integrity.get("raw_evidence_complete") is not True:
+        raise MapBuildError("raw LiDAR evidence is incomplete")
 
     # Stronger than the recorder's generic sparse-loss tolerance: map building
     # defaults to zero loss, zero truncation, zero producer supersede.
@@ -1168,7 +1179,8 @@ def build(input_path: Path, output_dir: Path | None = None) -> Path:
             "raw_evidence_complete": integrity.get("raw_evidence_complete"),
             "replay_complete": integrity.get("replay_complete"),
         },
-        "evidence_gate": {"strict_zero_loss": True, **strict_zero_fields},
+        "evidence_gate": {"strict_zero_loss": True, "replay_warning": capture_warning,
+                          **strict_zero_fields},
         "trajectory": {"l3_pose_samples": len(poses)},
         "raw_lidar": {"usable_scans": len(scans)},
         "stationary": {

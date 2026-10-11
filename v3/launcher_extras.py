@@ -338,6 +338,11 @@ def completion(cword: int, words: Sequence[str], root: Path) -> tuple[str, list[
     if command == "route":
         return 'r route "KÉRÉS" [--json]', _filter(["--json"], current)
 
+    if command == "learn":
+        from r2b4_orchestration.learning_cli import parser
+        selected = parser()
+        return selected.format_usage().strip(), _parser_candidates(selected, tail, current)
+
     if command == "chatgpt":
         from r2b4_voice.openai_oauth import cli_parser
         return _subcommand_completion(cli_parser(), tail, current)

@@ -10,13 +10,14 @@ import time
 from .agent_source_tools import build_source_tools
 from .agent_evidence_tools import build_evidence_tools
 from .agent_config_tools import build_config_tools
+from .learning_tools import build_learning_tools
 
 
 class SoftwareInterfaceAdapter:
     name = "software"
 
     def __init__(self, root: Path):
-        tools = (*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root))
+        tools = (*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root), *build_learning_tools(root))
         self._tools = {spec.name: (spec, handler) for spec, handler in tools}
         self.capability_names = frozenset(self._tools)
 

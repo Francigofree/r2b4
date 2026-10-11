@@ -14,6 +14,7 @@ from v3.adapters.vision_media_contracts import VisionJpeg
 from .agent_contracts import AgentToolResult, AgentToolSpec
 from .agent_config_tools import build_config_tools
 from .agent_evidence_tools import build_evidence_tools
+from .learning_tools import build_learning_tools
 from .agent_source_tools import build_source_tools
 from .world_model import WorldQuery, WorldQueryResult
 
@@ -269,7 +270,7 @@ def build_default_agent_tools(
             lambda args: _vision_observe(interface, args),
         ),
     ]
-    tools.extend((*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root)))
+    tools.extend((*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root), *build_learning_tools(root)))
     for action in ("skill.create", "skill.update"):
         tools.append((AgentToolSpec(action, "Save a standard Python skill used by the common library and Brain.",
             "READ", {"name": "required skill name", "source": "required Python module; async def run(robot, **parameters)",
