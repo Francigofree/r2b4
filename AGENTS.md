@@ -63,8 +63,6 @@ Ha a szükséges információ biztonságosan megszerezhető motor-output nélkü
 
 ## Helyi adatok
 
-A runtime-, capture-, log- és diagnosztikai adatok helyi fejlesztési adatok. Ne archiváld, másold, verziózd, írd felül vagy töröld őket automatikusan.
-
 Új ideiglenes diagnosztikai outputhoz lehetőleg `/tmp` alatti egyedi célt használj.
 
 ## Befejezés
