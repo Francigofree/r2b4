@@ -42,6 +42,7 @@ def _print_help(registry: AnalyzerRegistry) -> None:
         "  - input: sealed tools/mcap_evidence EVI bundle only\n"
         "  - source MCAP is never opened by DIAG\n"
         "  - output: facts, measurements, relationships and evidence references\n"
+        "  - motion_performance links prior L9 commands to sampled L3 estimates\n"
         "  - diagnostic payloads are atomically saved under runtime/diag by default\n"
         "  - --no-save requests an explicit ephemeral run\n"
         "  - no recommendations, suggestions or automatic root-cause verdicts\n\n"

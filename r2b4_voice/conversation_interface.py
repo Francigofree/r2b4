@@ -8,6 +8,7 @@ from pathlib import Path
 import queue
 import threading
 import time
+import uuid
 
 from r2b4_orchestration.agent_core import AgentCore, AgentToolBroker
 from r2b4_orchestration.agent_tools import build_default_agent_tools
@@ -142,6 +143,8 @@ class _AgentObservationJournal:
         self._last_fields = None
         self._offer_dropped = 0
         self._write_dropped = 0
+        self._learning_producer_id = uuid.uuid4().hex
+        self._learning_sequence = 0
         self._thread = threading.Thread(target=self._run, name="r2b4-agent-evidence", daemon=True)
         self._thread.start()
 
@@ -152,6 +155,24 @@ class _AgentObservationJournal:
             self._last_fields = fields
             try:
                 self._queue.put_nowait((event, fields))
+            except queue.Full:
+                self._offer_dropped += 1
+                raise
+
+    def offer_learning(self, event: str, fields: Mapping[str, object]) -> None:
+        """Keep learning transitions on the same bounded HRI-to-MCAP edge."""
+        with self._admission_lock:
+            if self._closed.is_set():
+                raise RuntimeError("agent observation journal is closed")
+            self._learning_sequence += 1
+            row = {**fields, "observation_topic": "r2b4.learning",
+                   "monotonic_ns": time.monotonic_ns(),
+                   "producer_id": self._learning_producer_id,
+                   "event_sequence": self._learning_sequence,
+                   "evidence_dropped": self._offer_dropped}
+            self._last_fields = row
+            try:
+                self._queue.put_nowait((event, row))
             except queue.Full:
                 self._offer_dropped += 1
                 raise
@@ -222,6 +243,7 @@ def build_voice_interface(
     llm = _OnDemandLLM(provider=provider, api_key=api_key, model=model, project_root=root)
     broker = AgentToolBroker(build_default_agent_tools(
         root, interface=core_interface, developer_mode=developer_mode,
+        event_sink=lambda event, fields: observation.offer_learning(event, fields),
     ))
     agent = AgentCore(llm, broker, max_tool_rounds=4)
     prompt = PromptAssembler(

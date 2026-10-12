@@ -17,8 +17,9 @@ from .learning_tools import build_learning_tools
 class SoftwareInterfaceAdapter:
     name = "software"
 
-    def __init__(self, root: Path):
-        tools = (*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root), *build_learning_tools(root))
+    def __init__(self, root: Path, *, interface=None, event_sink=None):
+        tools = (*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root),
+                 *build_learning_tools(root, interface=interface, event_sink=event_sink))
         self._tools = {spec.name: (spec, handler) for spec, handler in tools}
         self.capability_names = frozenset(self._tools)
 

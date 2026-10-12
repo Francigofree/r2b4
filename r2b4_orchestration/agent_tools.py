@@ -211,6 +211,7 @@ def build_default_agent_tools(
     *,
     interface: AgentRobotInterface | None = None,
     developer_mode: bool = False,
+    event_sink=None,
 ):
     """Expose the common robot and K&F tools; developer_mode is compatibility input."""
     root = Path(project_root).resolve()
@@ -270,7 +271,8 @@ def build_default_agent_tools(
             lambda args: _vision_observe(interface, args),
         ),
     ]
-    tools.extend((*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root), *build_learning_tools(root)))
+    tools.extend((*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root),
+                  *build_learning_tools(root, interface=interface, event_sink=event_sink)))
     for action in ("skill.create", "skill.update"):
         tools.append((AgentToolSpec(action, "Save a standard Python skill used by the common library and Brain.",
             "READ", {"name": "required skill name", "source": "required Python module; async def run(robot, **parameters)",

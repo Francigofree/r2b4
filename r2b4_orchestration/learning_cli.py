@@ -9,11 +9,11 @@ import threading
 
 
 def parser():
-    result = argparse.ArgumentParser(prog="r learn", description="Python-skill generálás, mérés és javítás motor nélküli LCE/LLM ciklusban.")
+    result = argparse.ArgumentParser(prog="r learn", description="Python-skill generálás, robotikai szimulációs mérés és javítás LCE/LLM ciklusban; mozgássiker után külön élő engedély és mérés szükséges.")
     result.add_argument("goal", nargs="+", help="a megtanulandó teljes cél szövege")
     result.add_argument("--skill", help="meglévő skill: először mért baseline, majd szükség szerinti javítás")
     result.add_argument("--parameters", default="{}", help="skillparaméterek JSON-objektumként")
-    result.add_argument("--scenario", type=Path, help="független motor nélküli mérési feltételek JSON-fájlja")
+    result.add_argument("--scenario", type=Path, help="független szemantikus/fizikai szimuláció vagy 1..8 környezetből álló scenario_suite JSON-fájlja")
     result.add_argument("--max-iterations", type=int, default=3)
     result.add_argument("--timeout-s", type=float, default=120.0)
     result.add_argument("--evidence", type=Path, help="explicit meglévő EVI háttérevidence, a friss próba külön adat")
@@ -21,7 +21,7 @@ def parser():
     result.add_argument("--provider", help="a meglévő provider-választó beállítása")
     result.add_argument("--model", help="a meglévő provider modellbeállítása")
     result.add_argument("--json", action="store_true")
-    result.epilog = "A siker a megadott szimulációs feltételekre vonatkozik. Forgatókönyv nélkül nincs bizonyított célteljesülés. Új evidence: egyedi /tmp könyvtár; a skill a robot_skills könyvtárban marad."
+    result.epilog = "A szimulált mozgás sikere LIVE_VALIDATION_REQUIRED: élő robotfejlődést eredeti MCAP/DIAG méréssel kell igazolni. Ez a parancs nem indít élő mozgást. Forgatókönyv nélkül nincs bizonyított célteljesülés. Új evidence: egyedi /tmp könyvtár."
     return result
 
 
@@ -37,7 +37,7 @@ def run_learning(project_root, goal, *, model=None, provider=None, skill=None, p
                  cancel_event=None, event_sink=None, library=None):
     from .agent_core import AgentCore, AgentToolBroker
     from .agent_tools import build_default_agent_tools
-    from .learning_tools import measure_skill_trial
+    from .learning_tools import measure_skill_suite, scenario_suite
     from .skill_library import SkillLibrary
     from .skill_learning import SkillLearningLoop
     from .skill_simulation import MotorlessSkillSimulator
@@ -64,8 +64,19 @@ def run_learning(project_root, goal, *, model=None, provider=None, skill=None, p
         simulator.goal_text = goal
         descriptor = None
         if scenario is not None:
-            descriptor = simulator.scenario_descriptor(scenario)
-            simulator.source.prepare(scenario, "simulation-discovery")
+            scenarios = scenario_suite(scenario)
+            if scenarios is None:
+                descriptor = simulator.scenario_descriptor(scenario)
+                simulator.source.prepare(scenario, "simulation-discovery")
+            else:
+                descriptor = {"kind": "scenario_suite", "scenarios": [simulator.scenario_descriptor(item) for item in scenarios]}
+                simulator.source.prepare(scenarios[0], "simulation-discovery")
+
+        def learning_event(event, fields):
+            if hasattr(simulator, "capture_learning_event"):
+                simulator.capture_learning_event(event, fields)
+            if event_sink is not None:
+                event_sink(event, fields)
         # A simulation has no production-config restart capability. The same
         # owning read/evidence/skill tools remain available in this experiment.
         tools = tuple((spec, handler) for spec, handler in build_default_agent_tools(root, interface=simulator.interface)
@@ -73,7 +84,7 @@ def run_learning(project_root, goal, *, model=None, provider=None, skill=None, p
         agent = AgentCore(selected_model, AgentToolBroker(tools))
 
         def trial(name, parameters, scenario, *, timeout_s, cancel_event):
-            return measure_skill_trial(root, library, simulator, name, parameters, scenario,
+            return measure_skill_suite(root, library, simulator, name, parameters, scenario,
                                        timeout_s=timeout_s, cancel_event=cancel_event)
 
         loop = SkillLearningLoop(agent, library, trial,
@@ -82,9 +93,11 @@ def run_learning(project_root, goal, *, model=None, provider=None, skill=None, p
         summary = loop.run(goal, skill=skill, parameters=parameters, scenario=scenario,
                            scenario_descriptor=descriptor,
                            max_iterations=max_iterations, timeout_s=timeout_s,
-                           evidence=background, cancel_event=cancel_event, event_sink=event_sink)
+                           evidence=background, cancel_event=cancel_event, event_sink=learning_event)
         summary["artifact_directory"] = str(simulator.root)
         summary["execution_scope"] = "MOTORLESS_SIMULATION"
+        if hasattr(simulator, "learning_capture"):
+            summary["learning_capture"] = str(simulator.learning_capture)
         summary["summary_path"] = str(simulator.root / "learning.json")
         with Path(summary["summary_path"]).open("x") as stream:
             json.dump(summary, stream, ensure_ascii=False, indent=2, allow_nan=False)

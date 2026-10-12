@@ -14,7 +14,7 @@ import time
 
 from .agent_core import AgentCore
 from .skill_library import SkillLibrary
-from .learning_tools import bounded_feedback, compact_assessment, compact_trial_feedback, compact_test_feedback
+from .learning_tools import bounded_feedback, compact_assessment, compact_trial_feedback, compact_test_feedback, scenario_suite
 
 
 class SkillLearningLoop:
@@ -57,6 +57,9 @@ class SkillLearningLoop:
                   "evidence": None, "elapsed_ns": None}
         selected, selected_parameters = skill, explicit_parameters
         previous = None
+        baseline = None
+        motion_experiment = any(isinstance(item, Mapping) and item.get("kind") == "differential_drive"
+                                for item in scenario_suite(scenario) or [scenario])
         agent_test_results = {}
 
         def check():
@@ -66,6 +69,8 @@ class SkillLearningLoop:
                 raise TimeoutError("LEARNING_TIMEOUT")
 
         def emit(event, fields):
+            fields = {"measurement_time_ns": time.monotonic_ns(), "clock_domain": "host_monotonic",
+                      "goal_id": result["goal_id"], **dict(fields)}
             if event.startswith("agent_llm_") or event in {"agent_skill_saved", "agent_skill_tested"}:
                 result["llm_events"].append({"event": event, **dict(fields)})
             if event == "agent_llm_started":
@@ -81,6 +86,8 @@ class SkillLearningLoop:
 
         try:
             check()
+            emit("learning_started", {"goal": goal, "skill": skill, "max_iterations": max_iterations,
+                                       "motion_experiment": motion_experiment})
             if evidence is not None:
                 if isinstance(evidence, Mapping):
                     result["evidence"] = dict(evidence)
@@ -99,7 +106,8 @@ class SkillLearningLoop:
                 check()
                 # An existing skill is measured before any model intervention.
                 if selected is None or number > 1:
-                    context = {"mode": "motorless", "scenario": bounded_feedback(scenario, max_bytes=8192),
+                    context = {"mode": "motorless", "physical_validation_required": motion_experiment,
+                               "scenario": bounded_feedback(scenario, max_bytes=8192),
                                "input_contract": bounded_feedback(scenario_descriptor, max_bytes=8192),
                                "parameters": bounded_feedback(explicit_parameters),
                                "previous_iteration": self._prompt_iteration(previous),
@@ -125,6 +133,13 @@ class SkillLearningLoop:
                             "Omitted previews explicitly describe partial data. Read measured.json details "
                             "with learning.read using feedback_path/SHA256 and a JSON pointer; use "
                             "diag.run or evi.query for full diagnostic profiles/source messages.\n"
+                            "Use measured performance and first_boundary to distinguish skill decisions, "
+                            "V3 tracking/constraints and physical plant effects. Treat likely_owner as an "
+                            "inference, never proven cause. Compare baseline/variant on identical scenarios "
+                            "with learning.compare; retain a working baseline when improvement is unproved. "
+                            "Use next_experiment to choose the smallest informative trial. Simulation "
+                            "cannot prove physical robot improvement; request explicit live movement "
+                            "approval through learning.live_plan before a canonical live measurement.\n"
                             "For use_skill/create_skill/update_skill fill only skill_json: spoken_text, "
                             "tool_name, tool_arguments_json, action_name and plan_json are null; "
                             "action_parameters is {}.\n"
@@ -193,6 +208,16 @@ class SkillLearningLoop:
                 trial = dict(self.trial_runner(selected, selected_parameters, scenario,
                     timeout_s=deadline - time.monotonic(), cancel_event=cancelled))
                 iteration["trial"] = trial
+                if baseline is None:
+                    baseline = iteration
+                elif motion_experiment:
+                    from .skill_simulation import compare_trials
+                    original = baseline.get("trial", {})
+                    comparison = compare_trials(original.get("trials", [original]), trial.get("trials", [trial]))
+                    iteration["comparison"] = comparison
+                    result["comparison"] = comparison
+                    emit("learning_comparison", {"iteration": number, "source_hash": loaded.source_hash,
+                                                 "comparison": bounded_feedback(comparison, max_bytes=4096)})
                 check()
                 runtime, assessment = trial.get("runtime"), trial.get("assessment")
                 if not isinstance(runtime, Mapping) or not isinstance(assessment, Mapping):
@@ -233,10 +258,19 @@ class SkillLearningLoop:
                 passed = (runtime.get("state") == "SUCCEEDED" and assessment.get("status") == "PASSED"
                           and all(item["passed"] for item in checks))
                 emit("learning_iteration_completed", {"iteration": number,
-                    "source_hash": loaded.source_hash, "assessment": "PASSED" if passed else "FAILED"})
+                    "source_hash": loaded.source_hash, "run_id": runtime.get("run_id"),
+                    "assessment": "PASSED" if passed else "FAILED", "feedback_path": trial.get("feedback_path"),
+                    "feedback_sha256": trial.get("feedback_sha256"), "learning_capture": trial.get("learning_capture")})
                 if passed:
-                    result.update(status="LEARNED", reason="INDEPENDENT_MOTORLESS_CHECKS_PASSED",
-                                  goal_satisfaction="ASSESSED_IN_MOTORLESS_SCENARIO")
+                    if motion_experiment:
+                        result.update(status="LIVE_VALIDATION_REQUIRED", reason="SIMULATED_MOTION_PASSED_LIVE_EVIDENCE_REQUIRED",
+                                      goal_satisfaction="ASSESSED_IN_SIMULATION", physical_validation="NOT_PERFORMED",
+                                      next_step="Use learning.live_plan to prepare a bounded canonical experiment and ask for explicit user movement approval.")
+                        emit("learning_live_validation_required", {"skill": selected, "source_hash": loaded.source_hash,
+                            "reason": result["reason"], "feedback_path": trial.get("feedback_path")})
+                    else:
+                        result.update(status="LEARNED", reason="INDEPENDENT_MOTORLESS_CHECKS_PASSED",
+                                      goal_satisfaction="ASSESSED_IN_MOTORLESS_SCENARIO")
                     break
                 result["reason"] = "MEASURED_GOAL_CHECK_FAILED"
                 previous = iteration
@@ -248,6 +282,9 @@ class SkillLearningLoop:
             result.update(status="FAILED", reason=f"{type(exc).__name__}:{exc}")
         finally:
             result["elapsed_ns"] = time.monotonic_ns() - started_ns
+            emit("learning_completed", {"skill": selected, "source_hash": result["current_hash"],
+                "status": result["status"], "reason": result["reason"],
+                "goal_satisfaction": result["goal_satisfaction"], "elapsed_ns": result["elapsed_ns"]})
         return result
 
     @staticmethod
@@ -258,6 +295,8 @@ class SkillLearningLoop:
         result = {key: iteration.get(key) for key in ("iteration", "skill", "source_hash")}
         result["parameters"] = bounded_feedback(iteration.get("parameters"))
         result["assessment"] = compact_assessment(iteration.get("assessment"))
+        if "comparison" in iteration:
+            result["comparison"] = bounded_feedback(iteration["comparison"], max_bytes=4096)
         tests = iteration.get("tests", {})
         result["tests"] = ({key: tests.get(key) for key in (
             "status", "returncode", "source_hash", "test_source_hash", "test_path")}

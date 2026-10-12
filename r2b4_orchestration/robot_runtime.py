@@ -277,7 +277,7 @@ class PublicRobotRuntime:
             self.skills = SkillRuntime(self.skill_library, socket_path or socket_path_for(root),
                                        on_terminal=self._skill_terminal, clock_ns=clock_ns)
             self.skill_observation = SkillObservationAdapter(root, event_sink=self._skill_observation_event)
-            self.software = SoftwareInterfaceAdapter(root)
+            self.software = SoftwareInterfaceAdapter(root, interface=interface, event_sink=self._learning_event)
         program_interface = interface
         if hasattr(interface, "adapters"):
             from v3.robot_interface import RobotInterface
@@ -364,6 +364,13 @@ class PublicRobotRuntime:
     def _interface_event(self, event: object) -> None:
         self._queue_evidence("interface", event)
         self._sdk_event("interface", event)
+
+    def _learning_event(self, event: str, fields: Mapping[str, object]) -> None:
+        # Learning is upper-host evidence. The existing follower delivers these
+        # transitions at every capture rate without returning them to control.
+        value = {**fields, "event_type": event, "measurement_time_ns": self.clock_ns()}
+        self._queue_evidence("learning", value)
+        self._sdk_event("learning", value)
 
     def _bounded_skill_result(self, result):
         # This runs in the upper host, never the control interpreter. The owning
