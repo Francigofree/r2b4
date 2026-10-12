@@ -19,16 +19,17 @@ from v3.engine import TickInputs
 from v3.execution import ExecutionRecord
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
+from v3.public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
 
 
-def _native_capture(output, *, lose_required=False):
+def _native_capture(output, *, lose_required=False, runtime_events=()):
     control = resolved_config().runtime.composition.live_control.control
     sink = OfflineMotorSink()
     composition = NativeControlComposition(sink, control)
     hub = ObservationHub()
     consumer = McapCaptureConsumer(
         "agent-evidence", output,
-        subscription=hub.subscribe_reliable("agent-evidence", capacity=8, required=True),
+        subscription=hub.subscribe_reliable("agent-evidence", capacity=16, required=True),
         configuration={"production_control": control},
         config=McapCaptureConfig(mode="append_only", tick_sample_hz=50))
     health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in
@@ -63,8 +64,10 @@ def _native_capture(output, *, lose_required=False):
                 measurement_monotonic_ns=context.monotonic_ns, health="OK", summary={"source": "simulation"},
                 raw_scan=(SimpleNamespace(angle_deg=0., distance_m=1., quality=10),)), topic="v3.raw_lidar")
             hub.publish(ExecutionRecord(inputs, result), topic="v3.capture_record")
+        for event in runtime_events:
+            hub.publish(event, topic=PUBLIC_RUNTIME_EVENT_TOPIC)
         if lose_required:
-            for _ in range(6):
+            for _ in range(17):
                 hub.publish({"future": "passive evidence"}, topic="unused")
     finally:
         composition.close()
@@ -102,6 +105,13 @@ def test_native_motor_free_compile_replay_and_feedback_keep_separate_scopes(tmp_
     assert "profiles" not in safety["metrics"]
     assert safety["omitted_metric_groups"] == ["profiles"]
     assert all(item["evidence_basis"] or item["evidence_refs"] for item in safety["observations"])
+    measurement = next(item for item in feedback["measurements"] if item["field_path"] == "/left_output")
+    assert measurement["view"] == "layers/L12"
+    assert measurement["statistics"]["numeric"] == {
+        "count": 3, "min": 0., "max": 0., "mean": 0., "nonzero_count": 0}
+    assert measurement["statistics"]["examples"][0]["evidence_ref"]["message_id"]
+    assert feedback["evidence"]["bundle_manifest_sha256"] == json.loads(
+        (evidence / "manifest.json").read_text())["self_sha256"]
     portable = collect_evidence_feedback(ROOT, evidence=evidence)
     assert portable["evidence"]["verification_source_checked"] is False
     assert portable["replay"] == {"status": "NOT_REQUESTED", "verified_match": False}
@@ -173,3 +183,83 @@ def test_heavy_evidence_tools_use_canonical_resident_guard(tmp_path, monkeypatch
             tools[name](args)
     assert not (tmp_path / "new.evidence").exists()
     assert not (tmp_path / "new.replay.json").exists()
+
+
+def _public_event(kind, value, sequence):
+    return {"schema": "R2B4_PUBLIC_ROBOT_RUNTIME_V1", "kind": kind, "value": value,
+            "clock_epoch": "robot-epoch", "producer_id": "skill-host", "event_sequence": sequence,
+            "evidence_dropped": 0, "publication_time_ns": 2_070_000_000 + sequence}
+
+
+def _bound_evidence(tmp_path, events):
+    captured = _native_capture(tmp_path / "bound.mcap", runtime_events=events)
+    evidence = tmp_path / "bound.evidence"
+    _tools(ROOT)["evi.compile"]({"capture": str(captured.path), "output": str(evidence)})
+    return captured.path, evidence
+
+
+def test_fresh_run_binding_comes_from_recorded_terminal_identity_and_source_refs(tmp_path):
+    identity = {"run_id": "skill-trial-1", "source_hash": "a" * 64}
+    terminal = {**identity, "state": "FAILED", "started_ns": 2_010_000_000,
+                "finished_ns": 2_060_000_000}
+    capture, evidence = _bound_evidence(tmp_path, [
+        _public_event("skill", terminal, 1),
+        _public_event("simulation_trial_assessment", {**identity, "goal_id": "goal-1",
+                      "assessment": {"status": "FAILED"}}, 2),
+    ])
+    feedback = collect_evidence_feedback(ROOT, evidence=evidence, capture=capture, binding={
+        **identity, "clock_epoch": "robot-epoch", "started_ns": terminal["started_ns"],
+        "finished_ns": terminal["finished_ns"]})
+    bound = feedback["trial_binding"]
+    assert bound["status"] == "VERIFIED" and bound["reasons"] == []
+    assert bound["terminal_event_count"] == bound["assessment_event_count"] == 1
+    assert bound["terminal_events"][0]["state"] == "FAILED"
+    ref = bound["terminal_events"][0]["evidence_ref"]
+    assert ref["publication_time_ns"] == ref["log_time_ns"] == 2_070_000_001
+    assert ref["clock_epoch"] == "robot-epoch" and ref["producer_id"] == "skill-host"
+    assert ref["event_sequence"] == 1 and ref["field_path"] == "/payload/value"
+    row = _tools(ROOT)["evi.source_message"]({"evidence": str(evidence), "message_id": ref["message_id"]})
+    assert row["payload"]["payload"]["value"] == terminal
+    # Terminal identity is evidence of this attempt, independent of its failure
+    # and of an unrequested replay.
+    assert feedback["replay"]["status"] == "NOT_REQUESTED"
+    for binding, reason in (
+        ({"run_id": "older-trial", "source_hash": identity["source_hash"]}, "TERMINAL_SKILL_EVENT_NOT_FOUND"),
+        ({**identity, "source_hash": "b" * 64}, "SKILL_SOURCE_HASH_MISMATCH"),
+        ({**identity, "clock_epoch": "different-boot"}, "CLOCK_EPOCH_MISMATCH"),
+        ({**identity, "clock_epoch": "robot-epoch", "finished_ns": 2_060_000_001}, "SKILL_TIME_MISMATCH"),
+        ({**identity, "started_ns": terminal["started_ns"]}, "TIME_BINDING_REQUIRES_CLOCK_EPOCH"),
+    ):
+        actual = collect_evidence_feedback(ROOT, evidence=evidence, capture=capture, binding=binding)["trial_binding"]
+        assert actual["status"] == "EVIDENCE_BLOCKED" and reason in actual["reasons"]
+    unchecked = collect_evidence_feedback(ROOT, evidence=evidence, binding=identity)["trial_binding"]
+    assert unchecked["status"] == "EVIDENCE_BLOCKED"
+    assert "SOURCE_CAPTURE_NOT_VERIFIED" in unchecked["reasons"]
+
+
+@pytest.mark.parametrize("kind,state,other_hash,reason", [
+    ("simulation_trial_assessment", None, "a" * 64, "TERMINAL_SKILL_EVENT_NOT_FOUND"),
+    ("skill", "RUNNING", "a" * 64, "TERMINAL_SKILL_EVENT_NOT_FOUND"),
+    ("skill", "SUCCEEDED", "b" * 64, "SKILL_SOURCE_HASH_MISMATCH"),
+])
+def test_assessment_or_unfinished_or_conflicting_source_cannot_replace_terminal_proof(
+        tmp_path, kind, state, other_hash, reason):
+    identity = {"run_id": "trial-1", "source_hash": "a" * 64}
+    value = {"run_id": identity["run_id"], "source_hash": other_hash, "state": state,
+             "assessment": {"status": "PASSED"}}
+    capture, evidence = _bound_evidence(tmp_path, [_public_event(kind, value, 1)])
+    bound = collect_evidence_feedback(ROOT, evidence=evidence, capture=capture, binding=identity)["trial_binding"]
+    assert bound["status"] == "EVIDENCE_BLOCKED" and reason in bound["reasons"]
+
+
+def test_conflicting_terminal_or_assessment_identity_blocks_an_already_matching_terminal(tmp_path):
+    identity = {"run_id": "trial-1", "source_hash": "a" * 64}
+    capture, evidence = _bound_evidence(tmp_path, [
+        _public_event("skill", {**identity, "state": "SUCCEEDED"}, 1),
+        _public_event("skill", {**identity, "state": "FAILED"}, 2),
+        _public_event("simulation_trial_assessment", {**identity, "source_hash": "b" * 64}, 3),
+    ])
+    bound = collect_evidence_feedback(ROOT, evidence=evidence, capture=capture, binding=identity)["trial_binding"]
+    assert bound["terminal_event_count"] == 2
+    assert bound["status"] == "EVIDENCE_BLOCKED"
+    assert {"TERMINAL_SKILL_EVENT_CONFLICT", "SKILL_SOURCE_HASH_MISMATCH"} <= set(bound["reasons"])

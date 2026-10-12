@@ -36,6 +36,50 @@ r execute skill.test --parameters '{"name":"terkepesz_r2b4"}' --json
 r x                             # canonical STOP
 ```
 
+## Mentett observer trace motor nélküli próbája
+
+A [`skill_simulation.py`](../r2b4_orchestration/skill_simulation.py) `semantic_trace`
+adaptere a production SDK `read`, `observe` és `events.wait` neveit is fogadja.
+A [recorded observer példa](examples/skill_learning_recorded_observer.json)
+szintetikus, kicsi fixture; valódi felvételnél a szemantikus rekordok eredeti
+measurement-idejét, sequence-ét, revisionjét és lineage-ét kell megőrizni.
+Az alábbi skill ugyanazokat az SDK-hívásokat használhatja a live ownerrel és a
+recorded adapterrel:
+
+```python
+async def run(robot):
+    camera = await robot.read("camera.status")
+    async with robot.observe(object_kind="person") as observer:
+        event = await robot.events.wait(observer, timeout_s=0.2)
+        if event is None:
+            return {"status": "FAILED", "reason": "NO_OBSERVATION"}
+        await robot.call("hri.report", text="observed:" + str(event.source_sequence))
+        return {"camera_state": camera["camera_state"], "source_sequence": event.source_sequence}
+```
+
+A mentett skill neve után a külön, független feltételeket tartalmazó scenario
+adható meg:
+
+```bash
+r learn "A camera.status lekérdezése után jelentsd az observer személyeseményének source_sequence értékét observed: előtaggal; add vissza camera_state és source_sequence mezőkkel" \
+  --skill SKILL_NEVE --scenario docs/examples/skill_learning_recorded_observer.json --json
+```
+
+Az `observer.parameters` az eredeti object/region binding; az `events` legfeljebb
+64 változatlan canonical observer eseményt tartalmaz. A `start_monotonic_ns`,
+`end_monotonic_ns` és `complete` a megadott felvételi intervallumot írja le.
+Az SDK a `recorded_monotonic` clock alapján fordítja a deadline-okat; ez nem
+aktuális live freshness. Hiányos coverage, sequence gap vagy az intervallumon
+túlnyúló `finish_events` esetén a próba `INCOMPLETE`, sikeres Python-return mellett
+is. Az adapter nem hoz létre videót vagy mozgást, és nem írhatja felül a host,
+lifecycle, safety/control vagy system ownerek állapotát.
+
+Az `expected_result` és `expected_reports` a host független összehasonlításához
+tartozik; a skill `simulation.scenario` olvasása nem kapja meg ezeket az oracle
+mezőket. A próba eredménye csak a megadott történeti szemantikus bemeneteken
+való működést bizonyítja. A `hri.report` journalba írt jelentését méri; audio
+kézbesítést és fizikai felismerési pontosságot nem igazol.
+
 Az `evi` a `runtime/captures/*.mcap` valódi, nem symlink fájljai közül a
 legnagyobb módosítási idejűt választja; egyezésnél a fájlnév dönt. A production
 capture a finalizálásig `.partial` néven marad, így nem kerül a választásba.
@@ -78,12 +122,31 @@ Az aktuális teljes lista: `r commands`; a részletes opciók: `r help PARANCS`.
 
 Az új LCE-felületek a canonical `read` / `execute` útján is elérhetők:
 `skill.list`, `skill.*`, `observe.*`, `media.recorder.*`, `hri.report`,
-`source.*`, `docs.*`, `config.*`, `evi.*`, `diag.*`, `learning.trial`,
+`source.*`, `docs.*`, `config.*`, `evi.*`, `diag.*`, `learning.trial`, `learning.read`,
 `replay.run`, `evidence.feedback`. A katalógus ezeket az owning
 capability-definíciókból követi, a mentett skillneveket forrásimport nélkül
 fedezi fel. Az élő elérhetőséget külön a `r caps` mutatja.
 A régebbi operator/control CLI-k és a privát runtime-worker nem kapnak új
 launcher-rövidítést; a Python segédprogramok listája `r tools`.
+
+A `learning.trial` a mért checkeket, replay/binding verdictet, DIAG-méréseket és
+source-hivatkozásokat adja vissza; nagy értéknél az omission explicit.
+A teljes mérés a válasz `feedback_path` fájljában marad. Például egy listás
+ellenpélda következő lapja a közös toolon olvasható:
+
+```bash
+r execute learning.read --parameters '{"feedback_path":"/tmp/PRÓBA/trial-1/measured.json","pointer":"/assessment/checks/1/actual","offset":8,"limit":8}' --json
+```
+
+Az opcionális `sha256` a `feedback_sha256` értékkel köti a kérést az eredeti
+artifacthoz. A `pointer` objektumot, listát vagy szöveget választhat: az `offset`
+kulcs-, elem- vagy Unicode-karakterpozíció; a `limit` kulcs/elem esetén 1–32,
+szövegnél 1–4096. A `next_offset` jelöli a következő lapot; elhagyott nagy
+értéknél annak konkrét JSON pointerével lehet mélyebbre olvasni.
+A visszajelzésben a capture-integrity, native replay, Python-return
+és független célfeltételek külön eredmények. A reprodukálható, motor nélküli
+observer-javítás próba: `python3 -m tools.skill_observer_learning_probe --json`;
+providerje explicit `SCRIPTED_DOUBLE`, valódi modellhívást nem állít.
 
 ## Hogyan követi a rendszer fejlődését?
 

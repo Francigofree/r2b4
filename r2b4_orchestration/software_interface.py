@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import time
+import uuid
 
 from .agent_source_tools import build_source_tools
 from .agent_evidence_tools import build_evidence_tools
@@ -42,12 +43,20 @@ def test_skill(library, name, *, timeout_s=30.0):
     target = library.root / "tests" / f"test_{entry.name}.py"
     if target.is_symlink() or not target.is_file():
         raise ValueError("SKILL_TEST_UNAVAILABLE")
+    test_hash = entry.descriptor.get("test_source_hash")
+    if not isinstance(test_hash, str):
+        raise ValueError("SKILL_TEST_SOURCE_UNAVAILABLE")
     # Use the canonical launcher function for a library test, including in a
     # temporary development library. This does not add a gate/manifest entry.
     command = [sys.executable, "-c", "from v3.test_runner import _run; import sys; sys.exit(_run([sys.argv[1]]))", str(target)]
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.pathsep.join((str(library.root), str(Path(__file__).resolve().parent.parent),
                                                 environment.get("PYTHONPATH", "")))
+    # A same-size edit within one timestamp tick must execute its new source,
+    # including pytest's assertion-rewrite imports. Isolate reads from old pyc
+    # and suppress writes; no existing cache or diagnostic data is modified.
+    environment["PYTHONPYCACHEPREFIX"] = "/tmp/r2b4-skill-test-pyc-" + uuid.uuid4().hex
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     process = subprocess.Popen(command, cwd=Path(__file__).resolve().parent.parent, env=environment,
                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                start_new_session=True, close_fds=True)
@@ -87,8 +96,10 @@ def test_skill(library, name, *, timeout_s=30.0):
             pass
         process.wait(timeout=1)
         process.stdout.close()
-    current_hash = library.load(name).source_hash
-    return {"status": "PASSED" if process.returncode == 0 and not timed_out and current_hash == entry.source_hash else "FAILED",
+    current = library.load(name)
+    test_changed = current.descriptor.get("test_source_hash") != test_hash
+    return {"status": "PASSED" if process.returncode == 0 and not timed_out and current.source_hash == entry.source_hash and not test_changed else "FAILED",
             "returncode": process.returncode, "timeout": timed_out,
             "output": output.decode("utf-8", errors="replace"), "output_dropped_bytes": dropped,
-            "test_path": str(target), "source_hash": entry.source_hash, "source_changed": current_hash != entry.source_hash}
+            "test_path": str(target), "source_hash": entry.source_hash, "source_changed": current.source_hash != entry.source_hash,
+            "test_source_hash": test_hash, "test_source_changed": test_changed}

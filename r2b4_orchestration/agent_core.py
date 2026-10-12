@@ -243,6 +243,7 @@ class AgentCore:
                     self._emit(event_sink, "agent_skill_tested", {"name": name,
                         "status": "PASSED" if passed else "FAILED", "error": test_result.error,
                         "source_hash": test_data.get("source_hash") if isinstance(test_data, Mapping) else None,
+                        "test_source_hash": test_data.get("test_source_hash") if isinstance(test_data, Mapping) else None,
                         "test_result": test_result.to_jsonable()})
                     if not passed:
                         if round_index >= self._max_tool_rounds:

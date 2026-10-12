@@ -73,6 +73,17 @@ The supported research loop is:
 
 Parts of this loop are implemented and integration-tested. Continuous autonomous skill evolution in unstructured physical environments remains a research objective.
 
+Motor-free trials can also use a supplied observer trace through the unchanged
+`robot.read("camera.status")` and `robot.observe()` / `robot.events.wait()` SDK.
+The [minimal example](docs/examples/skill_learning_recorded_observer.json) is a
+synthetic fixture; [usage and the source contract](docs/R_LAUNCHER.md#mentett-observer-trace-motor-nélküli-próbája)
+describe how original measurement time, sequence, revision and lineage are
+retained. Incomplete coverage remains `INCOMPLETE`, and recorded time does not
+establish current freshness. Expected outputs and reports stay with the host's
+independent check rather than being exposed by the skill's scenario read. These
+trials provide semantic program evidence without starting camera, media or motor
+owners.
+
 ## Physical platform
 
 - **Compute:** Raspberry Pi 5 (4 GB); Linux and Python.

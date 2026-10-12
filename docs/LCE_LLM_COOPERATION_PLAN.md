@@ -1,10 +1,12 @@
 # R2B4 — nyitott Skill/Interface, Python Skill Runtime és LCE–LLM együttműködés
 
-Dátum: 2026-10-10; implementációs állapot frissítve: 2026-10-11.
+Dátum: 2026-10-10; implementációs állapot frissítve: 2026-10-12.
 A közös async SDK, a Python Skill Library/Runtime, az LCE–LLM együttműködés,
 az owning vision-edge observer/recorder és az explicit, mért `r learn` ciklus
 implementálva. A tanulási infrastruktúra részlete és bizonyítási scope-ja a
-17. fejezetben szerepel. A valós recognition,
+17–18. fejezetben szerepel. Az observation/evidence/szimulátor korszerűsítése
+és a mérésből induló observer-skill javítás implementálva és motor nélkül
+bizonyítva. A valós recognition,
 nyolcórás üzem és RPi-timing külön hardver-evidence-et igényel.
 
 Implementáció: [`robot_sdk.py`](../r2b4_orchestration/robot_sdk.py),
@@ -579,3 +581,91 @@ célgazda információi; nem hoznak létre ALLOW-t, nem módosítanak lezárt
 TickInputs-ot, és nem térítenek vissza nagy raw payloadot a control islandbe.
 A motor nélküli bizonyítás nem bizonyít fizikai recognitiont, terepi
 célmegvalósulást, nyolcórás üzemet vagy RPi5 live CPU/GIL/jitter viselkedést.
+
+## 18. Az agentikus fejlesztési infrastruktúra korszerűsítése — 2026-10-12
+
+Az elemzés a tényleges production dispatchból, observer-adapterből, capture
+followerből, canonical EVI/DIAG/replay API-kból és a tanulási ciklusból indul.
+Az infrastruktúra akkor segíti az agentet, ha a konkrét futás inputja,
+programváltozata, eredménye és mérési korlátja visszakereshető; a javításhoz
+szükséges ellenpélda a rövid feedbackben is megmarad. A stabil V3 végrehajtás,
+MCAP compiler és DIAG analyzer algoritmusok megtartandók.
+
+| Feltárt hiány | Végrehajtandó korszerűsítés | Elfogadási bizonyíték |
+| --- | --- | --- |
+| A vision observer válasza eljut a skillhez, de a host dispatch nem rögzíti; a szimulátor saját observation-sora ezt a production utat nem bizonyítja. | A közös owning observer-adapter kompakt, a skillnek kézbesített esemény- és lifecycle-válaszait az existing host producer-journal/follower út rögzíti. A callback megőrzi az eredeti measurementet és a fogadó run/hash/generation azonosságát. | Ugyanaz az esemény direct és SDK/socket úton; EVI-ben eredeti idő/sequence/lineage, megfelelő futás; revokált késői completion nem válik sikeres kézbesítéssé. |
+| A standalone skill terminal capture-je csak interpreter-state-et tartalmaz; a visszaadott FAILED/PARTIAL eredmény elveszik. | Bounded programeredmény és külön szemantikus státusz a meglévő terminal evidence-ben. Nagy eredménynél explicit omission és tartalomazonosság; média továbbra is file reference. | SUCCEEDED interpreter + FAILED programeredmény külön marad; kis eredmény visszaolvasható; nagy payload nincs a controlban vagy korlátlan journal-sorban. |
+| A feedback a capture és bundle hash-ét ellenőrzi, de nem a kért skillfutás és forrásváltozat rögzített jelenlétét. | Opcionális, kötelezően ellenőrzött run/source binding az existing EVI eseményekből. Az új skillpróba kéri ezt; a háttér-evidence külön szerep marad. | Másik run vagy hash, hiányzó/ellentmondó terminal evidence blokkolja a tanulási sikert; canonical replay-scope továbbra külön állítás. |
+| A repair promptból kimaradnak a DIAG mérések és evidence-hivatkozások; a nagy scenario/assessment/tool-result túltöltheti a kontextust. | Egy közös, bounded próbavisszajelzés a CLI-loopnak és a common learning.trial toolnak: első hibás check, tényleges/expected érték vagy explicit bounded omission, mért DIAG adatok és eredeti query-hivatkozások. A teljes mérés a már meglévő measured.json-ban marad. | Nagy trace/eredmény mellett kicsi, érvényes JSON-válasz; a konkrét ellenpélda és annak forrása elérhető, nem marad puszta PASS/FAIL. |
+| A semantic_trace csak simulation.* read-et támogat, a valódi robot.observe() skill szimulációhoz átírást igényel. | Kis recorded-observer adapter a valódi async SDK műveleteihez, eredeti recorded clock/sequence/lineage és független expected feltételek mellett. Nincs új fizikai vagy kamera-szimulátor. | Ugyanaz a Python-skill fut valódi SDK/socket/Brain worker úton; hiányos interval/gap nem minősül sikernek; STOP/revoke cleanup megmarad. |
+| A pytest PASS újrahasználata csak a programforráshash-re támaszkodik; külön módosított tesztet korábbi PASS fedhet el. | A saved test hash-e is a teszteredmény és újrahasználati kulcs része; tesztváltozás a futtatás közben explicit érvénytelenítés. | Változatlan program + módosult teszt új ellenőrzést kap; régi PASS nem emel át hibás változatot. |
+
+A refaktor owning adapter/runtime-edge szintű. Nem készül új scheduler,
+eventbus, IPC-réteg vagy agent-admin workflow. Az observation részleges
+scope-ja **a skillnek kézbesített adat**, nem az összes producer-esemény
+hiánytalan archiválása. Recorded trace nem kap élő freshness-t vagy pozitív
+motion authorityt. A mérési feedback nem automatikus root-cause ítélet.
+
+A felülvizsgált, megtartott komponensek:
+
+| Komponens | Miért a meglévő út marad? |
+| --- | --- |
+| MCAP writer, observation sidecar, Evidence Compiler | Már van bounded enqueue, required-loss jelzés, véglegesítés, eredeti source-accounting és teljes bundle-verifikáció. Az új szemantikus evidence ugyanide érkezik; a compiler nem kap párhuzamos formátumot. |
+| Natív Replayer | A lezárt V3 execution inputot méri; az observer/skill esemény query evidence, nem új control input. A MATCH továbbra sem emberi célteljesülés. |
+| DIAG | Meglévő profilokból kap nyolc konkrét L9/L12 mérési szeletet, példákat és source refeket. Nincs új profiler és nincs automatikus root-cause ítélet. |
+| Common SDK, source/docs/config toolok és AgentCore | Egy owning toolkatalógus marad; a CLI és a skill ugyanazt a learning.trial/learning.read felületet használhatja. A teljes structured owner-result és a meglévő prompt-budget gate megmarad. |
+| Public World/Spatial és OutcomeLearner | Az executive prior kizárólag a saját qualified fizikai outcome contractjából tanul. Szimulációs siker és journal-esemény nem kerül fizikai siker-mintaként a robot tapasztalati priorjába. |
+| Pytest launcher | A kis gate és a release manifest változatlan. Az új tesztek opcionális pack-evidence; a mentett skillteszt a canonical launcheren fut. |
+
+Megvalósítás:
+
+1. A [`SkillObservationAdapter`](../r2b4_orchestration/skill_observation.py) és
+   [`PublicRobotRuntime`](../r2b4_orchestration/robot_runtime.py) a ténylegesen
+   kézbesített választ és a skill indulását/terminal outcome-ját a meglévő
+   journal → follower → MCAP úton rögzíti. Az eredeti idők, event identity,
+   source sequence/revision, invocation és goal-hivatkozások megmaradnak.
+   A nagy eredmény deklarált hash/reference scope-ot kap; ez önmagában nem
+   transport-loss. A valódi queue-veszteség továbbra is capture-integrity hiba.
+2. Az [`evidence.feedback`](../r2b4_orchestration/agent_evidence_tools.py)
+   opcionális run/source bindingot ellenőriz a capture terminal rekordján.
+   Friss learning-próbában ez kötelező: a terminal state és az eredmény
+   canonical JSON-hashe is egyezik a tényleges runtime-returnnel. A rögzített
+   független assessment teljes JSON-hashe is egyezik a visszaadott mérésével;
+   hamis PASSED és azonos státusz mellett módosult check is blokkol.
+3. A [`learning_tools.py`](../r2b4_orchestration/learning_tools.py) és
+   [`SkillLearningLoop`](../r2b4_orchestration/skill_learning.py) közös kicsi
+   mérési nézetet használ. Megmarad az első hibás check, a mért érték vagy
+   explicit omission, a DIAG statistics/observation és a source ref.
+   A teljes `R2B4_SKILL_TRIAL_V1` rekord a `measured.json`; a `learning.read`
+   standard JSON pointerrel, lista-/objektum-/szöveglapozással és artifact SHA256
+   ellenőrzéssel olvassa a konkrét részletet.
+4. A [`recorded observer adapter`](../r2b4_orchestration/skill_simulation.py)
+   változatlan production `read/observe/events.wait/finish` SDK-hívásokat
+   támogat. A partial/gap/interval-overrun `INCOMPLETE`; az expected oracle
+   a hostnál marad. A [kis fixture](examples/skill_learning_recorded_observer.json)
+   szintetikus, nem fizikai jelenetmodell.
+5. A saved-test evidence programhash + teszthash azonosságra vonatkozik.
+   A meaningful teszt további owning hibát talált: azonos méretű gyors edit
+   régi pytest/Python `.pyc`-t olvashatott. A tesztgyermek egyedi, nem létező
+   cache-prefixet és kikapcsolt bytecode-írást kap; meglévő cache nem törlődik.
+
+Elvégzett validáció, 2026-10-12:
+
+| Bizonyítás | Eredmény |
+| --- | --- |
+| Célzott opcionális tesztek | **125 különböző teszt PASS**: learning/evidence/AgentCore/teszt-identitás/feedback 57; production observer/SDK/host 42; observer capture direct/process 5; simulator/recorded observer 21. A később módosult teszt-cache út érintett SDK-tesztje külön újra PASS. |
+| Canonical gate és release | `./r test`: **14 PASS**; `./r test release`: **23 PASS**. Permanent manifest nem változott. |
+| Reprodukálható scripted observer generate → measure → repair → reuse | `python3 -m tools.skill_observer_learning_probe --json`: **2 iteráció, 2 SCRIPTED_DOUBLE hívás**, majd reuse **0 hívás**. Mindhárom capture teljes/source-checked, binding VERIFIED, natív replay MATCH; mind a 6 L12-output nulla. [Helyi proof](/tmp/r2b4-observer-learning-proof-er5qr677/proof.json). |
+| Valódi konfigurált providerrel mért javítás | A hibás skill sequence=1-et jelentett a source_frame_sequence=41 helyett. A független report-oracle FAILED lett; **gemini-2.5-flash 1 hívással** javította, a következő mérés PASSED. Reuse **0 modellhívás**, ismét PASSED. Mindhárom capture source-bound és teljes, replay MATCH, 6/6 L12-output nulla. [Helyi proof](/tmp/r2b4-real-observer-learning-z390bu25/proof.json). |
+| Negatív evidence | Más/stale run, eltérő source/clock/time, conflicting terminal, helyettesített runtime-result/state/assessment, tampered artifact, required-loss és nem terminális esemény nem kaphat pozitív minősítést. |
+
+A valódi provider-próba három eredeti capture-je a végső assessment-hash
+ellenőrzéssel is újra VERIFIED/MATCH: [aktuális összevetés](/tmp/r2b4-current-assessment-proof-25p6piz2/proof.json).
+Ehhez nem kellett új modellhívás vagy a korábbi artifactok felülírása.
+
+Nem bizonyított: élő kamera felismerési pontossága, audio/media fizikai
+kézbesítése, robotmozgás, nyolcórás üzem és RPi-jitter. A production observer
+próba valódi socket/worker/owner-logikát, szintetikus detector-forrást használt.
+A capture scope a kézbesített observer-válasz, nem az összes nem lekért
+producer-esemény. A simulator jelenleg kicsi szemantikus trace-ekre való;
+fizikai szimulátor fejlesztését ezek a próbák nem indokolták.

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 from collections.abc import Mapping
@@ -227,16 +228,159 @@ def _feedback_replay(root: Path, value: object, source_sha256: str | None) -> di
     }
 
 
+def _binding_expectation(value: object) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ValueError("binding must be an object")
+    expected = _strict_args(value, {"run_id", "source_hash", "clock_epoch", "started_ns", "finished_ns"})
+    for name in ("run_id", "source_hash"):
+        if not isinstance(expected.get(name), str) or not 1 <= len(expected[name]) <= 256:
+            raise ValueError(f"binding requires bounded {name}")
+    for name in ("started_ns", "finished_ns"):
+        if name in expected and (type(expected[name]) is not int or expected[name] < 0):
+            raise ValueError(f"binding {name} must be a non-negative integer")
+    if "clock_epoch" in expected and (
+            not isinstance(expected["clock_epoch"], str) or not 1 <= len(expected["clock_epoch"]) <= 256):
+        raise ValueError("binding clock_epoch must be bounded text")
+    return expected
+
+
+def _trial_binding(bundle, expected: dict[str, object] | None,
+                   capture_facts: Mapping[str, object], limit: int) -> dict[str, object]:
+    if expected is None:
+        return {"status": "NOT_REQUESTED"}
+    from tools.diag.profiling import evidence_ref
+    from v3.public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
+
+    reasons = []
+    if capture_facts.get("status") != "VERIFIED" or capture_facts.get("source_checked") is not True:
+        reasons.append("SOURCE_CAPTURE_NOT_VERIFIED")
+    if any(name in expected for name in ("started_ns", "finished_ns")) and "clock_epoch" not in expected:
+        reasons.append("TIME_BINDING_REQUIRES_CLOCK_EPOCH")
+    terminal = []
+    assessments = []
+    terminal_claims = set()
+    assessment_claims = set()
+    matching_events = terminal_count = assessment_count = scanned = 0
+    # A fresh trial is small. An older bundle with an unbounded event history
+    # cannot acquire a positive binding from a silently truncated search.
+    for row in bundle.iter_view("events", limit=4097):
+        scanned += 1
+        if scanned > 4096:
+            reasons.append("EVENT_SCAN_LIMIT")
+            break
+        payload = row.payload
+        if not isinstance(payload, Mapping):
+            continue
+        source_topic = payload.get("source_topic")
+        envelope = payload.get("payload")
+        if not isinstance(envelope, Mapping):
+            continue
+        if source_topic == PUBLIC_RUNTIME_EVENT_TOPIC:
+            kind, value, pointer = envelope.get("kind"), envelope.get("value"), "/payload/value"
+        elif source_topic in {"r2b4.skill", "r2b4.simulation_trial_assessment"}:
+            kind, value, pointer = source_topic.removeprefix("r2b4."), envelope, "/payload"
+        else:
+            continue
+        if kind not in {"skill", "simulation_trial_assessment"} or not isinstance(value, Mapping):
+            continue
+        if value.get("run_id") != expected["run_id"]:
+            continue
+        matching_events += 1
+        if value.get("source_hash") != expected["source_hash"]:
+            reasons.append("SKILL_SOURCE_HASH_MISMATCH")
+            continue
+        if "clock_epoch" in expected and envelope.get("clock_epoch") != expected["clock_epoch"]:
+            reasons.append("CLOCK_EPOCH_MISMATCH")
+            continue
+        ref = {
+            **evidence_ref(row, pointer).as_dict(), "source_topic": source_topic,
+            "producer_id": envelope.get("producer_id"), "event_sequence": envelope.get("event_sequence"),
+            "clock_epoch": envelope.get("clock_epoch"),
+            "publication_time_ns": envelope.get("publication_time_ns", payload.get("monotonic_ns")),
+        }
+        if kind == "skill":
+            if value.get("state") not in {"SUCCEEDED", "FAILED", "CANCELLED"}:
+                continue
+            if any(name in expected and (
+                    type(value.get(name)) is not int or value[name] != expected[name])
+                    for name in ("started_ns", "finished_ns")):
+                reasons.append("SKILL_TIME_MISMATCH")
+                continue
+            terminal_count += 1
+            terminal_claims.add(json.dumps({key: value.get(key) for key in (
+                "state", "started_ns", "finished_ns", "result_sha256")}, sort_keys=True, allow_nan=False))
+            if len(terminal) < limit:
+                terminal.append({"run_id": value["run_id"], "source_hash": value["source_hash"],
+                                 "state": value["state"], "started_ns": value.get("started_ns"),
+                                 "finished_ns": value.get("finished_ns"), "evidence_ref": ref,
+                                 **{key: value[key] for key in ("result_sha256", "result_size_bytes", "result_inline",
+                                     "result_scope", "reported_status", "reported_reason", "reported_success",
+                                     "goal_satisfaction") if key in value}})
+        else:
+            assessment_count += 1
+            assessment = value.get("assessment")
+            digest = hashlib.sha256(json.dumps(assessment, sort_keys=True,
+                separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+            assessment_claims.add(digest)
+            if len(assessments) < limit:
+                assessments.append({"goal_id": value.get("goal_id"),
+                                    "status": assessment.get("status") if isinstance(assessment, Mapping) else None,
+                                    "assessment_sha256": digest,
+                                    "evidence_ref": ref})
+    if not terminal_count:
+        reasons.append("TERMINAL_SKILL_EVENT_NOT_FOUND")
+    if len(terminal_claims) > 1:
+        reasons.append("TERMINAL_SKILL_EVENT_CONFLICT")
+    if len(assessment_claims) > 1:
+        reasons.append("TRIAL_ASSESSMENT_EVENT_CONFLICT")
+    return {
+        "status": "EVIDENCE_BLOCKED" if reasons else "VERIFIED", "expected": expected,
+        "reasons": list(dict.fromkeys(reasons)), "matching_event_count": matching_events,
+        "terminal_event_count": terminal_count, "assessment_event_count": assessment_count,
+        "terminal_events": terminal, "assessment_events": assessments,
+        "refs_truncated": terminal_count > limit or assessment_count > limit,
+    }
+
+
+def _measurement_slice(analyzer: str, metrics: Mapping[str, object]) -> list[dict[str, object]]:
+    """Select eight concrete control measurements from existing DIAG profiles."""
+    profiles = metrics.get("profiles", {})
+    selections = (
+        ("layers/L12", "/left_output"), ("layers/L12", "/right_output"),
+        ("layers/L12", "/safety_decision"), ("layers/L12", "/reason"),
+        ("layers/L9", "/requested_v_mps"), ("layers/L9", "/allowed_v_mps"),
+        ("layers/L9", "/requested_omega_rad_s"), ("layers/L9", "/allowed_omega_rad_s"),
+    )
+    result = []
+    for view, field in selections:
+        profile = profiles.get(view) if isinstance(profiles, Mapping) else None
+        fields = profile.get("fields", {}) if isinstance(profile, Mapping) else {}
+        statistics = fields.get(field) if isinstance(fields, Mapping) else None
+        if not isinstance(statistics, Mapping):
+            continue
+        result.append({
+            "analyzer_id": analyzer, "view": view, "field_path": field,
+            "row_count": profile["row_count"],
+            "first_log_time_ns": profile["first_log_time_ns"],
+            "last_log_time_ns": profile["last_log_time_ns"],
+            "statistics": dict(statistics),
+        })
+    return result
+
+
 def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> dict[str, object]:
     """Read explicit offline trial evidence, preserving independent proof scopes.
 
     Message time bounds describe the selected artifact; they are never a claim
-    that an older capture is the current skill run. The caller must bind the
-    selected capture to its trial's run/source identity.
+    that an older capture is the current skill run. Optional binding verifies
+    the expected run/source against a recorded terminal skill event.
     """
     root = Path(project_root).resolve()
-    args = _strict_args(value, {"evidence", "capture", "analyzers", "replay_result", "limit"})
+    args = _strict_args(value, {"evidence", "capture", "analyzers", "replay_result", "limit", "binding"})
     evidence = _explicit_path(root, args.get("evidence"), "evidence")
+    binding = _binding_expectation(args.get("binding"))
     analyzers = args.get("analyzers", ("evidence_health", "safety"))
     if (not isinstance(analyzers, (list, tuple)) or not 1 <= len(analyzers) <= 4
             or any(not isinstance(item, str) or not item for item in analyzers)
@@ -262,10 +406,14 @@ def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> d
                 context.facts.source_sha256, context.facts.source_snapshot_size)
             context = replace(context, facts=replace(context.facts, verification_source_checked=True))
         facts = context.facts.as_dict()
+        facts["bundle_manifest_sha256"] = context.bundle.manifest["self_sha256"]
         results = []
+        measurements = {}
         for analyzer in analyzers:
             result = registry.run(analyzer, context).as_dict(include_evidence=False, include_producer=False)
             metrics = result["metrics"]
+            for measurement in _measurement_slice(analyzer, metrics):
+                measurements.setdefault((measurement["view"], measurement["field_path"]), measurement)
             # Per-field profiles remain available through diag.run; scalar and
             # aggregate measurements are sufficient for the learning prompt.
             result["metrics"] = {key: item for key, item in metrics.items() if key != "profiles"}
@@ -280,6 +428,8 @@ def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> d
             "schema": "R2B4_AGENT_EVIDENCE_FEEDBACK_V1",
             "evidence": facts, "capture": capture_facts,
             "producer": context.producer.as_dict(), "analyzers": results,
+            "measurements": list(measurements.values()),
+            "trial_binding": _trial_binding(context.bundle, binding, capture_facts, limit),
             "replay": _feedback_replay(root, args.get("replay_result"), context.facts.source_sha256),
             "root_cause_inferred": False,
         }
@@ -292,11 +442,12 @@ def collect_evidence_feedback(project_root: Path, *, evidence: str | Path,
                               capture: str | Path | None = None,
                               analyzers: tuple[str, ...] = ("evidence_health", "safety"),
                               replay_result: str | Path | None = None,
-                              limit: int = 6) -> dict[str, object]:
+                              limit: int = 6,
+                              binding: Mapping[str, object] | None = None) -> dict[str, object]:
     """Convenience API for an explicit host-side learning evidence reader."""
     return read_evidence_feedback(project_root, {
         "evidence": evidence, "capture": capture, "analyzers": analyzers,
-        "replay_result": replay_result, "limit": limit,
+        "replay_result": replay_result, "limit": limit, "binding": binding,
     })
 
 
@@ -370,6 +521,7 @@ def build_evidence_tools(project_root: Path):
                          "capture": "optional explicit source MCAP to verify source binding and capture completeness",
                          "analyzers": "optional list of 1..4 unique DIAG analyzer ids",
                          "replay_result": "optional canonical replay JSON path, verified against the same source hash",
+                         "binding": "optional expected run_id/source_hash; clock_epoch required when started_ns/finished_ns are checked",
                          "limit": "optional observation/episode limit 1..10, default 6"}),
             lambda args: read_evidence_feedback(root, args),
         ),

@@ -150,6 +150,7 @@ def test_unexpected_process_or_safety_evidence_stops_without_retry(tmp_path, err
     {"feedback": {"evidence": {"verification_status": "FAIL"}}},
     {"feedback": {"analyzers": [{"admission": {"state": "INSUFFICIENT_EVIDENCE"}}]}},
     {"feedback": {"replay": {"status": "MATCH", "verified_match": False}}},
+    {"feedback": {"trial_binding": {"status": "EVIDENCE_BLOCKED", "reasons": ["SKILL_SOURCE_HASH_MISMATCH"]}}},
 ])
 def test_successful_skill_and_scenario_cannot_override_broken_evidence(tmp_path, evidence):
     _library, loop = ready_loop(tmp_path, lambda _: {"evidence": evidence})

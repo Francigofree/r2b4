@@ -101,6 +101,12 @@ class SkillLibrary:
             test_path = self.root / "tests" / f"test_{name}.py"
             if test_path.is_file():
                 descriptor["test_path"] = str(test_path)
+                if not test_path.is_symlink():
+                    try:
+                        test_source = self._read(test_path, MAX_SOURCE_BYTES)
+                        descriptor["test_source_hash"] = hashlib.sha256(test_source.encode("utf-8")).hexdigest()
+                    except (OSError, ValueError, UnicodeError) as exc:
+                        descriptor["test_error"] = f"{type(exc).__name__}:{exc}"[:1024]
             return SkillSource(name, path, source, digest, descriptor)
 
     def list(self, search: str = "") -> list[dict[str, object]]:

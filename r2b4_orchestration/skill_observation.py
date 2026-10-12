@@ -60,8 +60,9 @@ class _Connection:
 class SkillObservationAdapter:
     capability_names = frozenset(_OPERATIONS)
 
-    def __init__(self, root: str | Path, *, client=None):
+    def __init__(self, root: str | Path, *, client=None, event_sink=None):
         self.client = client or VisionClient(root=root)
+        self.event_sink = event_sink
         self._lock = threading.Lock()
         self._sessions = {}
         self._pending = {}
@@ -115,12 +116,24 @@ class SkillObservationAdapter:
             if revoked:
                 raise RuntimeError("OBSERVATION_SESSION_REVOKED")
         try:
-            return session.call(name, parameters)
-        except (OSError, EOFError):
+            try:
+                result = session.call(name, parameters)
+            except RuntimeError as exc:
+                if self.event_sink is not None:
+                    self.event_sink(name, {"status": "FAILED", "error": str(exc)[:1024],
+                        "handle": parameters.get("handle")}, invocation_id=invocation_id)
+                raise
+            if self.event_sink is not None:
+                self.event_sink(name, result, invocation_id=invocation_id)
+            return result
+        except (OSError, EOFError) as exc:
             with self._lock:
                 if self._sessions.get(key) is session:
                     self._sessions.pop(key)
             session.close()
+            if self.event_sink is not None:
+                self.event_sink(name, {"status": "FAILED", "error": f"{type(exc).__name__}:{exc}"[:1024],
+                    "handle": parameters.get("handle")}, invocation_id=invocation_id)
             raise
 
     def close_invocation(self, invocation_id=None):

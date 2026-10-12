@@ -37,6 +37,7 @@ from r2b4_orchestration.outcome_learning import OutcomeLearner
 SCHEMA = "R2B4_PUBLIC_ROBOT_RUNTIME_V1"
 MAX_REQUEST_BYTES = 65_536
 MAX_REPLY_BYTES = 1_048_576
+MAX_SKILL_SEMANTIC_EVIDENCE_BYTES = 32_768
 READS = frozenset({"robot.state", "world.snapshot", "world.history", "behavior.state", "behavior.history",
                    "brain.state", "brain.history", "spatial.snapshot"})
 QUERIES = frozenset({"world.query", "spatial.query"})
@@ -275,7 +276,7 @@ class PublicRobotRuntime:
             self.skill_library = SkillLibrary(root / "robot_skills")
             self.skills = SkillRuntime(self.skill_library, socket_path or socket_path_for(root),
                                        on_terminal=self._skill_terminal, clock_ns=clock_ns)
-            self.skill_observation = SkillObservationAdapter(root)
+            self.skill_observation = SkillObservationAdapter(root, event_sink=self._skill_observation_event)
             self.software = SoftwareInterfaceAdapter(root)
         program_interface = interface
         if hasattr(interface, "adapters"):
@@ -364,6 +365,59 @@ class PublicRobotRuntime:
         self._queue_evidence("interface", event)
         self._sdk_event("interface", event)
 
+    def _bounded_skill_result(self, result):
+        # This runs in the upper host, never the control interpreter. The owning
+        # SDK returns semantic pages/file references; large custom skill returns
+        # cannot silently make an unbounded journal/capture payload.
+        encoded = json.dumps(result, allow_nan=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        complete = len(encoded) <= MAX_SKILL_SEMANTIC_EVIDENCE_BYTES
+        digest = hashlib.sha256(encoded).hexdigest()
+        value = json.loads(encoded) if complete else {"omitted": True, "reason": "SKILL_SEMANTIC_EVIDENCE_BOUND",
+            "sha256": digest, "serialized_bytes": len(encoded)}
+        if not complete and isinstance(result, Mapping):
+            value["references"] = {name: item for name in ("clip_results", "output", "source_path")
+                                   if isinstance(item := result.get(name), str) and len(item) <= 4096}
+        # The declared hash/reference scope is intentional, not transport loss.
+        # A consumer requiring the complete large return must obtain it from
+        # the original invocation result and verify this digest independently.
+        return {"result": value, "result_inline": complete,
+                "result_scope": "full" if complete else "hash_and_references",
+                "result_sha256": digest, "result_size_bytes": len(encoded)}
+
+    def _skill_observation_event(self, action, result, *, invocation_id=None):
+        # Admission is checked after the owning edge replied. A revoked worker
+        # cannot resurrect observer demand or attach new evidence to an old run.
+        with self._state_lock:
+            if invocation_id is not None:
+                if self.skills is None or not self.skills.accepts(invocation_id):
+                    self.skill_observation.close_invocation(invocation_id)
+                    raise RuntimeError("SKILL_INVOCATION_REVOKED")
+                state = self.skills.status(invocation_id)
+            else:
+                state = {}
+            event = {"action": action, "delivery_scope": "delivered_to_skill" if invocation_id else "delivered_to_client",
+                "run_id": invocation_id, "source_hash": state.get("source_hash"),
+                "generation": state.get("generation"), "revision": state.get("revision"),
+                **self._skill_goals.get(invocation_id, {}), **self._bounded_skill_result(result)}
+            self._queue_evidence("skill_observation", event)
+
+    def _skill_evidence(self, state, *, event_type, cleanup_error=None):
+        event = {key: state.get(key) for key in ("run_id", "name", "state", "source_hash", "generation",
+                 "revision", "started_ns", "finished_ns", "error", "returncode")}
+        event.update(event_type=event_type, measurement_time_ns=state.get("finished_ns") or state.get("started_ns"),
+                     goal_satisfaction="UNASSESSED", **self._skill_goals.get(state["run_id"], {}))
+        if event_type == "skill_terminal":
+            returned = state.get("result")
+            event.update(self._bounded_skill_result(returned))
+            if isinstance(returned, Mapping):
+                for name in ("status", "reason", "success"):
+                    value = returned.get(name)
+                    if value is None or type(value) is bool or isinstance(value, str) and len(value) <= 1024:
+                        event["reported_" + name] = value
+            event["cleanup_status"] = "FAILED" if cleanup_error else "COMPLETED"
+            event["cleanup_error"] = cleanup_error
+        self._queue_evidence("skill", event)
+
     def _sdk_event(self, producer: str, event: object) -> None:
         # Only bounded immutable references are enqueued on producer callbacks.
         with self._sdk_event_lock:
@@ -399,6 +453,7 @@ class PublicRobotRuntime:
         run_id = state["run_id"]
         # Completion/error revokes further calls. A Python return never leaves
         # an accepted continuous command running without its invocation owner.
+        cleanup_error = None
         try:
             if self._skill_motion_run == run_id:
                 self.behaviors.revoke("SKILL_TERMINAL:" + state["state"])
@@ -410,15 +465,23 @@ class PublicRobotRuntime:
         except Exception as exc:
             self._skill_cleanup_error = "SKILL_CANONICAL_STOP_FAILED:" + type(exc).__name__
             self._health_error = self._skill_cleanup_error
+            cleanup_error = self._skill_cleanup_error
             raise
         finally:
-            if self.skill_observation is not None:
-                self.skill_observation.close_invocation(run_id)
-        self._sdk_event("skill", state)
-        self._queue_evidence("skill", {key: state.get(key) for key in
-                             ("run_id", "name", "state", "source_hash", "started_ns", "finished_ns", "error")})
-        self.brain.notify("SKILL_UPDATED")
-        self._skill_goals.pop(run_id, None)
+            try:
+                if self.skill_observation is not None:
+                    self.skill_observation.close_invocation(run_id)
+            except Exception as exc:
+                cleanup_error = cleanup_error or f"SKILL_OBSERVATION_CLOSE_FAILED:{type(exc).__name__}:{exc}"
+                self._skill_cleanup_error = cleanup_error
+                self._health_error = cleanup_error
+                raise
+            finally:
+                self._sdk_event("skill", state)
+                with self._state_lock:
+                    self._skill_evidence(state, event_type="skill_terminal", cleanup_error=cleanup_error)
+                    self._skill_goals.pop(run_id, None)
+                self.brain.notify("SKILL_UPDATED")
 
     def close(self):
         self.preempt("HOST_CLOSED")
@@ -881,7 +944,9 @@ class PublicRobotRuntime:
                 self._skill_goals[run_id] = {key: value for key, value in
                     (("goal_id", goal_id), ("subtask_id", subtask_id)) if value is not None}
                 try:
-                    return self.skills.start(**params, run_id=run_id)
+                    started = self.skills.start(**params, run_id=run_id)
+                    self._skill_evidence(started, event_type="skill_started")
+                    return started
                 except Exception:
                     self._skill_goals.pop(run_id, None)
                     raise

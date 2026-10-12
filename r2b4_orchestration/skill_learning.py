@@ -14,6 +14,7 @@ import time
 
 from .agent_core import AgentCore
 from .skill_library import SkillLibrary
+from .learning_tools import bounded_feedback, compact_assessment, compact_trial_feedback, compact_test_feedback
 
 
 class SkillLearningLoop:
@@ -72,7 +73,9 @@ class SkillLearningLoop:
             if event == "agent_skill_tested" and fields.get("status") == "PASSED":
                 completed = fields.get("test_result")
                 if isinstance(completed, Mapping) and isinstance(completed.get("data"), Mapping):
-                    agent_test_results[(fields.get("name"), fields.get("source_hash"))] = dict(completed["data"])
+                    test_hash = completed["data"].get("test_source_hash")
+                    if isinstance(test_hash, str):
+                        agent_test_results[(fields.get("name"), fields.get("source_hash"), test_hash)] = dict(completed["data"])
             if event_sink is not None:
                 event_sink(event, fields)
 
@@ -96,10 +99,11 @@ class SkillLearningLoop:
                 check()
                 # An existing skill is measured before any model intervention.
                 if selected is None or number > 1:
-                    context = {"mode": "motorless", "scenario": scenario,
-                               "input_contract": scenario_descriptor,
-                               "parameters": explicit_parameters, "previous_iteration": self._prompt_iteration(previous),
-                               "evidence": result["evidence"]}
+                    context = {"mode": "motorless", "scenario": bounded_feedback(scenario, max_bytes=8192),
+                               "input_contract": bounded_feedback(scenario_descriptor, max_bytes=8192),
+                               "parameters": bounded_feedback(explicit_parameters),
+                               "previous_iteration": self._prompt_iteration(previous),
+                               "evidence": bounded_feedback(result["evidence"], max_bytes=8192)}
                     if selected is not None:
                         loaded = self.library.load(selected)
                         context["selected_skill"] = {"name": selected, "source": loaded.source,
@@ -117,7 +121,10 @@ class SkillLearningLoop:
                             "The scenario is experiment configuration, not an implicit skill parameter. "
                             "Read observations through the published async SDK resources; do not "
                             "reconstruct samples or copy identities from earlier trials. "
-                            "Preserve measurement time, sequence/revision and lineage in observations.\n"
+                            "Preserve measurement time, sequence/revision and lineage in observations. "
+                            "Omitted previews explicitly describe partial data. Read measured.json details "
+                            "with learning.read using feedback_path/SHA256 and a JSON pointer; use "
+                            "diag.run or evi.query for full diagnostic profiles/source messages.\n"
                             "For use_skill/create_skill/update_skill fill only skill_json: spoken_text, "
                             "tool_name, tool_arguments_json, action_name and plan_json are null; "
                             "action_parameters is {}.\n"
@@ -152,7 +159,8 @@ class SkillLearningLoop:
                                                      "source_hash": loaded.source_hash})
 
                 if loaded.descriptor.get("test_path"):
-                    completed_tests = agent_test_results.get((selected, loaded.source_hash))
+                    test_hash = loaded.descriptor.get("test_source_hash")
+                    completed_tests = agent_test_results.get((selected, loaded.source_hash, test_hash))
                     if completed_tests is None and self.test_runner is None:
                         result["reason"] = "SKILL_TEST_RUNNER_REQUIRED"
                         break
@@ -171,6 +179,10 @@ class SkillLearningLoop:
                             or tests.get("source_hash", loaded.source_hash) != loaded.source_hash
                             or result["current_hash"] != loaded.source_hash):
                         result.update(status="FAILED", reason="SKILL_SOURCE_CHANGED_DURING_TEST")
+                        break
+                    if (tests.get("test_source_changed") or tests.get("test_source_hash", test_hash) != test_hash
+                            or self.library.load(selected).descriptor.get("test_source_hash") != test_hash):
+                        result.update(status="FAILED", reason="SKILL_TEST_CHANGED_DURING_TEST")
                         break
                     if tests.get("status") != "PASSED" or tests.get("returncode") != 0:
                         previous = iteration
@@ -243,33 +255,17 @@ class SkillLearningLoop:
         """Select measured facts for repair; complete records stay in artifacts."""
         if not isinstance(iteration, Mapping):
             return None
-        result = {key: iteration.get(key) for key in ("iteration", "skill", "source_hash", "parameters", "assessment")}
+        result = {key: iteration.get(key) for key in ("iteration", "skill", "source_hash")}
+        result["parameters"] = bounded_feedback(iteration.get("parameters"))
+        result["assessment"] = compact_assessment(iteration.get("assessment"))
         tests = iteration.get("tests", {})
-        result["tests"] = ({key: tests.get(key) for key in ("status", "returncode", "source_hash", "test_path")}
-                           if tests.get("status") == "PASSED" else tests)
+        result["tests"] = ({key: tests.get(key) for key in (
+            "status", "returncode", "source_hash", "test_source_hash", "test_path")}
+                           if tests.get("status") == "PASSED" else compact_test_feedback(tests))
         trial = iteration.get("trial")
         if not isinstance(trial, Mapping):
             return result
-        runtime = trial.get("runtime", {})
-        result["trial"] = {"runtime": {key: runtime.get(key) for key in (
-            "run_id", "source_hash", "state", "error", "pid", "returncode", "callback_error")},
-            "assessment": trial.get("assessment"), "capture": trial.get("capture"),
-            "feedback_path": trial.get("feedback_path"), "physical_output": trial.get("physical_output")}
-        returned = runtime.get("result")
-        if len(json.dumps(returned, ensure_ascii=False, default=str).encode()) <= 4096:
-            result["trial"]["runtime"]["result"] = returned
-        elif isinstance(returned, Mapping):
-            result["trial"]["runtime"]["result"] = {
-                key: str(returned[key])[:512] for key in ("error", "reason", "status", "success")
-                if key in returned}
-        evidence = trial.get("evidence", {})
-        feedback = evidence.get("feedback", {})
-        result["trial"]["evidence"] = {"status": evidence.get("status"), "error": evidence.get("error"),
-            "feedback": {"evidence": {key: feedback.get("evidence", {}).get(key) for key in (
-                "path", "source_sha256", "compiler_status", "source_integrity", "verification_status")},
-                "capture": feedback.get("capture"), "replay": feedback.get("replay"),
-                "analyzers": [{key: item.get(key) for key in ("analyzer_id", "admission", "summary")}
-                              for item in feedback.get("analyzers", ())]}}
+        result["trial"] = compact_trial_feedback(trial)
         return result
 
     @staticmethod
@@ -303,6 +299,9 @@ class SkillLearningLoop:
         capture = feedback.get("capture", {})
         if isinstance(capture, Mapping) and capture.get("status") == "EVIDENCE_BLOCKED":
             return "TRIAL_CAPTURE_EVIDENCE_BLOCKED"
+        binding = feedback.get("trial_binding", {})
+        if isinstance(binding, Mapping) and binding.get("status") == "EVIDENCE_BLOCKED":
+            return "TRIAL_EVIDENCE_BINDING_FAILED"
         for analyzer in feedback.get("analyzers", ()):
             admission = analyzer.get("admission", {}) if isinstance(analyzer, Mapping) else {}
             if admission.get("state") in {"ERROR", "INSUFFICIENT_EVIDENCE", "EVIDENCE_BLOCKED"}:

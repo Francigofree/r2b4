@@ -21,6 +21,49 @@ from .skill_library import SkillLibrary
 from v3.robot_interface import RobotInterface
 
 
+_OBSERVE_ACTIONS = frozenset({"observe.open", "observe.status", "observe.events", "observe.finish", "observe.close"})
+
+
+def _recorded_read_name(name):
+    # The host's state/lifecycle and developer tools keep their own authority.
+    from .robot_runtime import READS, SKILL_READS
+    return (isinstance(name, str) and 0 < len(name) <= 128 and "." in name
+            and name not in READS | SKILL_READS | {"simulation.scenario", "v3.status"}
+            and not name.startswith(("operator.", "system.", "capture.", "skill.", "software.", "brain.", "behavior.")))
+
+
+def _resolve_recorded_observer(value):
+    if (not isinstance(value, Mapping)
+            or set(value) != {"parameters", "events", "start_monotonic_ns", "end_monotonic_ns", "complete"}):
+        raise ValueError("observer requires parameters, events, original measurement interval and complete")
+    parameters, events = value["parameters"], value["events"]
+    start, end = value["start_monotonic_ns"], value["end_monotonic_ns"]
+    if (not isinstance(parameters, Mapping) or set(parameters) != {"region", "object_kind"}
+            or parameters["object_kind"] != "person"
+            or type(start) is not int or type(end) is not int or not 0 <= start <= end
+            or type(value["complete"]) is not bool or not isinstance(events, list) or len(events) > 64):
+        raise ValueError("invalid recorded observer binding, measurement interval or bounded events")
+    # Reuse the production image-region contract without opening its owner.
+    from v3.adapters.skill_observation import _region
+    _region(parameters["region"])
+    previous = 0
+    identities = set()
+    for event in events:
+        if (not isinstance(event, dict)
+                or event.get("kind") not in {"qualified_presence", "coverage_gap", "capability_failed"}
+                or type(event.get("sequence")) is not int or event["sequence"] <= previous
+                or type(event.get("measurement_monotonic_ns")) is not int
+                or not start <= event["measurement_monotonic_ns"] <= end
+                or type(event.get("source_sequence")) is not int or event["source_sequence"] < 0
+                or not isinstance(event.get("event_id"), str) or not 1 <= len(event["event_id"]) <= 256
+                or event["event_id"] in identities
+                or not isinstance(event.get("owner_generation"), str) or not 1 <= len(event["owner_generation"]) <= 256):
+            raise ValueError("recorded observer events require ordered identity and original measurement lineage")
+        previous = event["sequence"]
+        identities.add(event["event_id"])
+    return dict(value)
+
+
 def threshold_scenario(value=None) -> dict[str, object]:
     """Resolve the one implemented semantic scenario, with an independent oracle."""
     if value is None or value == "threshold_detection":
@@ -40,15 +83,17 @@ def threshold_scenario(value=None) -> dict[str, object]:
 def resolve_scenario(value=None):
     if not isinstance(value, Mapping) or value.get("kind") != "semantic_trace":
         return threshold_scenario(value)
-    if set(value) - {"kind", "resources", "expected_result", "expected_reports"}:
+    if set(value) - {"kind", "resources", "observer", "expected_result", "expected_reports"}:
         raise ValueError("unknown semantic_trace scenario fields")
     resources = value.get("resources")
-    if (not isinstance(resources, Mapping) or not 1 <= len(resources) <= 8
-            or any(not isinstance(name, str) or not name.startswith("simulation.")
-                   or name == "simulation.scenario" or len(name) > 128 for name in resources)
+    if (not isinstance(resources, Mapping) or not 0 <= len(resources) <= 8
+            or not resources and "observer" not in value
+            or any(not _recorded_read_name(name) for name in resources)
             or any(not isinstance(rows, list) or not 1 <= len(rows) <= 64
                    or any(not isinstance(row, dict) for row in rows) for rows in resources.values())):
-        raise ValueError("semantic_trace requires 1..8 simulation resources with 1..64 semantic objects")
+        raise ValueError("semantic_trace requires bounded semantic read resources or a recorded observer")
+    if "observer" in value:
+        _resolve_recorded_observer(value["observer"])
     if "expected_result" not in value and "expected_reports" not in value:
         raise ValueError("semantic_trace requires an independent expected_result or expected_reports")
     if "expected_reports" in value and (not isinstance(value["expected_reports"], list)
@@ -106,7 +151,9 @@ class _SemanticSource:
 
     def read(self, resource):
         if resource == "simulation.scenario":
-            return {**self.scenario, "source": "simulation", "resource": "simulation.sample"}
+            inputs = {key: value for key, value in self.scenario.items()
+                      if key not in {"expected_result", "expected_reports"}}
+            return {**inputs, "source": "simulation", "resource": "simulation.sample"}
         if resource == "operator.status":
             return {"runtime_running": False, "runtime_pid": None, "source": "simulation"}
         if resource == "v3.status":
@@ -141,6 +188,127 @@ class _SemanticSource:
         return {"status": "STOPPED", "source": "simulation", "physical_output": False}
 
 
+class _RecordedObservationAdapter:
+    """Replay one bounded observer session using its existing SDK contract.
+
+    This owns only recorded host observations. No camera/detector or media
+    owner is started, and recorded time never claims current live freshness.
+    """
+    capability_names = _OBSERVE_ACTIONS
+
+    def __init__(self, source):
+        self.source = source
+        self._lock = threading.Lock()
+        self._sessions = {}
+        self._counter = 0
+        self.delivered = []
+        self.partial = False
+
+    def reset(self):
+        self.close()
+        with self._lock:
+            self.delivered = []
+            self.partial = False
+
+    def descriptors(self):
+        available = "observer" in self.source.scenario
+        return {name: {"kind": "action", "supported": True, "available": available, "ready": available,
+                       "source": "recorded_semantic_trace", "owner": "recorded_observer",
+                       "reason": None if available else "RECORDED_OBSERVER_UNAVAILABLE"}
+                for name in self.capability_names}
+
+    def call(self, name, parameters, invocation_id=None):
+        params = dict(parameters)
+        evidence = []
+        with self._lock:
+            recorded = self.source.scenario.get("observer")
+            if recorded is None:
+                raise RuntimeError("RECORDED_OBSERVER_UNAVAILABLE")
+            if name == "observe.open":
+                readiness = params.pop("ready_timeout_s", 5.)
+                if type(readiness) not in {int, float} or not math.isfinite(readiness) or not 0 <= readiness <= 30:
+                    raise ValueError("invalid recorded observer readiness timeout")
+                from v3.adapters.skill_observation import _region
+                if (set(params) != {"region", "object_kind"}
+                        or params["object_kind"] != recorded["parameters"]["object_kind"]
+                        or _region(params["region"]) != _region(recorded["parameters"]["region"])):
+                    raise RuntimeError("RECORDED_OBSERVER_PARAMETERS_MISMATCH")
+                if self._sessions:
+                    raise RuntimeError("RECORDED_OBSERVER_SESSION_ALREADY_OPEN")
+                self._counter += 1
+                handle = f"recorded-observer-{self._counter}"
+                session = {"handle": handle, "invocation_id": invocation_id, "until": None,
+                           "delivered": set(), "recorded": recorded}
+                self._sessions[handle] = session
+                result = self._page(session, 0, 0)
+                result["status"] = "READY"
+                result["events"] = []
+                return result
+            handle = params.pop("handle", None)
+            session = self._sessions.get(handle)
+            if session is None or session["invocation_id"] != invocation_id:
+                raise RuntimeError("RECORDED_OBSERVER_REVOKED")
+            if name == "observe.close":
+                if params:
+                    raise ValueError("observe.close accepts only handle")
+                del self._sessions[handle]
+                return {"handle": handle, "status": "CLOSED", "source": "recorded_semantic_trace"}
+            if name == "observe.finish":
+                until = params.pop("until_monotonic_ns", None)
+                timeout = params.pop("timeout_s", 5.)
+                if (type(until) is not int or until < recorded["start_monotonic_ns"]
+                        or type(timeout) not in {int, float} or not math.isfinite(timeout) or not 0 <= timeout <= 30):
+                    raise ValueError("invalid recorded measurement deadline")
+                if session["until"] is not None and session["until"] != until:
+                    raise ValueError("recorded observer interval has already been closed")
+                session["until"] = until
+                self.partial |= until > recorded["end_monotonic_ns"] or not recorded["complete"]
+            elif name not in {"observe.events", "observe.status"}:
+                raise KeyError(name)
+            cursor, limit = params.pop("after_sequence", 0), params.pop("limit", 32)
+            if params or type(cursor) is not int or cursor < 0 or type(limit) is not int or not 1 <= limit <= 32:
+                raise ValueError("invalid recorded observer cursor/page")
+            result = self._page(session, cursor, limit)
+            for event in result["events"]:
+                if event["event_id"] not in session["delivered"]:
+                    session["delivered"].add(event["event_id"])
+                    self.delivered.append(event)
+                    evidence.append(event)
+        for event in evidence:
+            self.source.observations.append({"resource": "observe.events", "sample": event})
+            self.source.owner._queue_evidence("simulation_observation", event)
+        return result
+
+    def _page(self, session, cursor, limit):
+        recorded, until = session["recorded"], session["until"]
+        events = [event for event in recorded["events"]
+                  if until is None or event["measurement_monotonic_ns"] <= until]
+        selected = [event for event in events if event["sequence"] > cursor][:limit]
+        previous = cursor
+        lost = 0
+        for event in selected:
+            lost += max(0, event["sequence"] - previous - 1)
+            previous = event["sequence"]
+        self.partial |= bool(lost) or any(event["kind"] != "qualified_presence" for event in selected)
+        return {"handle": session["handle"], "status": "FINISHED" if until is not None else "READY",
+                "clock_domain": "recorded_monotonic", "monotonic_ns": recorded["start_monotonic_ns"],
+                "source": "recorded_semantic_trace", "live_freshness": False,
+                "events": json.loads(json.dumps(selected)), "lost_events": lost,
+                "latest_sequence": max((event["sequence"] for event in events), default=0),
+                "finished": until is not None, "partial": self.partial,
+                "recorded_start_monotonic_ns": recorded["start_monotonic_ns"],
+                "recorded_end_monotonic_ns": recorded["end_monotonic_ns"]}
+
+    def close_invocation(self, invocation_id=None):
+        with self._lock:
+            self._sessions = {handle: session for handle, session in self._sessions.items()
+                              if session["invocation_id"] != invocation_id}
+
+    def close(self):
+        with self._lock:
+            self._sessions.clear()
+
+
 class MotorlessSkillSimulator:
     """An explicit host-only trial; all generated evidence remains under /tmp.
 
@@ -164,7 +332,8 @@ class MotorlessSkillSimulator:
         # Host tools stay scoped to temporary simulation data. Agent source and
         # evidence tools are composed separately against the actual project.
         self.runtime.skill_observation.close()
-        self.runtime.skill_observation = None
+        self.recorded_observation = _RecordedObservationAdapter(self.source)
+        self.runtime.skill_observation = self.recorded_observation
         self.source.owner = self.runtime
         self.interface = self.runtime.program_interface
         self._stop = threading.Event()
@@ -187,6 +356,10 @@ class MotorlessSkillSimulator:
                           "samples": "Each await robot.read(resource) consumes one current sample; preserve the returned object unchanged.",
                           "parameters": "Only explicit skill parameters are passed as kwargs; the scenario is read through the SDK."}
         if scenario["kind"] == "semantic_trace":
+            input_contract["observer"] = (
+                "If observer is supplied, use the unchanged production robot.observe()/robot.events.wait()/"
+                "observer.finish_events() SDK. Its recorded_monotonic clock translates deadlines; original "
+                "event identity/time remain unchanged. Media and motion are unavailable.")
             return {**scenario, "input_contract": input_contract, "source": "simulation", "scope": "Recorded semantic trace; original sample lineage/time retained, no live freshness claim."}
         return {**scenario, "resource": "simulation.sample", "source": "simulation",
                 "input_contract": input_contract,
@@ -286,6 +459,15 @@ class MotorlessSkillSimulator:
         from v3_process_runtime import McapCaptureSession
 
         resolved_scenario = resolve_scenario(scenario)
+        if resolved_scenario["kind"] == "semantic_trace":
+            from v3.interface_adapters import build_adapters
+            published_reads = set().union(*(adapter.read_capability_names
+                                           for adapter in build_adapters(None, self.project_root)))
+            unknown = [name for name in resolved_scenario["resources"]
+                       if not name.startswith("simulation.") and name not in published_reads]
+            if unknown:
+                raise ValueError("RECORDED_READ_RESOURCE_NOT_PUBLISHED:" + ",".join(unknown))
+        self.recorded_observation.reset()
         number = len(self._trials) + 1
         self.source.prepare(resolved_scenario, f"simulation-trial-{number}")
         self._report_cursor = self.runtime._sdk_event_sequence
@@ -439,10 +621,22 @@ class MotorlessSkillSimulator:
                            if seq > self._report_cursor and producer == "report"]
             checks.append({"name": "observed_reports", "passed": reports == scenario["expected_reports"],
                            "expected": scenario["expected_reports"], "actual": reports})
+        observer = scenario.get("observer")
+        coverage_complete = True
+        if observer is not None:
+            expected_ids = [event["event_id"] for event in observer["events"]]
+            delivered_ids = [event["event_id"] for event in self.recorded_observation.delivered]
+            checks.append({"name": "all_recorded_observer_events_observed", "passed": expected_ids == delivered_ids,
+                           "expected": expected_ids, "actual": delivered_ids})
+            coverage_complete = observer["complete"] and not self.recorded_observation.partial
+            checks.append({"name": "recorded_observer_coverage", "passed": coverage_complete,
+                           "expected": "complete supplied measurement interval without gaps",
+                           "actual": {"complete": observer["complete"], "partial": self.recorded_observation.partial}})
         complete = (state.get("state") == "SUCCEEDED" and not state.get("finalizing")
-                    and not state.get("callback_error") and interrupted is None)
+                    and not state.get("callback_error") and interrupted is None and coverage_complete)
         return {"status": "INCOMPLETE" if not complete else "PASSED" if all(row["passed"] for row in checks) else "FAILED",
-                "checks": checks, "reason": interrupted or state.get("error"),
+                "checks": checks, "reason": interrupted or state.get("error") or
+                    ("RECORDED_OBSERVER_COVERAGE_INCOMPLETE" if not coverage_complete else None),
                 "scope": "Supplied semantic trace and independent expected outputs/reports; no physical scene or freshness evidence."}
 
     def close(self):
