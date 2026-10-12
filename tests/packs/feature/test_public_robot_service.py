@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import socket
@@ -14,23 +15,26 @@ from pathlib import Path
 import pytest
 
 from r2b4_orchestration.robot_runtime import MAX_REQUEST_BYTES, PublicRobotClient
+from r2b4_orchestration.robot_sdk import AsyncRobotSDK
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 @contextmanager
-def owner_service(project: Path, socket_path: Path):
+def owner_service(project: Path, socket_path: Path, *, program: str | None = None):
     """Start/terminate only this test's host owner, never an operator process."""
 
     environment = dict(os.environ)
     environment["PYTHONPATH"] = os.pathsep.join(filter(None, (
         str(PROJECT_ROOT), environment.get("PYTHONPATH"))))
     output_path = project.parent / "public-owner-output.txt"
+    command = ([sys.executable, "-c", program, str(project), str(socket_path)] if program is not None
+               else [sys.executable, "-m", "r2b4_orchestration.robot_runtime", "--root", str(project),
+                     "--socket", str(socket_path)])
     with output_path.open("w", encoding="utf-8") as output:
         process = subprocess.Popen(
-            [sys.executable, "-m", "r2b4_orchestration.robot_runtime", "--root", str(project),
-             "--socket", str(socket_path)],
+            command,
             cwd=PROJECT_ROOT, env=environment, stdin=subprocess.DEVNULL,
             stdout=output, stderr=subprocess.STDOUT,
         )
@@ -143,3 +147,55 @@ def test_real_owner_rejects_unknown_and_oversized_requests_and_remains_available
         assert process.poll() is None
         assert client.request("read", resource="behavior.state", launch=False)["lifecycle"] == "IDLE"
         assert not (project / "runtime" / "v3_command.json").exists()
+
+
+def test_real_owner_serializes_motion_handle_for_sdk_and_keeps_stop_available(tmp_path):
+    project, path = temporary_project(tmp_path)
+    # Keep the production host server, dispatcher and wire encoder. Replace
+    # only its robot owner: no command producer or hardware is started.
+    program = '''
+import sys
+from pathlib import Path
+import v3.robot_interface
+from v3.operator_controller import MotionHandle
+from r2b4_orchestration.robot_runtime import serve
+
+class FakeInterface:
+    def __init__(self, **_parameters):
+        pass
+
+    def capabilities(self):
+        return {"capabilities": {}}
+
+    def read(self, resource):
+        raise RuntimeError("No live robot in this host transport test")
+
+    def execute(self, action, **parameters):
+        if action != "v3.command.teleop":
+            raise AssertionError("Unexpected action: " + action)
+        return MotionHandle(pid=123, label="teleop", command_id="test-teleop", capture_mode="full")
+
+    def stop(self):
+        return {"status": "STOPPED"}
+
+v3.robot_interface.RobotInterface = FakeInterface
+serve(Path(sys.argv[1]), Path(sys.argv[2]))
+'''
+    with owner_service(project, path, program=program) as (process, _client):
+        async def scenario():
+            sdk = AsyncRobotSDK(path, root=project, timeout_s=2)
+            try:
+                handle = await sdk.call("v3.command.teleop", v_mps=0.15, omega_rad_s=0.0)
+                assert handle == {"pid": 123, "label": "teleop", "command_id": "test-teleop",
+                                  "capture_mode": "full"}
+                stopped = await asyncio.wait_for(sdk.stop(), timeout=2)
+                assert stopped["lifecycle"] == "IDLE"
+                assert (await sdk.read("behavior.state"))["lifecycle"] == "IDLE"
+            finally:
+                await sdk.close()
+
+        asyncio.run(scenario())
+        assert process.poll() is None
+        assert not (project / "runtime" / "v3_command.json").exists()
+        assert not (project / "runtime" / ".r2b4_runtime_pid").exists()
+        assert not (project / "runtime" / "captures").exists()

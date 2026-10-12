@@ -1264,7 +1264,7 @@ def serve(root: Path, socket_path: Path) -> int:
                 try:
                     conn.settimeout(35.0)
                     result = runtime.dispatch(request)
-                    _send(conn, {"schema": SCHEMA, "result": result}, MAX_REPLY_BYTES)
+                    _send(conn, {"schema": SCHEMA, "result": _jsonable(result)}, MAX_REPLY_BYTES)
                 except Exception as exc:
                     try:
                         _send(conn, {"schema": SCHEMA, "error": f"{type(exc).__name__}:{exc}"}, MAX_REPLY_BYTES)
