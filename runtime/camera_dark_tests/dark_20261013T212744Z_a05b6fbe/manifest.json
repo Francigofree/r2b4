@@ -1,0 +1,631 @@
+{
+  "schema": "R2B4_DARK_CAMERA_TEST_V1",
+  "started_utc": "2026-10-13T21:27:44.163876+00:00",
+  "output_dir": "/home/alba/project_r2b4/runtime/camera_dark_tests/dark_20261013T212744Z_a05b6fbe",
+  "target_window_s": 20.0,
+  "camera_setting_scope": "public SDK streams + video bitrate + SOFTWARE JPEG/brightness/contrast",
+  "sensor_exposure_gain_shutter_modified": false,
+  "stationary": true,
+  "camera_status_before": {
+    "running": false,
+    "camera_state": "OFF",
+    "detector_running": false,
+    "consumers": 0,
+    "manual_demand": false,
+    "owner_generation": "",
+    "last_error": null,
+    "owner_pid": null
+  },
+  "countdown": {
+    "spoken": true,
+    "numbers": [
+      {
+        "number": 5,
+        "started_after_s": 0.0,
+        "player": "pw-play"
+      },
+      {
+        "number": 4,
+        "started_after_s": 1.001,
+        "player": "pw-play"
+      },
+      {
+        "number": 3,
+        "started_after_s": 2.001,
+        "player": "pw-play"
+      },
+      {
+        "number": 2,
+        "started_after_s": 3.001,
+        "player": "pw-play"
+      },
+      {
+        "number": 1,
+        "started_after_s": 4.001,
+        "player": "pw-play"
+      },
+      {
+        "number": 0,
+        "started_after_s": 5.001,
+        "player": "pw-play"
+      }
+    ],
+    "elapsed_s": 5.513
+  },
+  "captures": [
+    {
+      "kind": "photo",
+      "stream": "lores",
+      "original": "01_lores_original.jpg",
+      "sha256": "4b67b012185345d769121df1251843987951b0ddb11174e9ad1f1af003052be3",
+      "producer_metadata": {
+        "source_sequence": 1,
+        "sensor_timestamp_ns": 11720122484000,
+        "measurement_monotonic_ns": 11720122484000,
+        "completed_monotonic_ns": 11720140704000,
+        "calibration_id": "cal-44715b8a956857d1",
+        "stream": "lores",
+        "width": 640,
+        "height": 360,
+        "rectified_K": [
+          [
+            416.0523224539757,
+            0.0,
+            291.92071172689907
+          ],
+          [
+            0.0,
+            412.0762381064851,
+            154.31281695143667
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "3e8957fab1a9457ab3992bb9ffd28a08",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 35,
+      "software_brightness": 1.0,
+      "software_contrast": 1.0,
+      "sensor_controls_modified": false,
+      "postprocessed": "01_lores_q35_b1_c1.jpg",
+      "mean_luma_0_255": 108.53,
+      "dark_pixel_fraction_under_16": 0.00211,
+      "status": "SAVED",
+      "index": 1,
+      "offset_s": 0.0,
+      "started_after_s": 0.0,
+      "finished_after_s": 0.627
+    },
+    {
+      "kind": "photo",
+      "stream": "main",
+      "original": "02_main_original.jpg",
+      "sha256": "13d859c3e5df0fbf031162afcecd15e23015d5373b6803f24fb80f5a71f66ecc",
+      "producer_metadata": {
+        "source_sequence": 8,
+        "sensor_timestamp_ns": 11720559933000,
+        "measurement_monotonic_ns": 11720559933000,
+        "completed_monotonic_ns": 11720730010435,
+        "calibration_id": "cal-250f7b76c6543469",
+        "stream": "main",
+        "width": 1280,
+        "height": 720,
+        "rectified_K": [
+          [
+            832.1046449079514,
+            0.0,
+            583.8414234537981
+          ],
+          [
+            0.0,
+            824.1524762129702,
+            308.62563390287335
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "3e8957fab1a9457ab3992bb9ffd28a08",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 90,
+      "software_brightness": 1.0,
+      "software_contrast": 1.0,
+      "sensor_controls_modified": false,
+      "postprocessed": "02_main_q90_b1_c1.jpg",
+      "mean_luma_0_255": 108.22,
+      "dark_pixel_fraction_under_16": 0.00488,
+      "status": "SAVED",
+      "index": 2,
+      "offset_s": 1.0,
+      "started_after_s": 1.001,
+      "finished_after_s": 1.198
+    },
+    {
+      "kind": "video",
+      "file": "03_low_bitrate_1Mbps.mp4",
+      "bitrate": 1000000,
+      "requested_duration_s": 2.0,
+      "owner_reply": {
+        "output": "/home/alba/project_r2b4/runtime/camera_dark_tests/dark_20261013T212744Z_a05b6fbe/03_low_bitrate_1Mbps.mp4",
+        "bytes": 325473,
+        "frames": 10,
+        "duration_s": 2.0,
+        "fps": 5.0,
+        "first_frame": {
+          "source_sequence": 1,
+          "sensor_timestamp_ns": 11722743190000,
+          "measurement_monotonic_ns": 11722743190000,
+          "completed_monotonic_ns": 11722760690594,
+          "calibration_id": "cal-44715b8a956857d1",
+          "stream": "lores",
+          "width": 640,
+          "height": 360,
+          "rectified_K": [
+            [
+              416.0523224539757,
+              0.0,
+              291.92071172689907
+            ],
+            [
+              0.0,
+              412.0762381064851,
+              154.31281695143667
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "owner_generation": "f308012b48f04ae5a07e4dbadb41b4c1",
+          "calibration_state": "CALIBRATED"
+        },
+        "last_frame": {
+          "source_sequence": 30,
+          "sensor_timestamp_ns": 11724555484000,
+          "measurement_monotonic_ns": 11724555484000,
+          "completed_monotonic_ns": 11724570600571,
+          "calibration_id": "cal-44715b8a956857d1",
+          "stream": "lores",
+          "width": 640,
+          "height": 360,
+          "rectified_K": [
+            [
+              416.0523224539757,
+              0.0,
+              291.92071172689907
+            ],
+            [
+              0.0,
+              412.0762381064851,
+              154.31281695143667
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "owner_generation": "f308012b48f04ae5a07e4dbadb41b4c1",
+          "calibration_state": "CALIBRATED"
+        }
+      },
+      "status": "SAVED",
+      "index": 3,
+      "offset_s": 2.5,
+      "started_after_s": 2.502,
+      "finished_after_s": 5.41
+    },
+    {
+      "kind": "photo",
+      "stream": "lores",
+      "original": "04_lores_original.jpg",
+      "sha256": "9384fff2a946d166098ba8ef8a6704511afaaa2f6531ba21dac6923f6444218c",
+      "producer_metadata": {
+        "source_sequence": 47,
+        "sensor_timestamp_ns": 11725617864000,
+        "measurement_monotonic_ns": 11725617864000,
+        "completed_monotonic_ns": 11725632854615,
+        "calibration_id": "cal-44715b8a956857d1",
+        "stream": "lores",
+        "width": 640,
+        "height": 360,
+        "rectified_K": [
+          [
+            416.0523224539757,
+            0.0,
+            291.92071172689907
+          ],
+          [
+            0.0,
+            412.0762381064851,
+            154.31281695143667
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "f308012b48f04ae5a07e4dbadb41b4c1",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 80,
+      "software_brightness": 2.0,
+      "software_contrast": 1.1,
+      "sensor_controls_modified": false,
+      "postprocessed": "04_lores_q80_b2_c1.1.jpg",
+      "mean_luma_0_255": 109.13,
+      "dark_pixel_fraction_under_16": 0.00201,
+      "status": "SAVED",
+      "index": 4,
+      "offset_s": 6.0,
+      "started_after_s": 6.001,
+      "finished_after_s": 6.086
+    },
+    {
+      "kind": "video",
+      "file": "05_high_bitrate_6Mbps.mp4",
+      "bitrate": 6000000,
+      "requested_duration_s": 2.0,
+      "owner_reply": {
+        "output": "/home/alba/project_r2b4/runtime/camera_dark_tests/dark_20261013T212744Z_a05b6fbe/05_high_bitrate_6Mbps.mp4",
+        "bytes": 923515,
+        "frames": 10,
+        "duration_s": 2.0,
+        "fps": 5.0,
+        "first_frame": {
+          "source_sequence": 1,
+          "sensor_timestamp_ns": 11727625531000,
+          "measurement_monotonic_ns": 11727625531000,
+          "completed_monotonic_ns": 11727647225214,
+          "calibration_id": "cal-44715b8a956857d1",
+          "stream": "lores",
+          "width": 640,
+          "height": 360,
+          "rectified_K": [
+            [
+              416.0523224539757,
+              0.0,
+              291.92071172689907
+            ],
+            [
+              0.0,
+              412.0762381064851,
+              154.31281695143667
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "owner_generation": "43e87d49a5da4500b3dfd6a441d48c18",
+          "calibration_state": "CALIBRATED"
+        },
+        "last_frame": {
+          "source_sequence": 31,
+          "sensor_timestamp_ns": 11729500320000,
+          "measurement_monotonic_ns": 11729500320000,
+          "completed_monotonic_ns": 11729519430700,
+          "calibration_id": "cal-44715b8a956857d1",
+          "stream": "lores",
+          "width": 640,
+          "height": 360,
+          "rectified_K": [
+            [
+              416.0523224539757,
+              0.0,
+              291.92071172689907
+            ],
+            [
+              0.0,
+              412.0762381064851,
+              154.31281695143667
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "owner_generation": "43e87d49a5da4500b3dfd6a441d48c18",
+          "calibration_state": "CALIBRATED"
+        }
+      },
+      "status": "SAVED",
+      "index": 5,
+      "offset_s": 7.5,
+      "started_after_s": 7.502,
+      "finished_after_s": 10.252
+    },
+    {
+      "kind": "photo",
+      "stream": "main",
+      "original": "06_main_original.jpg",
+      "sha256": "a9fe29e93e7d3516413f7e5a70190ee146905ff9a4e11a141ec9a298c41167b8",
+      "producer_metadata": {
+        "source_sequence": 48,
+        "sensor_timestamp_ns": 11730562699000,
+        "measurement_monotonic_ns": 11730562699000,
+        "completed_monotonic_ns": 11730594283382,
+        "calibration_id": "cal-250f7b76c6543469",
+        "stream": "main",
+        "width": 1280,
+        "height": 720,
+        "rectified_K": [
+          [
+            832.1046449079514,
+            0.0,
+            583.8414234537981
+          ],
+          [
+            0.0,
+            824.1524762129702,
+            308.62563390287335
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "43e87d49a5da4500b3dfd6a441d48c18",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 95,
+      "software_brightness": 3.0,
+      "software_contrast": 1.2,
+      "sensor_controls_modified": false,
+      "postprocessed": "06_main_q95_b3_c1.2.jpg",
+      "mean_luma_0_255": 108.5,
+      "dark_pixel_fraction_under_16": 0.00457,
+      "status": "SAVED",
+      "index": 6,
+      "offset_s": 11.0,
+      "started_after_s": 11.001,
+      "finished_after_s": 11.079
+    },
+    {
+      "kind": "photo",
+      "stream": "main",
+      "original": "07_main_original.jpg",
+      "sha256": "c533a7902343bf3e7a4d2b722c26fca2a9138e27032bb7631452027e90f78e51",
+      "producer_metadata": {
+        "source_sequence": 1,
+        "sensor_timestamp_ns": 11733121262000,
+        "measurement_monotonic_ns": 11733121262000,
+        "completed_monotonic_ns": 11733154492243,
+        "calibration_id": "cal-250f7b76c6543469",
+        "stream": "main",
+        "width": 1280,
+        "height": 720,
+        "rectified_K": [
+          [
+            832.1046449079514,
+            0.0,
+            583.8414234537981
+          ],
+          [
+            0.0,
+            824.1524762129702,
+            308.62563390287335
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "5cd3ca41de2e4574a52caad4f1bced97",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 60,
+      "software_brightness": 1.0,
+      "software_contrast": 2.0,
+      "sensor_controls_modified": false,
+      "postprocessed": "07_main_q60_b1_c2.jpg",
+      "mean_luma_0_255": 108.13,
+      "dark_pixel_fraction_under_16": 0.00517,
+      "status": "SAVED",
+      "index": 7,
+      "offset_s": 13.0,
+      "started_after_s": 13.002,
+      "finished_after_s": 13.625
+    },
+    {
+      "kind": "photo",
+      "stream": "lores",
+      "original": "08_lores_original.jpg",
+      "sha256": "90b627b76f6421eeaf7a82ec629c901f9ee96631de3575b9c4dccf5e03e2109a",
+      "producer_metadata": {
+        "source_sequence": 1,
+        "sensor_timestamp_ns": 11735217096000,
+        "measurement_monotonic_ns": 11735217096000,
+        "completed_monotonic_ns": 11735237342335,
+        "calibration_id": "cal-44715b8a956857d1",
+        "stream": "lores",
+        "width": 640,
+        "height": 360,
+        "rectified_K": [
+          [
+            416.0523224539757,
+            0.0,
+            291.92071172689907
+          ],
+          [
+            0.0,
+            412.0762381064851,
+            154.31281695143667
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "2a4cd704c81f4ae2a8a94c2d14de2e60",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 90,
+      "software_brightness": 4.0,
+      "software_contrast": 1.0,
+      "sensor_controls_modified": false,
+      "postprocessed": "08_lores_q90_b4_c1.jpg",
+      "mean_luma_0_255": 109.01,
+      "dark_pixel_fraction_under_16": 0.00224,
+      "status": "SAVED",
+      "index": 8,
+      "offset_s": 15.0,
+      "started_after_s": 15.002,
+      "finished_after_s": 15.692
+    },
+    {
+      "kind": "photo",
+      "stream": "main",
+      "original": "09_main_original.jpg",
+      "sha256": "e2cabde331293b276321bc291bd53be4967b39c5e8e978898aa53267b2b19085",
+      "producer_metadata": {
+        "source_sequence": 1,
+        "sensor_timestamp_ns": 11737258750000,
+        "measurement_monotonic_ns": 11737258750000,
+        "completed_monotonic_ns": 11737304809617,
+        "calibration_id": "cal-250f7b76c6543469",
+        "stream": "main",
+        "width": 1280,
+        "height": 720,
+        "rectified_K": [
+          [
+            832.1046449079514,
+            0.0,
+            583.8414234537981
+          ],
+          [
+            0.0,
+            824.1524762129702,
+            308.62563390287335
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "219b2a0821504b8e8cc003b2a9807c21",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 95,
+      "software_brightness": 1.0,
+      "software_contrast": 1.0,
+      "sensor_controls_modified": false,
+      "postprocessed": "09_main_q95_b1_c1.jpg",
+      "mean_luma_0_255": 109.98,
+      "dark_pixel_fraction_under_16": 0.00443,
+      "status": "SAVED",
+      "index": 9,
+      "offset_s": 17.0,
+      "started_after_s": 17.002,
+      "finished_after_s": 17.78
+    },
+    {
+      "kind": "photo",
+      "stream": "lores",
+      "original": "10_lores_original.jpg",
+      "sha256": "b85ef18a30097d386e96fd931127b2cacfb4b06b4d7d961c2df3a8a858ef6c9d",
+      "producer_metadata": {
+        "source_sequence": 13,
+        "sensor_timestamp_ns": 11738008665000,
+        "measurement_monotonic_ns": 11738008665000,
+        "completed_monotonic_ns": 11738024823635,
+        "calibration_id": "cal-44715b8a956857d1",
+        "stream": "lores",
+        "width": 640,
+        "height": 360,
+        "rectified_K": [
+          [
+            416.0523224539757,
+            0.0,
+            291.92071172689907
+          ],
+          [
+            0.0,
+            412.0762381064851,
+            154.31281695143667
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "owner_generation": "219b2a0821504b8e8cc003b2a9807c21",
+        "calibration_state": "CALIBRATED"
+      },
+      "software_jpeg_quality": 50,
+      "software_brightness": 1.5,
+      "software_contrast": 2.0,
+      "sensor_controls_modified": false,
+      "postprocessed": "10_lores_q50_b1.5_c2.jpg",
+      "mean_luma_0_255": 108.55,
+      "dark_pixel_fraction_under_16": 0.00204,
+      "status": "SAVED",
+      "index": 10,
+      "offset_s": 18.4,
+      "started_after_s": 18.401,
+      "finished_after_s": 18.475
+    }
+  ],
+  "warmup_metadata": {
+    "source_sequence": 1,
+    "sensor_timestamp_ns": 11710008270000,
+    "measurement_monotonic_ns": 11710008270000,
+    "completed_monotonic_ns": 11710063806502,
+    "calibration_id": "cal-44715b8a956857d1",
+    "stream": "lores",
+    "width": 640,
+    "height": 360,
+    "rectified_K": [
+      [
+        416.0523224539757,
+        0.0,
+        291.92071172689907
+      ],
+      [
+        0.0,
+        412.0762381064851,
+        154.31281695143667
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "owner_generation": "300b9c021b3e40eaa53b5cf24d97e17b",
+    "calibration_state": "CALIBRATED"
+  },
+  "capture_window_elapsed_s": 20.003,
+  "photos_saved": 8,
+  "videos_saved": 2,
+  "status": "COMPLETE",
+  "camera_status_after": {
+    "running": false,
+    "camera_state": "OFF",
+    "detector_running": false,
+    "consumers": 0,
+    "manual_demand": false,
+    "owner_generation": "",
+    "last_error": null,
+    "owner_generation_started_ns": null,
+    "detector_last_error": null,
+    "owner_pid": 16906
+  },
+  "finished_utc": "2026-10-13T21:28:18.753410+00:00"
+}
