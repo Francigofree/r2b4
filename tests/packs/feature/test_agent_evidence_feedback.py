@@ -22,7 +22,7 @@ from v3.observation import ObservationHub
 from v3.public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
 
 
-def _native_capture(output, *, lose_required=False, runtime_events=()):
+def _native_capture(output, *, lose_required=False, runtime_events=(), sample_hz=50, metadata=None):
     control = resolved_config().runtime.composition.live_control.control
     sink = OfflineMotorSink()
     composition = NativeControlComposition(sink, control)
@@ -31,12 +31,13 @@ def _native_capture(output, *, lose_required=False, runtime_events=()):
         "agent-evidence", output,
         subscription=hub.subscribe_reliable("agent-evidence", capacity=16, required=True),
         configuration={"production_control": control},
-        config=McapCaptureConfig(mode="append_only", tick_sample_hz=50))
+        metadata=metadata,
+        config=McapCaptureConfig(mode="append_only", tick_sample_hz=sample_hz))
     health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in
                    sorted(set(control.critical_device_ids) | {"ENCODER", "IMU"}))
     try:
         for tick in range(3):
-            context = TickContext(tick, 2_000_000_000 + tick * 20_000_000)
+            context = TickContext(tick, 2_000_000_000 + tick * (20_000_000 if sample_hz == 50 else 100_000_000))
             def sample(device, kind, **values):
                 return DeviceSample(device, kind, tick + 1, context.monotonic_ns,
                                     tuple(DataField(key, value) for key, value in values.items()))
@@ -78,6 +79,39 @@ def _native_capture(output, *, lose_required=False, runtime_events=()):
 
 def _tools(root):
     return {spec.name: handler for spec, handler in build_evidence_tools(root)}
+
+
+@pytest.mark.parametrize("clock_variant", ["same_boot", "other_boot", "missing_boot", "simulation"])
+def test_live_motion_scope_is_bound_to_source_run_clock_and_excludes_idle_prefix(tmp_path, clock_variant):
+    terminal = {"schema": "R2B4_PUBLIC_ROBOT_RUNTIME_V1", "kind": "skill",
+        "publication_time_ns": 3_000_000_000, "clock_epoch": "boot-qualified-fixture",
+        "producer_id": "fixture-host", "event_sequence": 1, "evidence_dropped": 0,
+        "value": {"event_type": "skill_terminal", "state": "SUCCEEDED", "run_id": "fixture-run",
+                  "source_hash": "fixture-source", "started_ns": 2_020_000_000, "finished_ns": 2_040_000_000}}
+    metadata = {"runtime": "v3_process_runtime", "command_gateway": "AtomicResidentCommandGateway"}
+    if clock_variant != "missing_boot":
+        metadata["monotonic_boot_id"] = "other-boot" if clock_variant == "other_boot" else "boot-qualified-fixture"
+    if clock_variant == "simulation":
+        metadata.update(source="simulation", physical_hardware=False)
+    captured = _native_capture(tmp_path / "scoped.mcap", runtime_events=(terminal,), metadata=metadata)
+    evidence = tmp_path / "scoped.evidence"
+    _tools(ROOT)["evi.compile"]({"capture": str(captured.path), "output": str(evidence)})
+    feedback = collect_evidence_feedback(ROOT, evidence=evidence, capture=captured.path,
+        analyzers=("motion_performance",), binding={"run_id": "fixture-run", "source_hash": "fixture-source"})
+    assert feedback["trial_binding"]["status"] == "VERIFIED"
+    scope = feedback["measurement_scope"]
+    metrics = feedback["analyzers"][0]["metrics"]
+    if clock_variant == "same_boot":
+        assert scope["status"] == "BOUND_TO_SKILL_RUN"
+        assert scope["clock_epoch"] == "boot-qualified-fixture" and scope["run_id"] == "fixture-run"
+        assert scope["runtime_ref"]["message_id"] and scope["terminal_ref"]["message_id"]
+        assert metrics["temporal_coverage"]["measurement_time_interval_ns"] == [2_020_000_000, 2_040_000_000]
+        assert metrics["tracking"]["valid_pairs"] == 1
+        assert metrics["performance"]["allowed_observed_s"] == pytest.approx(.02)
+    else:
+        assert scope["status"] == ("SIMULATION_CLOCK" if clock_variant == "simulation" else "CLOCK_EPOCH_UNVERIFIED")
+        assert metrics["temporal_coverage"]["measurement_time_interval_ns"] is None
+        assert metrics["tracking"]["valid_pairs"] == 2
 
 
 def test_native_motor_free_compile_replay_and_feedback_keep_separate_scopes(tmp_path):

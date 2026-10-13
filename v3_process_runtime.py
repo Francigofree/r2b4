@@ -25,7 +25,7 @@ from v3.capture_rate import CAPTURE_HZ_VALUES, CONTROL_CAPTURE_HZ, DEFAULT_CAPTU
 from v3.capture_behavior import project_behavior_record
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
-from v3.hri_evidence import HriEventFollower
+from v3.hri_evidence import HriEventFollower, hri_clock_epoch
 from v3.public_runtime_evidence import PublicRuntimeEventFollower
 from v3.adapters.native_lidar_port import (
     TimedPoseReference,
@@ -747,6 +747,7 @@ def main(argv: list[str] | None = None) -> int:
                 metadata={
                     "runtime": "v3_process_runtime",
                     "command_gateway": "AtomicResidentCommandGateway",
+                    "monotonic_boot_id": hri_clock_epoch(),
                     "runtime_affinity": affinity_config.as_dict(),
                 },
                 capacity=args.capture_ingress_capacity,

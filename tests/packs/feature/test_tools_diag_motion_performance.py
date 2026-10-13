@@ -135,3 +135,91 @@ def test_sampled_derivatives_count_observed_stop_start_and_direction_changes():
     assert quality["allowed_angular_reversal_count"] == 1
     assert quality["derivative_observed_s"] == pytest.approx(.2)
     assert "motion_performance" in build_default_registry().ids()
+
+
+@pytest.mark.parametrize("source_change", ["missing", "wrong_tick", "wrong_time", "boolean_tick", "unknown_ref"])
+def test_compact_context_reference_requires_matching_original_tick_evidence(source_change):
+    context = _context()
+    context.bundle.rows["ticks"] = []
+    for anchor in context.bundle.rows["layers/L3"]:
+        tick_context = dict(anchor.payload["context"])
+        context.bundle.rows["ticks"].append(EvidenceViewRow(
+            "ticks", anchor.message_id, "", anchor.topic, anchor.log_time_ns, anchor.tick_id,
+            {"tick_id": anchor.tick_id, "monotonic_ns": tick_context["monotonic_ns"],
+             "inputs": {"context": tick_context}}))
+    for view in (*motion_performance.VIEWS, "layers/L5", "layers/L6"):
+        for row in context.bundle.rows[view]:
+            row.payload["context"] = {"$ref": "input_context"}
+    if source_change == "missing":
+        context.bundle.rows["ticks"].clear()
+    elif source_change == "unknown_ref":
+        context.bundle.rows["layers/L9"][1].payload["context"] = {"$ref": "unknown_context"}
+    else:
+        input_context = context.bundle.rows["ticks"][1].payload["inputs"]["context"]
+        input_context["tick_id" if source_change in ("wrong_tick", "boolean_tick") else "monotonic_ns"] = {
+            "wrong_tick": 17, "wrong_time": 77, "boolean_tick": True}[source_change]
+    metrics = motion_performance.run(context, None).metrics
+    assert metrics["temporal_coverage"]["interval_counts"]["invalid_or_inconsistent_source_context"] >= 1
+    assert metrics["tracking"]["valid_pairs"] == 0
+
+
+@pytest.mark.parametrize("sample_hz", [10, 50])
+def test_native_sampled_mcap_evi_and_agent_feedback_resolve_original_tick_context(tmp_path, sample_hz):
+    # Real production composition and capture writer, followed by the explicit
+    # compiler and verified consumer API. No physical motor writer is opened.
+    from test_agent_evidence_feedback import _native_capture
+    from rig import ROOT
+    from r2b4_orchestration.agent_evidence_tools import build_evidence_tools, collect_evidence_feedback
+    from tools.mcap_evidence.reader import EvidenceBundle
+
+    captured = _native_capture(tmp_path / "trial.mcap", sample_hz=sample_hz)
+    bundle_path = tmp_path / "trial.evidence"
+    handlers = {spec.name: handler for spec, handler in build_evidence_tools(ROOT)}
+    handlers["evi.compile"]({"capture": str(captured.path), "output": str(bundle_path)})
+    bundle = EvidenceBundle.open(bundle_path)
+    l3 = next(bundle.iter_view("layers/L3"))
+    tick = next(bundle.iter_view("ticks"))
+    assert l3.payload["context"] == {"$ref": "input_context"}
+    assert l3.message_id == tick.message_id
+    assert l3.tick_id == tick.payload["inputs"]["context"]["tick_id"]
+
+    feedback = collect_evidence_feedback(ROOT, evidence=bundle_path, capture=captured.path,
+        analyzers=("motion_performance",))
+    metric = feedback["analyzers"][0]["metrics"]
+    coverage = metric["temporal_coverage"]
+    assert coverage["aligned_rows"] == 3
+    assert coverage["interval_counts"].get("invalid_or_inconsistent_source_context", 0) == 0
+    assert coverage["interval_counts"]["valid_source_intervals"] == 2
+    assert coverage["sample_rate_hz_estimate"] == pytest.approx(sample_hz)
+    assert metric["tracking"]["valid_pairs"] == 2
+    assert metric["tracking"]["linear_rmse_mps"] == 0.
+    assert feedback["capture"]["status"] == "VERIFIED"
+    assert feedback["root_cause_inferred"] is False
+
+
+def test_explicit_source_time_window_measures_only_complete_run_intervals():
+    context = _context()
+    context.measurement_time_interval_ns = (1_050_000_000, 1_200_000_000)
+    metrics = motion_performance.run(context, None).metrics
+    coverage = metrics["temporal_coverage"]
+    assert coverage["measurement_time_interval_ns"] == [1_050_000_000, 1_200_000_000]
+    assert coverage["interval_counts"]["outside_measurement_time_interval_rows"] == 1
+    assert coverage["first_time_ns"] == 1_100_000_000
+    assert metrics["tracking"]["valid_pairs"] == 1
+    assert metrics["tracking"]["first_departure"]["command_tick_id"] == 1
+    assert metrics["performance"]["estimated_path_length_m"] == pytest.approx(.05)
+    assert metrics["goal_progress"]["segments"][0]["first"]["tick_id"] == 1
+
+    context.measurement_time_interval_ns = (1_110_000_000, 1_190_000_000)
+    metrics = motion_performance.run(context, None).metrics
+    assert metrics["tracking"]["valid_pairs"] == 0
+    assert metrics["tracking"]["linear_rmse_mps"] is None
+    assert metrics["performance"]["estimated_path_length_m"] is None
+
+
+@pytest.mark.parametrize("interval", [(2, 1), (-1, 1), (False, 1), (1,), [1, 2]])
+def test_measurement_context_rejects_invalid_source_time_interval(interval):
+    from tools.diag.context import DiagContext
+
+    with pytest.raises(ValueError, match="measurement_time_interval_ns"):
+        DiagContext(None, None, None, None, measurement_time_interval_ns=interval)

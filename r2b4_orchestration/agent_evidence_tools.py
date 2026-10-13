@@ -370,6 +370,45 @@ def _measurement_slice(analyzer: str, metrics: Mapping[str, object]) -> list[dic
     return result
 
 
+def _motion_measurement_scope(bundle, binding: Mapping[str, object]) -> dict[str, object]:
+    """Qualify a live run interval without reinterpreting a synthetic clock."""
+    if binding.get("status") == "NOT_REQUESTED":
+        return {"status": "CAPTURE_WIDE"}
+    if binding.get("status") != "VERIFIED":
+        return {"status": "RUN_BINDING_UNVERIFIED"}
+    runtimes = list(bundle.iter_view("runtime", limit=2)) if bundle.has_view("runtime") else []
+    if len(runtimes) != 1 or not isinstance(runtimes[0].payload, Mapping):
+        return {"status": "RUNTIME_CLOCK_UNVERIFIED"}
+    runtime = runtimes[0].payload
+    metadata = runtime.get("metadata", {})
+    if not isinstance(metadata, Mapping):
+        return {"status": "RUNTIME_CLOCK_UNVERIFIED"}
+    if metadata.get("source") == "simulation" or metadata.get("physical_hardware") is False:
+        return {"status": "SIMULATION_CLOCK", "scope": "Full synthetic trial; worker wall time does not bound virtual physics time."}
+    if (metadata.get("runtime") != "v3_process_runtime"
+            or metadata.get("command_gateway") != "AtomicResidentCommandGateway"):
+        return {"status": "RUNTIME_CLOCK_UNVERIFIED"}
+    epoch = metadata.get("monotonic_boot_id")
+    terminal = binding.get("terminal_events", [])
+    intervals = {(row.get("started_ns"), row.get("finished_ns")) for row in terminal}
+    if (not isinstance(epoch, str) or not epoch or not terminal
+            or runtime.get("clock_epoch") != "linux_monotonic_boot"
+            or any(row.get("evidence_ref", {}).get("clock_epoch") != epoch for row in terminal)):
+        return {"status": "CLOCK_EPOCH_UNVERIFIED"}
+    if len(intervals) != 1:
+        return {"status": "RUN_INTERVAL_UNVERIFIED"}
+    start, finish = next(iter(intervals))
+    if (type(start) is not int or type(finish) is not int or not 0 <= start < finish
+            or any(type(row.get("evidence_ref", {}).get("publication_time_ns")) is not int
+                   or finish > row["evidence_ref"]["publication_time_ns"] for row in terminal)):
+        return {"status": "RUN_INTERVAL_UNVERIFIED"}
+    from tools.diag.profiling import evidence_ref
+    return {"status": "BOUND_TO_SKILL_RUN", "started_ns": start, "finished_ns": finish,
+            "clock_epoch": epoch, **{key: binding["expected"][key] for key in ("run_id", "source_hash")},
+            "runtime_ref": evidence_ref(runtimes[0], "/metadata/monotonic_boot_id").as_dict(),
+            "terminal_ref": terminal[0]["evidence_ref"]}
+
+
 def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> dict[str, object]:
     """Read explicit offline trial evidence, preserving independent proof scopes.
 
@@ -407,10 +446,16 @@ def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> d
             context = replace(context, facts=replace(context.facts, verification_source_checked=True))
         facts = context.facts.as_dict()
         facts["bundle_manifest_sha256"] = context.bundle.manifest["self_sha256"]
+        trial_binding = _trial_binding(context.bundle, binding, capture_facts, limit)
+        motion_scope = _motion_measurement_scope(context.bundle, trial_binding)
         results = []
         measurements = {}
         for analyzer in analyzers:
-            result = registry.run(analyzer, context).as_dict(include_evidence=False, include_producer=False)
+            selected_context = context
+            if analyzer == "motion_performance" and motion_scope["status"] == "BOUND_TO_SKILL_RUN":
+                selected_context = replace(context, measurement_time_interval_ns=(
+                    motion_scope["started_ns"], motion_scope["finished_ns"]))
+            result = registry.run(analyzer, selected_context).as_dict(include_evidence=False, include_producer=False)
             metrics = result["metrics"]
             for measurement in _measurement_slice(analyzer, metrics):
                 measurements.setdefault((measurement["view"], measurement["field_path"]), measurement)
@@ -429,7 +474,8 @@ def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> d
             "evidence": facts, "capture": capture_facts,
             "producer": context.producer.as_dict(), "analyzers": results,
             "measurements": list(measurements.values()),
-            "trial_binding": _trial_binding(context.bundle, binding, capture_facts, limit),
+            "trial_binding": trial_binding,
+            "measurement_scope": motion_scope,
             "replay": _feedback_replay(root, args.get("replay_result"), context.facts.source_sha256),
             "root_cause_inferred": False,
         }

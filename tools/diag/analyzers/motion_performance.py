@@ -8,7 +8,7 @@ gaps or unqualified local-pose continuity. No causal/tuning verdict is inferred.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 from statistics import median
 
@@ -17,7 +17,7 @@ from ..contracts import AnalyzerContract, AnalyzerOutput, DiagnosticObservation,
 from ..profiling import evidence_ref
 
 VIEWS = ("layers/L3", "layers/L8", "layers/L9", "layers/L11", "layers/L12")
-OPTIONAL = ("layers/L5", "layers/L6")
+OPTIONAL = ("layers/L5", "layers/L6", "ticks")
 MAX_GAP_NS = 250_000_000
 LINEAR_EPS = 0.005
 ANGULAR_EPS = 0.02
@@ -45,9 +45,42 @@ def _time(row):
     if not isinstance(context, dict):
         return None
     value = context.get("monotonic_ns")
-    if type(value) is int and value >= 0 and context.get("tick_id") == row.tick_id:
+    tick = context.get("tick_id")
+    if (type(value) is int and value >= 0 and type(tick) is int and tick >= 0
+            and type(row.tick_id) is int and tick == row.tick_id):
         return value
     return None
+
+
+def _canonical_context_rows(rows):
+    """Resolve persisted context references through their original tick view.
+
+    EVI deliberately preserves the compact source JSON. Resolve only the exact
+    input_context reference, leaving all other persisted values untouched. A
+    missing or inconsistent source context remains a data gap.
+    """
+    tick_row = rows.get("ticks")
+    tick_payload = _payload(tick_row)
+    inputs = tick_payload.get("inputs", {})
+    source_context = inputs.get("context") if isinstance(inputs, dict) else None
+    if tick_row is not None:
+        source_row = replace(tick_row, payload={"context": source_context})
+        timestamp = _time(source_row)
+        if (timestamp is None or type(tick_payload.get("monotonic_ns")) is not int
+                or tick_payload["monotonic_ns"] != timestamp):
+            return None
+    resolved = dict(rows)
+    for view, row in rows.items():
+        if not view.startswith("layers/"):
+            continue
+        context = _payload(row).get("context")
+        if context == {"$ref": "input_context"}:
+            if source_context is None:
+                return None
+            resolved[view] = replace(row, payload={**_payload(row), "context": source_context})
+    if tick_row is not None and any(_time(resolved[view]) != timestamp for view in VIEWS):
+        return None
+    return resolved
 
 
 def _pair(payload, linear, angular):
@@ -150,6 +183,7 @@ def _goal_sample(rows, timestamp):
 
 def run(context, registry) -> AnalyzerOutput:
     del registry
+    measurement_interval = getattr(context, "measurement_time_interval_ns", None)
     intervals = Counter()
     durations = Counter()
     missing = Counter()
@@ -178,9 +212,22 @@ def run(context, registry) -> AnalyzerOutput:
             previous_goal_key = None
             continue
         aligned += 1
+        rows = _canonical_context_rows(rows)
+        if rows is None:
+            intervals["invalid_or_inconsistent_source_context"] += 1
+            previous = None
+            close_segment()
+            previous_goal_key = None
+            continue
         timestamp = _time(rows["layers/L3"])
         if timestamp is None or any(_time(rows[view]) != timestamp for view in VIEWS):
             intervals["invalid_or_inconsistent_source_context"] += 1
+            previous = None
+            close_segment()
+            previous_goal_key = None
+            continue
+        if measurement_interval is not None and not measurement_interval[0] <= timestamp <= measurement_interval[1]:
+            intervals["outside_measurement_time_interval_rows"] += 1
             previous = None
             close_segment()
             previous_goal_key = None
@@ -279,10 +326,16 @@ def run(context, registry) -> AnalyzerOutput:
                 "frame_id": local[0], "generation": local[1],
                 "command_ref": evidence_ref(prior["layers/L9"], "/allowed_v_mps" if abs(error_v) > DEPARTURE_LINEAR else "/allowed_omega_rad_s").as_dict(),
                 "estimate_ref": evidence_ref(rows["layers/L3"], "/local_v_mps" if abs(error_v) > DEPARTURE_LINEAR else "/local_omega_rad_s").as_dict(),
+                "command_context_ref": evidence_ref(prior.get("ticks", prior["layers/L9"]),
+                    "/inputs/context" if "ticks" in prior else "/context").as_dict(),
+                "estimate_context_ref": evidence_ref(rows.get("ticks", rows["layers/L3"]),
+                    "/inputs/context" if "ticks" in rows else "/context").as_dict(),
             }
     close_segment()
     temporal = {
         "time_reference": "SOURCE_CONTEXT_MONOTONIC_NS", "response_reference": "NEXT_L3_TICK_ESTIMATE",
+        "context_resolution": "SAME_MESSAGE_INPUT_CONTEXT_REFERENCE",
+        "measurement_time_interval_ns": list(measurement_interval) if measurement_interval is not None else None,
         "recording_sampling": "SAMPLED_INTERVALS_ONLY", "max_gap_s": MAX_GAP_NS / 1e9,
         "aligned_rows": aligned, "per_view_rows": {view: context.bundle.view_count(view) for view in VIEWS},
         "first_time_ns": first_time, "last_time_ns": last_time,
@@ -328,7 +381,7 @@ def run(context, registry) -> AnalyzerOutput:
         DiagnosticObservation(kind=ObservationKind.DERIVED_MEASUREMENT, code="AMR_TIME_LINKED_MOTION",
             message="Durations use bounded sampled source-time intervals; local-estimate distances and response pairs require unchanged frame/generation and explicit continuity.",
             values={"qualified_recording_s": temporal["qualified_recording_s"], "qualified_estimate_s": path_duration, "response_pairs": valid_pairs},
-            evidence_basis=(view_scan(*VIEWS, fields=("/context", "/local_pose", "/localization_quality", "/allowed_v_mps", "/local_v_mps")),)),
+            evidence_basis=(view_scan(*VIEWS, "ticks", fields=("/context", "/inputs/context", "/local_pose", "/localization_quality", "/allowed_v_mps", "/local_v_mps")),)),
         DiagnosticObservation(kind=ObservationKind.DATA_QUALITY, code="AMR_SAMPLED_EVIDENCE_LIMITS",
             message="L3 is an estimate at tick reference time. Sampling cannot prove between-sample motion, physical tracking, stop distance/settling, or the cause of a skill failure.",
             values={"excluded_intervals": dict(intervals), "missing_fields": dict(missing)},

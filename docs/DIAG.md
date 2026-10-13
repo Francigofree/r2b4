@@ -67,9 +67,10 @@ DIAG stabil sorrendje:
 5. `navigation`
 6. `localization`
 7. `drive`
-8. `world_model`
-9. `lineage`
-10. `lifecycle`
+8. `motion_performance`
+9. `world_model`
+10. `lineage`
+11. `lifecycle`
 
 Az analyzer contract required/optional evidence view-kat és source topicokat
 deklarál. Hiányzó required view/topic esetén az admission eredménye
@@ -155,6 +156,41 @@ a full DIAG nem jár végig indokolatlanul.
 
 L8-L12 és encoder/wheel/motor sensor view-k. Wheel target, normalized command és
 final output zero/nonzero/sign számlálók.
+
+### motion_performance
+
+Időben összekapcsolt AMR mozgásteljesítmény- és mozgásminőség-mutatók az
+L3/L8/L9/L11/L12 mintavett kimeneteiből. Az előző L9 allowed command és a
+következő L3 local estimate összevetéséből idővel súlyozott sebességhiba,
+RMSE/bias, valamint az első küszöbtúllépés konkrét tickje, ideje, értéke és
+source-reference-e készül. Az L3 becslés, nem független fizikai ground truth.
+
+A `temporal_coverage` megőrzi a source `TickContext` időt, a mintavételi frekvencia
+becslését és a kizárt intervallumokat. A persisted `{$ref: input_context}`
+layer-context kizárólag azonos source-message-hez tartozó `ticks` nézet
+`/inputs/context` értékéből oldható fel. Az eredeti top-level tick/idő,
+input-context és layer-context egyezése továbbra is kötelező; hiányzó vagy hibás
+reference nem pótolható publication/log time-mal. A DIAG ehhez nem nyitja meg
+az MCAP-ot, és nem expandál raw payloadot.
+
+Explicit `DiagContext.measurement_time_interval_ns=(start,end)` megadásakor
+csak az inclusive source-időablakon belüli mintákból képez intervallumot. Az
+ablak előtti parancs és az első belső estimate nem alkot mért response-párt.
+A kizárt minták száma és az alkalmazott időablak a coverage-ben szerepel;
+scope nélkül továbbra is a teljes bundle az elemzés bemenete.
+
+A `performance` requested/allowed mozgás-, constraint-, safety-block- és
+saturation-időt, commanded distance-et, valamint lokális becsült chord-path és
+szegmensenkénti net displacement értékeket ad. A `motion_quality` allowed
+gyorsulás-RMS, irányváltás és stop-start számlálókat tartalmaz. A `goal_progress`
+azonos célú L5 mission endpoint hibáját és az elérhető L6 progress értéket őrzi,
+legfeljebb hat, source-reference-ekkel ellátott szegmensben.
+
+250 ms-nál nagyobb gap, hiányzó vagy nem monoton source idő esetén nincs
+intervallum-integráció. Lokális távolság és response-pár csak explicit
+pose-continuity, megfelelő localization quality, azonos frame és generation
+mellett készül. A mintavett evidence nem bizonyít köztes fizikai mozgást,
+stop-distance/settling értéket vagy skill-failure okot.
 
 ### world_model
 

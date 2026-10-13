@@ -77,3 +77,59 @@ Meglévő releváns élő capture offline kiértékelhető új motorindítás n�
 Új élő mozgás kizárólag az aktuális feladatban kifejezetten engedélyezett,
 konkrét próbára indulhat. Váratlan safety/fault/process/timing eredmény
 után a próba megszakad; automatikus újraindítás nincs.
+
+## Használat
+
+A [single scenario](examples/skill_learning_motion.json) egy 0,4 m-es,
+független célt ír elő. A [scenario suite](examples/skill_learning_motion_suite.json)
+ugyanezt vizsgálja négy környezetben: névleges hajtás, csökkent tapadás,
+lassabb kerékválasz és jobb oldali hajtáseltérés. A seed és a cél azonos;
+környezetenként egy plant-tényező változik.
+
+Egy már elmentett, például `relative_goal` nevű skill szimulált tanulása:
+
+```bash
+./r learn "Érd el a független 0,4 m-es célt minden megadott környezetben" \
+  --skill relative_goal --scenario docs/examples/skill_learning_motion_suite.json \
+  --max-iterations 3 --timeout-s 120 --json
+```
+
+Az LCE először az eredeti skillt méri. Ha az már megfelelő, nincs javító
+LLM-hívás. Sikertelen baseline esetén a javított source ugyanazokat a
+scenario-kat kapja; a `learning.compare` csak lezárt, source-ellenőrzött,
+replay-egyező párokat fogad el. A sikertelen rövid mozgás ideje nem
+hatékonysági baseline egy célt elérő hosszabb mozgáshoz. Az idő és a
+tracking-minőség összevetése két sikeres próba között értelmezhető.
+Hibával vagy megszakítással végződő worker-futás nem lehet pozitív
+változtatási ajánlás vagy élő siker alapja, akkor sem, ha előtte mozgott
+vagy elérte a modellbeli célt.
+
+A fizikát használó próba sikerének állapota `LIVE_VALIDATION_REQUIRED`.
+A CLI ezt nem tekinti befejezett fizikai tanulásnak, ezért nem nulla exit
+code-dal tér vissza. A teljes `learning.json`, `measured.json`, per-trial
+50 Hz-es MCAP/replay/EVI és a tanulási folyamat 10 Hz-es `learning.mcap`
+az eredményben megadott `/tmp` könyvtárban található.
+
+Az agent toolok szerepe:
+
+* `learning.trial`: explicit motormentes mérés egy scenario-val vagy suite-tal;
+* `learning.read`: teljes artifact lekérdezése SHA256-tal és JSON pointerrel;
+* `learning.compare`: azonos környezetekben mért baseline és változat;
+* `learning.live_plan`: konkrét canonical mérőpróba, source-hash, fizikai
+  kalibráció szerinti sebességkorlát, timeout, STOP és engedélykérdés;
+* `learning.live_feedback`: eredeti production MCAP, azonosított skill-run
+  és source, boot-clock szerint kötött mérési intervallum, DIAG-feltételek.
+
+Az élő terv a benne közölt külön mérősource-ra vonatkozik; a hivatkozott
+eredeti skillt nem futtatja. A relatív cél-eltolás nem teljes úthosszkorlát.
+Engedély után a felülvizsgált `bounded_execution.source` használandó:
+timeout és minden megszakítás után canonical STOP, második próbálkozás nélkül.
+Régebbi capture boot-azonosító nélkül továbbra is elemezhető, de a
+`learning.live_feedback` nem igazol belőle skill-runra kötött élő sikert.
+
+A szimuláció `learning.mcap` fájljában a több próba mozgásmintái kis,
+trial-azonosítóval ellátott események. A gyorsított fizika virtuális mérési
+ideje külön mezőben marad a host publikációs idejétől. A per-trial 50 Hz-es
+capture tartalmazza az exact replayhez szükséges natív inputot. Élő üzemben
+a meglévő 10 Hz-es behavior capture rögzíti a natív scalar állapotot és a
+tanulási eseményeket.

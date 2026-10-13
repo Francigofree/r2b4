@@ -82,7 +82,12 @@ class SkillLearningLoop:
                     if isinstance(test_hash, str):
                         agent_test_results[(fields.get("name"), fields.get("source_hash"), test_hash)] = dict(completed["data"])
             if event_sink is not None:
-                event_sink(event, fields)
+                compact = bounded_feedback(fields, max_bytes=6144)
+                if compact != fields:
+                    compact = {key: value for key, value in fields.items()
+                        if key in {"measurement_time_ns", "clock_domain", "goal_id", "iteration", "skill", "name", "source_hash", "run_id", "status", "reason"}}
+                    compact["details"] = bounded_feedback(fields, max_bytes=6144)
+                event_sink(event, compact)
 
         try:
             check()

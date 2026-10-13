@@ -1,0 +1,103 @@
+"""Measured experiments cross the saved skill, SDK, Brain and native V3."""
+from __future__ import annotations
+
+import copy
+from pathlib import Path
+
+import pytest
+
+from rig import ROOT
+from r2b4_orchestration.learning_tools import measure_skill_trial
+from r2b4_orchestration.skill_library import SkillLibrary
+from r2b4_orchestration.skill_simulation import MotorlessSkillSimulator, compare_trials
+from v3.mcap_reader import McapReader
+from v3.mcap_capture import EVENT_TOPIC
+from v3.public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
+
+
+SCENARIO = {"kind": "differential_drive", "environment_id": "open", "seed": 7,
+            "goal": {"x_m": .4, "y_m": 0.}, "duration_s": 8.}
+MOVE = '''async def run(robot):
+    scenario = await robot.read("simulation.scenario")
+    return await robot.call("v3.command.move_relative", forward_m=scenario["goal"]["x_m"], max_v_mps=.2)
+'''
+
+
+def test_saved_motion_skill_has_independent_truth_native_replay_and_complete_learning_events(tmp_path):
+    library = SkillLibrary(tmp_path / "skills")
+    library.create("move", MOVE)
+    with MotorlessSkillSimulator(ROOT, library) as simulator:
+        simulator.capture_learning_event("learning_started", {"goal": "drive to the independent goal"})
+        baseline = measure_skill_trial(ROOT, library, simulator, "move", {}, SCENARIO, timeout_s=15)
+        assert baseline["runtime"]["state"] == "SUCCEEDED", baseline
+        assert baseline["assessment"]["status"] == "PASSED", baseline
+        assert baseline["performance"]["goal_reached"] is True
+        assert baseline["performance"]["commands"][0]["status"] == "COMPLETED"
+        assert baseline["evidence"]["feedback"]["replay"]["verified_match"] is True, baseline
+        assert baseline["evidence"]["feedback"]["capture"]["complete"] is True
+        assert baseline["physical_output"] is False
+        variant = measure_skill_trial(ROOT, library, simulator, "move", {}, SCENARIO, timeout_s=15)
+        assert variant["performance"]["metrics"] == baseline["performance"]["metrics"]
+        comparison = compare_trials([baseline], [variant])
+        assert comparison["status"] == "UNCHANGED", comparison
+        assert comparison["change_recommended"] is False
+        simulator.capture_learning_event("learning_comparison", comparison)
+        simulator.capture_learning_event("learning_completed", {"status": "UNCHANGED"})
+        timeline = simulator.learning_capture
+    reader = McapReader(timeline)
+    integrity = reader.capture_integrity()["integrity"]
+    assert integrity["sample_complete"] is True
+    assert integrity["tick_sample_hz"] == 10
+    assert integrity["replay_complete"] is False
+    rows = [record.json() for record in reader.iter_messages(topics={EVENT_TOPIC})]
+    events = [row["payload"] for row in rows if row.get("source_topic") == PUBLIC_RUNTIME_EVENT_TOPIC]
+    kinds = [row["kind"] for row in events]
+    assert "learning_started" in kinds and "learning_comparison" in kinds and "learning_completed" in kinds
+    samples = [row["value"] for row in events if row["kind"] == "learning_motion_sample"]
+    assert samples and {row["trial_number"] for row in samples} == {1, 2}
+    for number in (1, 2):
+        stamps = [row["measurement_monotonic_ns"] for row in samples if row["trial_number"] == number]
+        assert all(b-a == 100_000_000 for a, b in zip(stamps, stamps[1:]))
+    assert not (simulator.root / "runtime" / "v3_command.json").exists()
+
+
+def test_skill_claimed_success_cannot_override_ground_truth(tmp_path):
+    library = SkillLibrary(tmp_path / "skills")
+    library.create("false_success", "async def run(robot): return {'success': True}\n")
+    with MotorlessSkillSimulator(ROOT, library) as simulator:
+        trial = simulator.trial("false_success", {}, SCENARIO, timeout_s=5)
+    assert trial["runtime"]["state"] == "SUCCEEDED"
+    assert trial["assessment"]["status"] == "FAILED"
+    assert trial["performance"]["ground_truth"]["x_m"] == 0.
+    assert trial["performance"]["diagnosis"]["likely_owner"] == "skill_logic"
+    assert trial["performance"]["next_experiment"]["kind"] == "skill_goal_request"
+    comparison = compare_trials([trial], [copy.deepcopy(trial)])
+    assert comparison["status"] == "INCONCLUSIVE" and comparison["change_recommended"] is False
+    assert any(row["reason"] == "TRIAL_EVIDENCE_NOT_VERIFIED" for row in comparison["blockers"])
+
+
+def test_worker_failure_after_reaching_goal_cannot_recommend_variant(tmp_path):
+    library = SkillLibrary(tmp_path / "skills")
+    library.create("reach_then_fail", '''async def run(robot):
+    await robot.call("v3.command.move_relative", forward_m=.4, max_v_mps=.2)
+    raise RuntimeError("failed after motion")
+''')
+    with MotorlessSkillSimulator(ROOT, library) as simulator:
+        trial = simulator.trial("reach_then_fail", {}, SCENARIO, timeout_s=15)
+    assert trial["runtime"]["state"] == "FAILED", trial
+    assert trial["performance"]["goal_reached"] is True
+    assert trial["assessment"]["status"] == "FAILED"
+    assert next(row for row in trial["assessment"]["checks"] if row["name"] == "canonical_final_stop")["passed"] is True
+    compared = compare_trials([trial], [copy.deepcopy(trial)])
+    assert compared["status"] == "INCONCLUSIVE" and compared["change_recommended"] is False
+    assert any(row["reason"] == "SKILL_RUNTIME_NOT_SUCCEEDED" for row in compared["blockers"])
+
+
+@pytest.mark.parametrize("changes", [
+    {"plant": {"traction": -1}}, {"seed": True}, {"duration_s": 100},
+    {"v3_overrides": {"lidar_safety": {"minimum_clearance_m": 0}}},
+    {"plant": {"right_gain": float("nan")}},
+])
+def test_unbounded_or_safety_changing_scene_is_rejected(changes):
+    with pytest.raises(ValueError):
+        MotorlessSkillSimulator.scenario_descriptor({**SCENARIO, **changes})

@@ -134,6 +134,7 @@ class DifferentialDriveExperiment:
         self.commands = []
         self.status = {}
         self.first_boundary = None
+        self.fault_layer = None
         self.path_length = self.tracking_squared = self.max_jerk = 0.
         self.previous_v = self.previous_acceleration = 0.
         self.tracking_count = self.safety_stop_count = self.collision_count = 0
@@ -209,7 +210,8 @@ class DifferentialDriveExperiment:
                 dx_m=dx*math.cos(yaw)+dy*math.sin(yaw), dy_m=-dx*math.sin(yaw)+dy*math.cos(yaw),
                 dyaw_rad=_wrap(self.yaw-yaw), rmse_m=.001, observability=1.))
         self.scan_pose, self.scan_time_ns = (self.x, self.y, self.yaw), self.now_ns
-        raw = tuple({"angle_rad": -bearing, "dist": distance*1000.} for bearing, distance in ranges)
+        from v3.adapters.live_lidar import LidarPointReading
+        raw = tuple(LidarPointReading((-math.degrees(bearing)) % 360., distance, 20) for bearing, distance in ranges)
         return tuple(samples), SimpleNamespace(raw_scan_id=self.tick//5+1, raw_scan_timestamp=self.now_ns/1e9,
             scan_start_monotonic_ns=self.now_ns, scan_end_monotonic_ns=self.now_ns,
             measurement_monotonic_ns=self.now_ns, health="OK", raw_scan=raw, summary={"source": "simulation"})
@@ -259,7 +261,12 @@ class DifferentialDriveExperiment:
                     self.tracking_squared += (self.previous_v-reference)**2
                     self.tracking_count += 1
                 self._previous_reference = allowed.allowed_v_mps
-            if active and result.final_actuation.safety_decision.value != "ALLOW" and result.final_actuation.reason not in {"NO_MOTION", "ZERO_REQUEST", "MISSION_COMPLETED"}:
+            if result.trace.fault_layer is not None:
+                self.fault_layer = self.fault_layer or result.trace.fault_layer
+                self.first_boundary = self.first_boundary or {"tick_id": self.tick, "monotonic_ns": self.now_ns,
+                    "layer": self.fault_layer, "reason": result.final_actuation.reason}
+            requested_motion = allowed is not None and abs(allowed.allowed_v_mps)+abs(allowed.allowed_omega_rad_s) > 1e-9
+            if active and requested_motion and result.final_actuation.safety_decision.value != "ALLOW":
                 self.safety_stop_count += 1
                 if self.first_boundary is None and result.final_actuation.reason not in {"LIFECYCLE_INACTIVE", "ZERO_OUTPUT"}:
                     self.first_boundary = {"tick_id": self.tick, "monotonic_ns": self.now_ns,
@@ -275,11 +282,14 @@ class DifferentialDriveExperiment:
 
     def execute(self, action, parameters):
         from v3.action_catalog import ACTION_CATALOG
+        from v3.finite_navigation import _RELATIVE_COMPLETION_ERROR_FRACTION, _pose_distance, _pose_angle
         params = dict(parameters)
         for field in ("session_owner_pid", "capture", "capture_mode", "capture_hz", "session_watchdog_s"):
             params.pop(field, None)
         finite_timeout = params.pop("finite_timeout_s", self.scenario["duration_s"])
         timeout = _number(finite_timeout, "finite_timeout_s", .01, 30.)
+        if action == "v3.command.navigate" and params.pop("wait_for_completion", False) is not True:
+            raise ValueError("simulation navigate requires wait_for_completion=True")
         descriptor = ACTION_CATALOG[action]
         if set(params) - {row.name for row in descriptor.parameters}:
             raise ValueError("unknown finite simulation action parameters")
@@ -288,9 +298,9 @@ class DifferentialDriveExperiment:
                 raise ValueError("missing action parameter: " + row.name)
         if len(self.commands) >= 16:
             raise RuntimeError("SIMULATION_COMMAND_LIMIT")
-        if self.first_boundary is not None and self.status.get("fault_layer"):
+        if self.fault_layer:
             raise RuntimeError("SIMULATION_FAULT_REQUIRES_NEW_TRIAL")
-        pose = self.status["estimate"]
+        pose = self.status["estimate"]["local_pose"]
         start_pose = {key: pose[key] for key in ("x_m", "y_m", "yaw_rad")}
         yaw = start_pose["yaw_rad"]
         if action == "v3.command.navigate":
@@ -310,8 +320,17 @@ class DifferentialDriveExperiment:
                 target["yaw_rad"] = _wrap(yaw+_number(params["final_yaw_rad"], "final_yaw_rad"))
         max_v = _number(params.get("max_v_mps", .2), "max_v_mps", .01, .5)
         max_omega = _number(params.get("max_omega_rad_s", min(1.2, self.config.navigation.wheel_limits.target_center_spin_rad_s)), "max_omega_rad_s", .01, 1.2)
+        goal_tolerance = self.config.mission.default_constraints.goal_tolerance_m
+        yaw_tolerance = self.config.mission.default_constraints.yaw_tolerance_rad
+        if action != "v3.command.navigate":
+            distance, angle = _pose_distance(start_pose, target), _pose_angle(start_pose, target)
+            if distance is not None and distance > 0:
+                goal_tolerance = min(goal_tolerance, distance*_RELATIVE_COMPLETION_ERROR_FRACTION)
+            if angle is not None and abs(angle) > 0:
+                yaw_tolerance = min(yaw_tolerance, abs(angle)*_RELATIVE_COMPLETION_ERROR_FRACTION)
         command_id = f"simulation.motion.{len(self.commands)+1}"
         started = self.now_ns
+        start_tick = self.tick
         deadline = min(started+round(timeout*1e9), self.start_ns+round(self.scenario["duration_s"]*1e9))
         self._cancelled.clear()
         reason = "SIMULATION_TIME_BUDGET"
@@ -321,10 +340,7 @@ class DifferentialDriveExperiment:
                     break
                 self.client.publish_navigate(command_id, **target, frame_id="R2B4_ODOM_LOCAL",
                     max_v_mps=max_v, max_omega_rad_s=max_omega, ttl_ns=200_000_000,
-                    goal_tolerance_m=min(self.config.mission.default_constraints.goal_tolerance_m,
-                                         self.scenario["position_tolerance_m"]/2),
-                    yaw_tolerance_rad=min(self.config.mission.default_constraints.yaw_tolerance_rad,
-                                          self.scenario["yaw_tolerance_rad"]/2))
+                    goal_tolerance_m=goal_tolerance, yaw_tolerance_rad=yaw_tolerance)
                 result = self.step(active=True)
             navigation = self.status.get("navigation") or {}
             if self.collision_count:
@@ -333,7 +349,7 @@ class DifferentialDriveExperiment:
             if result.trace.fault_layer is not None:
                 reason = "V3_FAULT:" + result.trace.fault_layer
                 break
-            if navigation.get("status") == "COMPLETED":
+            if navigation.get("status") == "COMPLETE":
                 reason = "GOAL_REACHED"
                 break
         if self._cancelled.is_set():
@@ -343,6 +359,8 @@ class DifferentialDriveExperiment:
         result = {"status": "COMPLETED" if reason == "GOAL_REACHED" else "FAILED", "reason": reason,
             "command_id": command_id, "mission_id": "mission-"+command_id, "source": "simulation",
             "physical_output": False, "elapsed_s": (self.now_ns-started)/1e9,
+            "request_measurement_monotonic_ns": started, "completion_status_monotonic_ns": self.now_ns,
+            "request_tick_id": start_tick, "clock_domain": "simulation_monotonic",
             "start_pose": start_pose, "target_pose": target,
             "final_pose": {key: final[key] for key in ("x_m", "y_m", "yaw_rad")}}
         self.commands.append({"action": action, "parameters": dict(parameters), **result})
@@ -372,29 +390,64 @@ class DifferentialDriveExperiment:
             "elapsed_s": (self.now_ns-self.start_ns)/1e9, "path_length_m": self.path_length,
             "tracking_error_rms_mps": math.sqrt(self.tracking_squared/self.tracking_count) if self.tracking_count else None,
             "max_abs_jerk_mps3": self.max_jerk, "collision_count": self.collision_count,
-            "safety_stop_count": self.safety_stop_count}
+            "safety_stop_count": self.safety_stop_count, "command_count": len(self.commands)}
+        last_target = self.commands[-1]["target_pose"] if self.commands else None
+        target_error = math.hypot(last_target["x_m"]-goal["x_m"], last_target["y_m"]-goal["y_m"]) if last_target else None
         passed = (metrics["goal_position_error_m"] <= self.scenario["position_tolerance_m"]
                   and (metrics["goal_yaw_error_rad"] is None or metrics["goal_yaw_error_rad"] <= self.scenario["yaw_tolerance_rad"])
-                  and not self.collision_count and not self.status.get("fault_layer"))
+                  and not self.collision_count and not self.fault_layer)
         if passed:
             owner, reason = "none", "INDEPENDENT_SIMULATED_GOAL_REACHED"
         elif not self.commands:
             owner, reason = "skill_logic", "NO_MOTION_REQUESTED"
-        elif self.status.get("fault_layer"):
+        elif self.fault_layer:
             owner, reason = "V3_or_measurement", "FIRST_NATIVE_FAULT_REQUIRES_BOUNDARY_INSPECTION"
         elif self.collision_count:
             owner, reason = "environment_or_V3", "FOOTPRINT_COLLISION"
+        elif target_error is not None and target_error > self.scenario["position_tolerance_m"] and all(row["status"] == "COMPLETED" for row in self.commands):
+            owner, reason = "skill_logic", "COMPLETED_REQUESTED_TARGET_DIFFERS_FROM_INDEPENDENT_GOAL"
+            self.first_boundary = self.first_boundary or {"layer": "skill_command", "reason": reason,
+                "command_id": self.commands[-1]["command_id"], "requested_target": last_target,
+                "independent_goal": goal, "target_error_m": target_error,
+                "tick_id": self.commands[-1]["request_tick_id"],
+                "monotonic_ns": self.commands[-1]["request_measurement_monotonic_ns"]}
         elif all(row["status"] == "COMPLETED" for row in self.commands):
             owner, reason = "skill_logic_or_state_estimation", "COMPLETED_COMMANDS_DID_NOT_REACH_INDEPENDENT_GOAL"
         else:
             owner, reason = "V3_or_plant_or_skill_limits", "COMMAND_FAILED_BEFORE_INDEPENDENT_GOAL"
-        return {"metrics": metrics, "ground_truth": {"x_m": self.x, "y_m": self.y, "yaw_rad": self.yaw},
+        result = {"metrics": metrics, "ground_truth": {"x_m": self.x, "y_m": self.y, "yaw_rad": self.yaw,
+            "measurement_monotonic_ns": self.now_ns, "clock_domain": "simulation_monotonic", "sequence": self.tick-1,
+            "source": "differential_drive_plant", "environment_id": self.scenario["environment_id"], "seed": self.scenario["seed"]},
             "first_boundary": self.first_boundary, "commands": self.commands,
             "diagnosis": {"likely_owner": owner, "reason": reason, "inference": True,
                           "causal_proof": False}, "goal_reached": passed,
-            "next_experiment": {"kind": "paired_one_factor", "factor": "plant.traction",
-                "reason": "Compare the same skill and seed on the nominal and changed traction; inspect L3/L9/L12 before tuning."},
             "scope": "Synthetic ground truth; 50 Hz native V3 and calibrated PWM plant, no live physical evidence."}
+        result["next_experiment"] = next_motion_experiment(result, self.scenario)
+        return result
+
+
+def next_motion_experiment(performance, scenario):
+    """Choose a small contrast that can distinguish the observed failure owners."""
+    metrics, diagnosis = performance.get("metrics", {}), performance.get("diagnosis", {})
+    if diagnosis.get("likely_owner") == "skill_logic":
+        return {"kind": "skill_goal_request", "factor": "skill_parameters_or_goal_selection",
+                "reason": "The skill issued no motion. Verify its branch and requested target before changing V3 gains.",
+                "discriminating_metrics": ["command_count", "goal_position_error_m"]}
+    if metrics.get("collision_count", 0) or metrics.get("safety_stop_count", 0):
+        return {"kind": "paired_one_factor", "factor": "obstacle_clearance",
+                "reason": "Repeat with one obstructing circle moved farther from the requested route; keep commands, gains and seed fixed.",
+                "discriminating_metrics": ["collision_count", "safety_stop_count", "goal_position_error_m"]}
+    if "state_estimation" in diagnosis.get("likely_owner", ""):
+        return {"kind": "paired_one_factor", "factor": "plant.traction", "values": [scenario["plant"]["traction"], 1.],
+                "reason": "Completed native commands missed the truth goal. Compare nominal traction to distinguish decision target error from odometry/slip.",
+                "discriminating_metrics": ["goal_position_error_m", "L3_translation_vs_ground_truth"]}
+    if metrics.get("tracking_error_rms_mps") is not None and metrics["tracking_error_rms_mps"] > .02:
+        return {"kind": "paired_one_factor", "factor": "plant.response_tau_s", "values": [0., scenario["plant"]["response_tau_s"]],
+                "reason": "Compare instantaneous and delayed wheel response with fixed skill/V3/seed before attributing tracking loss to controller gains.",
+                "discriminating_metrics": ["tracking_error_rms_mps", "max_abs_jerk_mps3", "goal_position_error_m"]}
+    return {"kind": "paired_one_factor", "factor": "plant.right_gain", "values": [1., 1.1],
+            "reason": "Test one modest wheel asymmetry with fixed skill, V3 and seed to check whether the observed behavior generalizes.",
+            "discriminating_metrics": ["goal_position_error_m", "goal_yaw_error_rad", "tracking_error_rms_mps"]}
 
 
 def compare_trials(baseline_trials, variant_trials):
@@ -404,6 +457,8 @@ def compare_trials(baseline_trials, variant_trials):
         raise ValueError("comparison requires equally sized lists of 1..8 paired trials")
     rows, blockers = [], []
     for index, (baseline, variant) in enumerate(zip(baseline_trials, variant_trials)):
+        if not isinstance(baseline, Mapping) or not isinstance(variant, Mapping):
+            raise ValueError("comparison trials must be objects")
         def scenario_key(trial):
             scenario = trial.get("scenario", {})
             return json.dumps({key: value for key, value in scenario.items() if key != "v3_overrides"},
@@ -414,12 +469,29 @@ def compare_trials(baseline_trials, variant_trials):
         if baseline.get("scenario", {}).get("kind") != "differential_drive":
             blockers.append({"pair": index, "reason": "MOTION_METRICS_UNAVAILABLE"})
             continue
+        base_identity = baseline.get("simulation_config", {}).get("base_sha256")
+        variant_identity = variant.get("simulation_config", {}).get("base_sha256")
+        if not isinstance(base_identity, str) or len(base_identity) != 64 or not isinstance(variant_identity, str):
+            blockers.append({"pair": index, "reason": "BASE_CONTROL_CONFIG_IDENTITY_MISSING"})
+        elif base_identity != variant_identity:
+            blockers.append({"pair": index, "reason": "UNPAIRED_BASE_CONTROL_CONFIG"})
         for label, trial in (("baseline", baseline), ("variant", variant)):
+            if trial.get("runtime", {}).get("state") != "SUCCEEDED":
+                blockers.append({"pair": index, "side": label, "reason": "SKILL_RUNTIME_NOT_SUCCEEDED"})
             if trial.get("assessment", {}).get("status") not in {"PASSED", "FAILED"}:
                 blockers.append({"pair": index, "side": label, "reason": "TRIAL_ASSESSMENT_INCOMPLETE"})
+            if trial.get("performance", {}).get("goal_reached") and trial.get("assessment", {}).get("status") != "PASSED":
+                blockers.append({"pair": index, "side": label, "reason": "GOAL_REACHED_WITHOUT_PASS"})
+            if (trial.get("performance") != trial.get("assessment", {}).get("performance")
+                    or trial.get("simulation_config") != trial.get("assessment", {}).get("simulation_config")):
+                blockers.append({"pair": index, "side": label, "reason": "UNBOUND_SIMULATION_MEASUREMENTS"})
             evidence = trial.get("evidence")
-            if evidence is not None and (evidence.get("feedback", {}).get("trial_binding", {}).get("status") != "VERIFIED"
-                    or evidence.get("replay", {}).get("status") != "MATCH"):
+            feedback = evidence.get("feedback", {}) if isinstance(evidence, Mapping) else {}
+            capture = feedback.get("capture", {})
+            if (feedback.get("trial_binding", {}).get("status") != "VERIFIED"
+                    or feedback.get("replay", {}).get("verified_match") is not True
+                    or capture.get("source_checked") is not True or capture.get("status") != "VERIFIED"
+                    or capture.get("sample_complete") is not True or capture.get("raw_evidence_complete") is not True):
                 blockers.append({"pair": index, "side": label, "reason": "TRIAL_EVIDENCE_NOT_VERIFIED"})
         before, after = baseline.get("performance", {}), variant.get("performance", {})
         first, second = before.get("metrics", {}), after.get("metrics", {})
@@ -431,8 +503,12 @@ def compare_trials(baseline_trials, variant_trials):
         improvement, regression = [], []
         if before.get("goal_reached") != after.get("goal_reached"):
             (improvement if after.get("goal_reached") else regression).append("goal_reached")
-        for metric, tolerance in (("collision_count", 0.), ("goal_position_error_m", .005),
-                                  ("goal_yaw_error_rad", .01), ("elapsed_s", .1), ("tracking_error_rms_mps", .005)):
+        comparable = [("collision_count", 0.), ("goal_position_error_m", .005), ("goal_yaw_error_rad", .01)]
+        # A failed short motion is not an efficient alternative to reaching the
+        # goal. Compare efficiency/quality only between two successful trials.
+        if before.get("goal_reached") and after.get("goal_reached"):
+            comparable.extend((("elapsed_s", .1), ("tracking_error_rms_mps", .005)))
+        for metric, tolerance in comparable:
             change = delta.get(metric)
             if change is not None and abs(change) > tolerance:
                 (improvement if change < 0 else regression).append(metric)
@@ -446,10 +522,13 @@ def compare_trials(baseline_trials, variant_trials):
               else "REGRESSED" if "REGRESSED" in outcomes else "IMPROVED" if "IMPROVED" in outcomes else "UNCHANGED")
     return {"schema": "R2B4_SKILL_COMPARISON_V1", "status": status, "pairs": rows, "blockers": blockers,
             "generalization": "MULTIPLE_SUPPLIED_ENVIRONMENTS" if len({row["environment_id"] for row in rows}) > 1 else "ONE_SUPPLIED_ENVIRONMENT",
-            "change_recommended": status == "IMPROVED", "physical_validation_required": status == "IMPROVED",
-            "next_experiment": {"kind": "resolve_blocker" if blockers else "paired_one_factor",
-                "factor": "plant.traction", "reason": "Resolve missing evidence first." if blockers else
-                "Hold skill, V3 config and seed fixed; change traction in one new environment to test robustness."},
+            "change_recommended": status == "IMPROVED" and all(row["variant_goal_reached"] for row in rows),
+            "physical_validation_required": status == "IMPROVED" and all(row["variant_goal_reached"] for row in rows),
+            "next_experiment": {"kind": "resolve_blocker", "reason": "Resolve missing, unpaired or unverified evidence first.",
+                                "blocker": blockers[0]} if blockers else next_motion_experiment(
+                                    next((trial.get("performance", {}) for trial in variant_trials
+                                          if not trial.get("performance", {}).get("goal_reached")), variant_trials[0].get("performance", {})),
+                                    variant_trials[0]["scenario"]),
             "scope": "Paired synthetic trials only; supplied environments do not prove live or unseen-environment improvement."}
 
 

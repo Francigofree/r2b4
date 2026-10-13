@@ -1,13 +1,14 @@
-"""Small motor-free skill trial through the real host, SDK and Python worker.
+"""Motor-free skill experiments through the real host, SDK and Python worker.
 
-The synthetic source supplies semantic scalar samples, not camera/physics
-claims. Native V3 STOP ticks and host events use the existing capture path.
+Semantic recordings and a bounded differential-drive plant feed native V3.
+Full native replay and a 10 Hz learning timeline use existing MCAP paths.
 Generated skills are trusted ordinary Python; this is not a Python sandbox.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
 import json
+import hashlib
 import math
 from pathlib import Path
 import socket
@@ -18,6 +19,8 @@ from types import SimpleNamespace
 
 from .robot_runtime import MAX_REPLY_BYTES, MAX_REQUEST_BYTES, SCHEMA, PublicRobotRuntime
 from .skill_library import SkillLibrary
+from .motion_simulation import (DifferentialDriveExperiment, MOTION_ACTIONS, compare_trials,
+                                motion_scenario, simulation_control_config)
 from v3.robot_interface import RobotInterface
 
 
@@ -81,6 +84,8 @@ def threshold_scenario(value=None) -> dict[str, object]:
 
 
 def resolve_scenario(value=None):
+    if isinstance(value, Mapping) and value.get("kind") == "differential_drive":
+        return motion_scenario(value)
     if not isinstance(value, Mapping) or value.get("kind") != "semantic_trace":
         return threshold_scenario(value)
     if set(value) - {"kind", "resources", "observer", "expected_result", "expected_reports"}:
@@ -120,14 +125,31 @@ class _SemanticSource:
         self.trace_samples = {}
         self.scenario = threshold_scenario()
         self.stops = 0
+        self.physics = None
+        self._last_clock_ns = 0
         self._lock = threading.Lock()
+
+    def clock_ns(self):
+        if self.physics is not None:
+            self._last_clock_ns = max(self._last_clock_ns, self.physics.now_ns)
+        else:
+            self._last_clock_ns = max(self._last_clock_ns, time.monotonic_ns())
+        return self._last_clock_ns
 
     def prepare(self, scenario, revision):
         with self._lock:
+            self.clock_ns()
+            self.physics = None
             self.scenario = resolve_scenario(scenario)
-            measured = time.monotonic_ns()
+            measured = self.clock_ns()
             self.observations = []
             self.resource_reads = {}
+            if self.scenario["kind"] == "differential_drive":
+                self.trace_samples = {}
+                self.samples = []
+                self.reads = type(self).reads | {"v3.pose", "v3.safety", "v3.health"}
+                self.capability_names = self.reads | self.motion | MOTION_ACTIONS | {"v3.command.stop"}
+                return
             if self.scenario["kind"] == "semantic_trace":
                 self.trace_samples = self.scenario["resources"]
                 self.samples = []
@@ -144,9 +166,11 @@ class _SemanticSource:
                             for index, value in enumerate(self.scenario["values"])]
 
     def capabilities(self):
+        available_motion = MOTION_ACTIONS if self.scenario["kind"] == "differential_drive" else frozenset()
         return {name: {"kind": "read" if name in self.reads else "action", "supported": True,
-                       "available": name not in self.motion, "ready": name not in self.motion,
-                       "source": "simulation", "reason": "MOTORLESS_SIMULATION" if name in self.motion else None}
+                       "available": name not in self.motion or name in available_motion,
+                       "ready": name not in self.motion or name in available_motion,
+                       "source": "simulation", "reason": "MOTORLESS_SIMULATION" if name in self.motion and name not in available_motion else None}
                 for name in self.capability_names}
 
     def read(self, resource):
@@ -157,8 +181,20 @@ class _SemanticSource:
         if resource == "operator.status":
             return {"runtime_running": False, "runtime_pid": None, "source": "simulation"}
         if resource == "v3.status":
+            if self.physics is not None:
+                return json.loads(json.dumps(self.physics.status))
             return {"state": "IDLE", "tick_id": 0, "monotonic_ns": time.monotonic_ns(),
                     "safety_decision": "STOP", "source": "simulation"}
+        if self.physics is not None and resource in {"v3.pose", "v3.health", "v3.safety"}:
+            status = self.physics.status
+            if resource == "v3.pose":
+                result = status["estimate"]
+            elif resource == "v3.health":
+                result = status["source_health"]
+            else:
+                result = {key: status[key] for key in ("state", "tick_id", "monotonic_ns", "safety_decision",
+                                                       "safety_reason", "fault_layer", "enabled")}
+            return json.loads(json.dumps(result))
         if resource != "simulation.sample" and resource not in self.trace_samples:
             raise KeyError(resource)
         with self._lock:
@@ -180,6 +216,14 @@ class _SemanticSource:
         return json.loads(json.dumps(sample))
 
     def execute(self, action, **parameters):
+        if self.physics is not None:
+            if action in MOTION_ACTIONS:
+                return self.physics.execute(action, parameters)
+            if action == "v3.command.stop":
+                if parameters:
+                    raise ValueError("STOP accepts no parameters")
+                self.stops += 1
+                return self.physics.stop()
         if action != "v3.command.stop":
             raise RuntimeError("MOTORLESS_SIMULATION")
         if parameters:
@@ -314,8 +358,9 @@ class MotorlessSkillSimulator:
 
     ``trial`` runs a saved skill through a Brain goal and the real SDK socket.
     It measures the full observed samples and returned detections independently.
-    Scalar detection and bounded semantic traces cover the concrete skill
-    evaluation needs; there is no physical scene or sensor simulator.
+    Scalar detection, recorded semantic traces and a deterministic bounded
+    physical model use the same worker/SDK boundary; physical validation remains
+    a separate live robot task.
     """
 
     def __init__(self, project_root: Path | str, library: SkillLibrary | None = None):
@@ -326,6 +371,9 @@ class MotorlessSkillSimulator:
         self.source = _SemanticSource()
         backend = RobotInterface(project_root=self.root, controller=self.source,
                                  adapters=(self.source,), upper_runtime=False)
+        # Publication/lifecycle time remains the real host clock. Accelerated
+        # plant measurement time is explicit in the simulated tick payload;
+        # it must not become a future host-journal publication timestamp.
         self.runtime = PublicRobotRuntime(backend, root=self.root, socket_path=self.socket_path)
         self.runtime.skill_library = self.library
         self.runtime.skills.library = self.library
@@ -348,6 +396,18 @@ class MotorlessSkillSimulator:
         self._trial_lock = threading.Lock()
         self._closed = False
         self.goal_text = None
+        self.learning_capture = self.root / "learning.mcap"
+        self._learning_session = None
+        self._learning_anchor_written = False
+
+    def capture_learning_event(self, event, fields):
+        """Persist the complete learning lifecycle, including between-trial events."""
+        if self._learning_session is None or self._closed:
+            raise RuntimeError("learning capture requires an entered simulator")
+        if not isinstance(event, str) or not event.startswith(("learning_", "agent_")) or len(event) > 128 or not isinstance(fields, Mapping):
+            raise ValueError("learning event requires a bounded learning_/agent_ name and fields")
+        self.runtime._queue_evidence(event, {**dict(fields), "source": "simulation", "physical_output": False})
+        self.runtime._flush_evidence()
 
     @staticmethod
     def scenario_descriptor(value=None):
@@ -355,6 +415,13 @@ class MotorlessSkillSimulator:
         input_contract = {"scenario_read": 'await robot.read("simulation.scenario")',
                           "samples": "Each await robot.read(resource) consumes one current sample; preserve the returned object unchanged.",
                           "parameters": "Only explicit skill parameters are passed as kwargs; the scenario is read through the SDK."}
+        if scenario["kind"] == "differential_drive":
+            input_contract.update(motion="Use ordinary finite v3.command.move_relative, turn_by, or navigate with wait_for_completion=True in R2B4_ODOM_LOCAL. "
+                "Each action advances virtual 50 Hz time and returns only after native completion/failure and STOP. "
+                "Do not use host sleeps to advance this model or compare its timestamps to the host wall clock.",
+                measurements="Read v3.status/pose/health/safety for native estimates. Ground truth is withheld until independent assessment.")
+            return {**scenario, "source": "simulation", "input_contract": input_contract,
+                    "scope": "Calibrated PWM differential-drive model, bounded room/circles, synthetic sensors and native V3; live fidelity unproven."}
         if scenario["kind"] == "semantic_trace":
             input_contract["observer"] = (
                 "If observer is supplied, use the unchanged production robot.observe()/robot.events.wait()/"
@@ -374,6 +441,14 @@ class MotorlessSkillSimulator:
         if not self._ready.wait(2) or self._server_error is not None:
             self.close()
             raise RuntimeError("motorless socket failed") from self._server_error
+        from v3.mcap_capture import McapCaptureConfig
+        from v3_process_runtime import McapCaptureSession
+        self.runtime._flush_evidence()
+        self._learning_session = McapCaptureSession("skill-learning", self.learning_capture,
+            configuration={"scope": "learning_observation", "native_replay_capture": "per-trial capture.mcap"},
+            metadata={"source": "simulation", "physical_hardware": False}, project_root=self.root,
+            config=McapCaptureConfig(mode="append_only", tick_sample_hz=10), capacity=1024)
+        self._learning_session.start()
         return self
 
     def _serve(self):
@@ -476,18 +551,69 @@ class MotorlessSkillSimulator:
         conf = self.project_root / "conf"
         config = ConfigResolver(conf / "hardver.json", conf / "fizika.json", conf / "speed_map.json",
                                 conf / "vezerles.json").resolve().runtime.composition.live_control.control
+        simulation_config = None
+        if resolved_scenario["kind"] == "differential_drive":
+            from v3.capture_encoding import encode_value
+            def config_digest(value):
+                return hashlib.sha256(json.dumps(encode_value(value), sort_keys=True, separators=(",", ":"),
+                                                 allow_nan=False).encode()).hexdigest()
+            base_digest = config_digest(config)
+            config = simulation_control_config(config, resolved_scenario)
+            simulation_config = {"base_sha256": base_digest, "effective_sha256": config_digest(config),
+                                 "overrides": resolved_scenario["v3_overrides"]}
         writer, gateway = OfflineMotorSink(), FakeCommandGateway()
         composition = NativeControlComposition(writer, config)
         session = McapCaptureSession(f"motorless-skill-{number}", directory / "capture.mcap",
                                     configuration={"production_control": config},
                                     metadata={"source": "simulation", "scenario": resolved_scenario,
-                                              "skill": name, "physical_hardware": False},
+                                              "skill": name, "physical_hardware": False,
+                                              "simulation_config": simulation_config},
                                     project_root=self.root,
-                                    config=McapCaptureConfig(mode="append_only", tick_sample_hz=50))
+                                    config=McapCaptureConfig(mode="append_only", tick_sample_hz=50), capacity=2048)
         # Drain older host evidence before the follower establishes this scope.
         self.runtime._flush_evidence()
         session.start()
-        start_ns = time.monotonic_ns()
+        start_ns = self.source.clock_ns() + 20_000_000
+        physics = None
+        if resolved_scenario["kind"] == "differential_drive":
+            def observe_motion(record, raw_scan):
+                if raw_scan is not None:
+                    session.hub.publish(raw_scan, topic="v3.raw_lidar")
+                session.observe(record)
+                if not self._learning_anchor_written:
+                    self._learning_session.observe(record)
+                    self._learning_anchor_written = True
+                if record.inputs.context.tick_id % 5 == 0:
+                    from v3.resident_status import _tick_status
+                    status = _tick_status(record.result)
+                    estimate = status.get("estimate") or {}
+                    layers = {row.layer: row.output for row in record.result.trace.layers}
+                    native_estimate, requested, allowed = layers.get("L3"), layers.get("L8"), layers.get("L9")
+                    quality = getattr(native_estimate, "localization_quality", None)
+                    final = record.result.final_actuation
+                    self.capture_learning_event("learning_motion_sample", {
+                        "trial_number": number, "tick_id": record.inputs.context.tick_id,
+                        "measurement_monotonic_ns": record.inputs.context.monotonic_ns,
+                        "clock_domain": "simulation_monotonic",
+                        "estimate": {key: estimate.get(key) for key in ("x_m", "y_m", "yaw_rad", "v_mps", "omega_rad_s")},
+                        "frame_id": getattr(native_estimate, "frame_id", None),
+                        "local_pose_generation": getattr(quality, "generation", None),
+                        "local_pose_continuous": getattr(quality, "local_pose_continuous", None),
+                        "requested_v_mps": getattr(requested, "requested_v_mps", None),
+                        "requested_omega_rad_s": getattr(requested, "requested_omega_rad_s", None),
+                        "allowed_v_mps": getattr(allowed, "allowed_v_mps", None),
+                        "allowed_omega_rad_s": getattr(allowed, "allowed_omega_rad_s", None),
+                        "constraint_codes": [row.value for row in getattr(allowed, "active_constraints", ())],
+                        "left_output": final.left_output, "right_output": final.right_output,
+                        "mission": status["mission"], "navigation": status["navigation"],
+                        "safety_decision": status["safety_decision"], "safety_reason": status["safety_reason"],
+                        "fault_layer": status["fault_layer"]})
+                if session.failed or self._learning_session.failed:
+                    raise RuntimeError("SIMULATION_CAPTURE_INTEGRITY_FAILURE")
+            physics = DifferentialDriveExperiment(resolved_scenario, config, composition, writer, directory,
+                start_ns, observe_motion, self.runtime._queue_evidence)
+            physics.simulation_config = simulation_config
+            self.source.physics = physics
 
         def stop_tick(tick):
             context = TickContext(tick, start_ns + tick * 20_000_000)
@@ -530,12 +656,19 @@ class MotorlessSkillSimulator:
                 measurement_monotonic_ns=context.monotonic_ns,
                 health="OK", raw_scan=(), summary={"source": "simulation"}), topic="v3.raw_lidar")
             session.observe(ExecutionRecord(inputs, result))
+            if not self._learning_anchor_written:
+                self._learning_session.observe(ExecutionRecord(inputs, result))
+                self._learning_anchor_written = True
 
         run_id = None
         goal = None
         interrupted = None
+        settled = False
         try:
-            stop_tick(0)
+            if physics is not None:
+                physics.step()
+            else:
+                stop_tick(0)
             self.runtime._queue_evidence("simulation_trial_started", {
                 "name": name, "scenario": resolved_scenario, "source": "simulation"})
             goal = self.runtime.execute("brain.submit", {"text": self.goal_text or
@@ -563,6 +696,9 @@ class MotorlessSkillSimulator:
                 "state": "FAILED", "error": "SKILL_NOT_STARTED", "source_hash": self.library.load(name).source_hash}
             self.runtime.brain.step()
             goal = self.runtime.brain.goal(goal["goal_id"])
+            if physics is not None:
+                physics.settle()
+                settled = True
             assessment = self._assess(state, interrupted, scenario is not None)
             self.runtime._queue_evidence("simulation_trial_assessment", {
                 "run_id": run_id, "goal_id": goal["goal_id"], "source_hash": state.get("source_hash"),
@@ -570,20 +706,49 @@ class MotorlessSkillSimulator:
         finally:
             self.runtime._flush_evidence()
             try:
-                stop_tick(1)
+                if physics is None:
+                    stop_tick(1)
+                elif not settled:
+                    physics.stop()
             finally:
                 composition.close()
-                capture = session.finalize(SimpleNamespace(status=0))
+                try:
+                    capture = session.finalize(SimpleNamespace(status=0))
+                finally:
+                    if physics is not None:
+                        self.source.clock_ns()
+                        self.source.physics = None
         result = {"runtime": state, "assessment": assessment, "observations": list(self.source.observations),
                   "brain_goal": goal, "scenario": resolved_scenario, "source": "simulation",
                   "capture": str(capture), "capture_path": str(capture),
                   "artifact_directory": str(directory), "motor_writes": len(writer.writes),
-                  "physical_output": False}
+                  "learning_capture": str(self.learning_capture), "physical_output": False}
+        if physics is not None:
+            result["performance"] = physics.performance()
+            result["simulation_config"] = simulation_config
         self._trials.append(result)
         (directory / "trial.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
         return result
 
     def _assess(self, state, interrupted, explicit_scenario):
+        if self.source.physics is not None:
+            performance = self.source.physics.performance()
+            scenario = self.source.scenario
+            metrics = performance["metrics"]
+            checks = [{"name": "independent_ground_truth_position", "passed": metrics["goal_position_error_m"] <= scenario["position_tolerance_m"],
+                       "expected": scenario["position_tolerance_m"], "actual": metrics["goal_position_error_m"]},
+                      {"name": "independent_ground_truth_heading", "passed": metrics["goal_yaw_error_rad"] is None or metrics["goal_yaw_error_rad"] <= scenario["yaw_tolerance_rad"],
+                       "expected": scenario["yaw_tolerance_rad"], "actual": metrics["goal_yaw_error_rad"]},
+                      {"name": "collision_free", "passed": metrics["collision_count"] == 0, "actual": metrics["collision_count"]},
+                      {"name": "native_no_fault", "passed": not self.source.physics.fault_layer,
+                       "actual": performance["first_boundary"]},
+                      {"name": "canonical_final_stop", "passed": self.source.physics.output == (0., 0.),
+                       "actual": list(self.source.physics.output)}]
+            complete = state.get("state") in {"SUCCEEDED", "FAILED"} and not state.get("finalizing") and not state.get("callback_error") and interrupted is None
+            return {"status": "INCOMPLETE" if not complete else "PASSED" if state.get("state") == "SUCCEEDED" and all(row["passed"] for row in checks) else "FAILED",
+                    "checks": checks, "reason": interrupted or state.get("error"), "scope": performance["scope"],
+                    "safety_fault": bool(self.source.physics.fault_layer or metrics["collision_count"] or metrics["safety_stop_count"]),
+                    "performance": performance, "simulation_config": self.source.physics.simulation_config}
         if self.source.scenario["kind"] == "semantic_trace":
             return self._assess_trace(state, interrupted)
         expected = [sample for sample in self.source.samples if sample["value"] >= self.source.scenario["threshold"]]
@@ -643,19 +808,23 @@ class MotorlessSkillSimulator:
         if self._closed:
             return
         self._closed = True
-        self.runtime.close()
-        self.runtime._flush_evidence()
-        self._stop.set()
-        if self._server_thread is not None:
-            self._server_thread.join(timeout=2)
-        with self._handlers_lock:
-            handlers = tuple(self._handlers)
-        for thread in handlers:
-            thread.join(timeout=1)
-        self.socket_path.unlink(missing_ok=True)
+        try:
+            self.runtime.close()
+            self.runtime._flush_evidence()
+        finally:
+            self._stop.set()
+            if self._server_thread is not None:
+                self._server_thread.join(timeout=2)
+            with self._handlers_lock:
+                handlers = tuple(self._handlers)
+            for thread in handlers:
+                thread.join(timeout=1)
+            self.socket_path.unlink(missing_ok=True)
+            if self._learning_session is not None:
+                self._learning_session.finalize(SimpleNamespace(status=0))
 
     def __exit__(self, *_):
         self.close()
 
 
-__all__ = ["MotorlessSkillSimulator", "threshold_scenario", "resolve_scenario"]
+__all__ = ["MotorlessSkillSimulator", "threshold_scenario", "resolve_scenario", "compare_trials"]

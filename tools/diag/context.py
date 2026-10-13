@@ -52,6 +52,16 @@ class DiagContext:
     bundle: EvidenceBundle
     facts: EvidenceFacts
     producer: DiagProducerFacts
+    measurement_time_interval_ns: tuple[int, int] | None = None
+
+    def __post_init__(self) -> None:
+        interval = self.measurement_time_interval_ns
+        if interval is not None and (
+            not isinstance(interval, tuple) or len(interval) != 2
+            or any(type(value) is not int or value < 0 for value in interval)
+            or interval[0] > interval[1]
+        ):
+            raise ValueError("measurement_time_interval_ns requires ordered nonnegative source times")
 
 
 def _int(mapping: dict[str, object], key: str, default: int = 0) -> int:

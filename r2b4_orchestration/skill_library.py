@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import codecs
 from dataclasses import dataclass
 import hashlib
 import keyword
@@ -57,8 +58,26 @@ class SkillLibrary:
         return data.decode("utf-8")
 
     @staticmethod
+    def _description_prefix(text: str) -> tuple[str, bool]:
+        data = text.encode("utf-8")
+        truncated = len(data) > MAX_DESCRIPTION_BYTES
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        return decoder.decode(data[:MAX_DESCRIPTION_BYTES], final=not truncated), truncated
+
+    @classmethod
+    def _read_description(cls, path: Path) -> tuple[str, bool]:
+        # Fixed lookahead completes a UTF-8 character crossing the byte bound.
+        # Strict decoding still rejects malformed bytes in the consumed prefix.
+        with path.open("rb") as handle:
+            data = handle.read(MAX_DESCRIPTION_BYTES + 4)
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        text = decoder.decode(data, final=len(data) < MAX_DESCRIPTION_BYTES + 4)
+        prefix, _ = cls._description_prefix(text)
+        return prefix, len(data) > MAX_DESCRIPTION_BYTES
+
+    @staticmethod
     def _describe(name: str, path: Path, tree: ast.Module, description: str,
-                  source_hash: str) -> dict[str, object]:
+                  source_hash: str, description_truncated: bool = False) -> dict[str, object]:
         entry = next((node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
                       and node.name == "run"), None)
         parameters: dict[str, object] = {}
@@ -77,8 +96,10 @@ class SkillLibrary:
             if entry.args.kwarg is not None:
                 parameters["**" + entry.args.kwarg.arg] = {"required": False}
         text = description or ast.get_docstring(tree) or (ast.get_docstring(entry) if entry else "") or ""
+        text, text_truncated = SkillLibrary._description_prefix(text)
         result = ast.unparse(entry.returns)[:256] if entry and entry.returns else "Python return value"
-        return {"name": name, "description": text[:MAX_DESCRIPTION_BYTES], "parameters": parameters,
+        return {"name": name, "description": text,
+                "description_truncated": description_truncated or text_truncated, "parameters": parameters,
                 "result": result, "availability": {"supported": True, "available": True, "ready": True},
                 "source_path": str(path), "source_hash": source_hash}
 
@@ -87,14 +108,16 @@ class SkillLibrary:
             path = self._path(name)
             source = self._read(path, MAX_SOURCE_BYTES)
             description_path = path.with_suffix(".md")
-            description = self._read(description_path, MAX_DESCRIPTION_BYTES) if description_path.exists() else ""
+            description, description_truncated = (self._read_description(description_path)
+                                                  if description_path.exists() else ("", False))
             digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
             try:
                 tree = self._parse(source, path)
-                descriptor = self._describe(name, path, tree, description, digest)
+                descriptor = self._describe(name, path, tree, description, digest, description_truncated)
             except SyntaxError as exc:
                 # Source retrieval must still work when an IDE edit needs repair.
                 descriptor = {"name": name, "description": description, "parameters": {}, "result": None,
+                              "description_truncated": description_truncated,
                               "source_path": str(path), "source_hash": digest,
                               "availability": {"supported": True, "available": True, "ready": False},
                               "error": f"{type(exc).__name__}:{exc}"[:1024]}

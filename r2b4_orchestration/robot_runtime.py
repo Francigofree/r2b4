@@ -368,7 +368,7 @@ class PublicRobotRuntime:
     def _learning_event(self, event: str, fields: Mapping[str, object]) -> None:
         # Learning is upper-host evidence. The existing follower delivers these
         # transitions at every capture rate without returning them to control.
-        value = {**fields, "event_type": event, "measurement_time_ns": self.clock_ns()}
+        value = {"measurement_time_ns": self.clock_ns(), **fields, "event_type": event}
         self._queue_evidence("learning", value)
         self._sdk_event("learning", value)
 

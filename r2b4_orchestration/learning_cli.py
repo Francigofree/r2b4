@@ -74,12 +74,14 @@ def run_learning(project_root, goal, *, model=None, provider=None, skill=None, p
 
         def learning_event(event, fields):
             if hasattr(simulator, "capture_learning_event"):
-                simulator.capture_learning_event(event, fields)
+                simulator.capture_learning_event(event if event.startswith("learning_") else "learning_agent_event",
+                                                 {"event_type": event, **dict(fields)})
             if event_sink is not None:
                 event_sink(event, fields)
         # A simulation has no production-config restart capability. The same
         # owning read/evidence/skill tools remain available in this experiment.
-        tools = tuple((spec, handler) for spec, handler in build_default_agent_tools(root, interface=simulator.interface)
+        tools = tuple((spec, handler) for spec, handler in build_default_agent_tools(root, interface=simulator.interface,
+                                                                                  event_sink=learning_event)
                       if spec.name != "config.patch")
         agent = AgentCore(selected_model, AgentToolBroker(tools))
 
