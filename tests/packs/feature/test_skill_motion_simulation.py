@@ -10,6 +10,7 @@ from rig import ROOT
 from r2b4_orchestration.learning_tools import measure_skill_trial
 from r2b4_orchestration.skill_library import SkillLibrary
 from r2b4_orchestration.skill_simulation import MotorlessSkillSimulator, compare_trials
+from r2b4_orchestration.motion_simulation import motion_scenario, next_motion_experiment
 from v3.mcap_reader import McapReader
 from v3.mcap_capture import EVENT_TOPIC
 from v3.public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
@@ -101,3 +102,67 @@ def test_worker_failure_after_reaching_goal_cannot_recommend_variant(tmp_path):
 def test_unbounded_or_safety_changing_scene_is_rejected(changes):
     with pytest.raises(ValueError):
         MotorlessSkillSimulator.scenario_descriptor({**SCENARIO, **changes})
+
+
+def _comparison_trial(*, scenario=None, reached=True, **metrics):
+    """Only for pure comparison arithmetic; it does not create measured evidence."""
+    performance = {"goal_reached": reached, "metrics": {"goal_position_error_m": .02,
+        "elapsed_s": 3., "path_length_m": .4, "tracking_error_rms_mps": .02,
+        "max_abs_jerk_mps3": 40., "collision_count": 0, "safety_stop_count": 0, **metrics}}
+    config = {"base_sha256": "a" * 64}
+    return {"scenario": motion_scenario(scenario or SCENARIO), "runtime": {"state": "SUCCEEDED"},
+        "performance": performance, "simulation_config": config,
+        "assessment": {"status": "PASSED" if reached else "FAILED", "performance": performance,
+                       "simulation_config": config},
+        "evidence": {"feedback": {"trial_binding": {"status": "VERIFIED"},
+            "replay": {"verified_match": True}, "capture": {"status": "VERIFIED", "source_checked": True,
+                "sample_complete": True, "raw_evidence_complete": True}}}}
+
+
+def test_environment_generalization_counts_physics_not_labels_or_seeds():
+    first = _comparison_trial()
+    renamed = _comparison_trial(scenario={**SCENARIO, "environment_id": "renamed", "seed": 8})
+    repeated = compare_trials([first, renamed], [copy.deepcopy(first), copy.deepcopy(renamed)])
+    assert repeated["distinct_environment_count"] == 1
+    assert repeated["generalization"] == "ONE_SUPPLIED_ENVIRONMENT"
+    delayed = _comparison_trial(scenario={**SCENARIO, "plant": {"response_tau_s": .1}})
+    varied = compare_trials([first, delayed], [copy.deepcopy(first), copy.deepcopy(delayed)])
+    assert varied["distinct_environment_count"] == 2
+    assert varied["generalization"] == "MULTIPLE_SUPPLIED_ENVIRONMENTS"
+
+
+def test_successful_jerk_path_tradeoff_does_not_hide_goal_recovery():
+    baseline = _comparison_trial()
+    variant = _comparison_trial(elapsed_s=2., path_length_m=.42, max_abs_jerk_mps3=50.)
+    comparison = compare_trials([baseline], [variant])
+    assert comparison["status"] == "TRADEOFF" and comparison["change_recommended"] is False
+    assert set(comparison["pairs"][0]["regressed_metrics"]) == {"path_length_m", "max_abs_jerk_mps3"}
+    failed = _comparison_trial(reached=False, goal_position_error_m=.3, elapsed_s=.5,
+                               path_length_m=.1, max_abs_jerk_mps3=2.)
+    recovery = compare_trials([failed], [_comparison_trial()])
+    assert recovery["status"] == "IMPROVED" and recovery["change_recommended"] is True
+    assert not recovery["pairs"][0]["regressed_metrics"]
+
+
+def test_small_quality_changes_and_unverified_config_do_not_recommend_change():
+    baseline = _comparison_trial()
+    variant = _comparison_trial(path_length_m=.405, max_abs_jerk_mps3=41.)
+    assert compare_trials([baseline], [variant])["status"] == "UNCHANGED"
+    variant["simulation_config"] = {"base_sha256": "b" * 64}
+    variant["assessment"]["simulation_config"] = variant["simulation_config"]
+    comparison = compare_trials([baseline], [variant])
+    assert comparison["status"] == "INCONCLUSIVE" and comparison["change_recommended"] is False
+    assert any(row["reason"] == "UNPAIRED_BASE_CONTROL_CONFIG" for row in comparison["blockers"])
+
+
+@pytest.mark.parametrize("owner,metrics,plant", [
+    ("skill_logic_or_state_estimation", {}, {"traction": 1.}),
+    ("skill_logic_or_state_estimation", {}, {"traction": .9}),
+    ("V3_or_plant_or_skill_limits", {"tracking_error_rms_mps": .1}, {"response_tau_s": 0.}),
+    ("none", {}, {"right_gain": 1.1}),
+])
+def test_next_probe_always_changes_the_selected_physical_factor(owner, metrics, plant):
+    scenario = motion_scenario({**SCENARIO, "plant": plant})
+    probe = next_motion_experiment({"diagnosis": {"likely_owner": owner}, "metrics": metrics}, scenario)
+    assert probe["kind"] == "paired_one_factor" and probe["values"][0] != probe["values"][1]
+    assert probe["discriminating_metrics"]

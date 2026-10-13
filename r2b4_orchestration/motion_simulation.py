@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import replace
+import hashlib
 import json
 import math
 import random
@@ -431,23 +432,37 @@ def next_motion_experiment(performance, scenario):
     metrics, diagnosis = performance.get("metrics", {}), performance.get("diagnosis", {})
     if diagnosis.get("likely_owner") == "skill_logic":
         return {"kind": "skill_goal_request", "factor": "skill_parameters_or_goal_selection",
-                "reason": "The skill issued no motion. Verify its branch and requested target before changing V3 gains.",
+                "reason": "Verify the skill branch and requested target against the independent goal before changing V3 gains.",
                 "discriminating_metrics": ["command_count", "goal_position_error_m"]}
     if metrics.get("collision_count", 0) or metrics.get("safety_stop_count", 0):
         return {"kind": "paired_one_factor", "factor": "obstacle_clearance",
                 "reason": "Repeat with one obstructing circle moved farther from the requested route; keep commands, gains and seed fixed.",
                 "discriminating_metrics": ["collision_count", "safety_stop_count", "goal_position_error_m"]}
     if "state_estimation" in diagnosis.get("likely_owner", ""):
-        return {"kind": "paired_one_factor", "factor": "plant.traction", "values": [scenario["plant"]["traction"], 1.],
+        traction = scenario["plant"]["traction"]
+        return {"kind": "paired_one_factor", "factor": "plant.traction", "values": [traction, 1. if traction != 1. else .9],
                 "reason": "Completed native commands missed the truth goal. Compare nominal traction to distinguish decision target error from odometry/slip.",
                 "discriminating_metrics": ["goal_position_error_m", "L3_translation_vs_ground_truth"]}
     if metrics.get("tracking_error_rms_mps") is not None and metrics["tracking_error_rms_mps"] > .02:
-        return {"kind": "paired_one_factor", "factor": "plant.response_tau_s", "values": [0., scenario["plant"]["response_tau_s"]],
+        response = scenario["plant"]["response_tau_s"]
+        return {"kind": "paired_one_factor", "factor": "plant.response_tau_s", "values": [response, 0. if response != 0. else .1],
                 "reason": "Compare instantaneous and delayed wheel response with fixed skill/V3/seed before attributing tracking loss to controller gains.",
                 "discriminating_metrics": ["tracking_error_rms_mps", "max_abs_jerk_mps3", "goal_position_error_m"]}
-    return {"kind": "paired_one_factor", "factor": "plant.right_gain", "values": [1., 1.1],
+    gain = scenario["plant"]["right_gain"]
+    return {"kind": "paired_one_factor", "factor": "plant.right_gain", "values": [gain, 1.1 if gain == 1. else 1.],
             "reason": "Test one modest wheel asymmetry with fixed skill, V3 and seed to check whether the observed behavior generalizes.",
             "discriminating_metrics": ["goal_position_error_m", "goal_yaw_error_rad", "tracking_error_rms_mps"]}
+
+
+def _environment_fingerprint(scenario):
+    # Labels and random seeds do not make a different physical environment.
+    # Circle order is immaterial to geometry, so normalize it as well.
+    scenario = motion_scenario(scenario)
+    environment = {"room": scenario["room"], "plant": scenario["plant"],
+                   "obstacles": sorted(scenario["obstacles"],
+                                       key=lambda row: (row["x_m"], row["y_m"], row["radius_m"]))}
+    return hashlib.sha256(json.dumps(environment, sort_keys=True, separators=(",", ":"),
+                                    allow_nan=False).encode()).hexdigest()
 
 
 def compare_trials(baseline_trials, variant_trials):
@@ -503,32 +518,42 @@ def compare_trials(baseline_trials, variant_trials):
         improvement, regression = [], []
         if before.get("goal_reached") != after.get("goal_reached"):
             (improvement if after.get("goal_reached") else regression).append("goal_reached")
-        comparable = [("collision_count", 0.), ("goal_position_error_m", .005), ("goal_yaw_error_rad", .01)]
+        comparable = [("collision_count", 0.), ("safety_stop_count", 0.),
+                      ("goal_position_error_m", .005), ("goal_yaw_error_rad", .01)]
         # A failed short motion is not an efficient alternative to reaching the
         # goal. Compare efficiency/quality only between two successful trials.
         if before.get("goal_reached") and after.get("goal_reached"):
-            comparable.extend((("elapsed_s", .1), ("tracking_error_rms_mps", .005)))
+            # Absolute path tolerance is one centimetre. Jerk changes must
+            # exceed both 1 m/s³ and 5% of the baseline to count as tradeoffs.
+            jerk = first.get("max_abs_jerk_mps3")
+            jerk_tolerance = max(1., abs(jerk)*.05) if type(jerk) in {int, float} else 1.
+            comparable.extend((("elapsed_s", .1), ("tracking_error_rms_mps", .005),
+                               ("path_length_m", .01), ("max_abs_jerk_mps3", jerk_tolerance)))
         for metric, tolerance in comparable:
             change = delta.get(metric)
             if change is not None and abs(change) > tolerance:
                 (improvement if change < 0 else regression).append(metric)
         outcome = "TRADEOFF" if improvement and regression else "IMPROVED" if improvement else "REGRESSED" if regression else "UNCHANGED"
         rows.append({"environment_id": baseline["scenario"]["environment_id"], "seed": baseline["scenario"]["seed"],
+            "environment_fingerprint": _environment_fingerprint(baseline["scenario"]),
             "outcome": outcome, "metric_deltas_variant_minus_baseline": delta,
+            "comparison_tolerances": dict(comparable),
             "improved_metrics": improvement, "regressed_metrics": regression,
             "baseline_goal_reached": before.get("goal_reached"), "variant_goal_reached": after.get("goal_reached")})
     outcomes = {row["outcome"] for row in rows}
     status = ("INCONCLUSIVE" if blockers else "TRADEOFF" if "TRADEOFF" in outcomes or {"IMPROVED", "REGRESSED"} <= outcomes
               else "REGRESSED" if "REGRESSED" in outcomes else "IMPROVED" if "IMPROVED" in outcomes else "UNCHANGED")
+    environments = len({row["environment_fingerprint"] for row in rows})
+    next_trial = next((trial for trial in variant_trials if not trial.get("performance", {}).get("goal_reached")),
+                      variant_trials[0])
     return {"schema": "R2B4_SKILL_COMPARISON_V1", "status": status, "pairs": rows, "blockers": blockers,
-            "generalization": "MULTIPLE_SUPPLIED_ENVIRONMENTS" if len({row["environment_id"] for row in rows}) > 1 else "ONE_SUPPLIED_ENVIRONMENT",
+            "generalization": "MULTIPLE_SUPPLIED_ENVIRONMENTS" if environments > 1 else "ONE_SUPPLIED_ENVIRONMENT",
+            "distinct_environment_count": environments,
             "change_recommended": status == "IMPROVED" and all(row["variant_goal_reached"] for row in rows),
             "physical_validation_required": status == "IMPROVED" and all(row["variant_goal_reached"] for row in rows),
             "next_experiment": {"kind": "resolve_blocker", "reason": "Resolve missing, unpaired or unverified evidence first.",
                                 "blocker": blockers[0]} if blockers else next_motion_experiment(
-                                    next((trial.get("performance", {}) for trial in variant_trials
-                                          if not trial.get("performance", {}).get("goal_reached")), variant_trials[0].get("performance", {})),
-                                    variant_trials[0]["scenario"]),
+                                    next_trial.get("performance", {}), next_trial["scenario"]),
             "scope": "Paired synthetic trials only; supplied environments do not prove live or unseen-environment improvement."}
 
 

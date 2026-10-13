@@ -103,6 +103,10 @@ tracking-minőség összevetése két sikeres próba között értelmezhető.
 Hibával vagy megszakítással végződő worker-futás nem lehet pozitív
 változtatási ajánlás vagy élő siker alapja, akkor sem, ha előtte mozgott
 vagy elérte a modellbeli célt.
+A `learning.json` minden iteráció eredeti source-szövegét és SHA256-át
+megőrzi. A `learning.read` `/iterations/0/source` pointere visszaadja a
+baseline forrását. A sikertelen vagy regressziós javítás elmentett változata
+kézzel felülvizsgálható; a ciklus nem írja automatikusan vissza a baseline-t.
 
 A fizikát használó próba sikerének állapota `LIVE_VALIDATION_REQUIRED`.
 A CLI ezt nem tekinti befejezett fizikai tanulásnak, ezért nem nulla exit

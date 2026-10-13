@@ -246,8 +246,8 @@ def _measured_artifact(root, value, expected_sha256=None):
     if expected_sha256 is not None and expected_sha256 != digest:
         raise ValueError("measured artifact SHA256 mismatch")
     result = json.loads(raw)
-    if not isinstance(result, Mapping) or result.get("schema") not in {"R2B4_SKILL_TRIAL_V1", "R2B4_SKILL_SUITE_V1", "R2B4_LIVE_LEARNING_FEEDBACK_V1"}:
-        raise ValueError("expected R2B4_SKILL_TRIAL_V1, R2B4_SKILL_SUITE_V1 or R2B4_LIVE_LEARNING_FEEDBACK_V1 measured artifact")
+    if not isinstance(result, Mapping) or result.get("schema") not in {"R2B4_SKILL_TRIAL_V1", "R2B4_SKILL_SUITE_V1", "R2B4_LIVE_LEARNING_FEEDBACK_V1", "R2B4_SKILL_LEARNING_V1"}:
+        raise ValueError("expected R2B4_SKILL_TRIAL_V1, R2B4_SKILL_SUITE_V1, R2B4_SKILL_LEARNING_V1 or R2B4_LIVE_LEARNING_FEEDBACK_V1 measured artifact")
     return path, digest, result
 
 

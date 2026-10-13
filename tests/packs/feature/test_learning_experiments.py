@@ -179,6 +179,9 @@ def test_simulated_physical_success_requires_live_validation_and_uses_zero_llm_c
         event_sink=lambda event, fields: events.append(event))
     assert result["status"] == "LIVE_VALIDATION_REQUIRED" and result["physical_validation"] == "NOT_PERFORMED"
     assert result["goal_satisfaction"] == "ASSESSED_IN_SIMULATION" and result["provider_calls"] == 0
+    assert result["iterations"][0]["source"] == library.load("baseline").source
+    assert hashlib.sha256(result["iterations"][0]["source"].encode()).hexdigest() == result["iterations"][0]["source_hash"]
+    assert "source" not in SkillLearningLoop._prompt_iteration(result["iterations"][0])
     assert events[0] == "learning_started" and events[-1] == "learning_completed"
 
 

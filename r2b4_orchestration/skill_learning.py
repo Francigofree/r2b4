@@ -172,6 +172,7 @@ class SkillLearningLoop:
                 if result["source_hash"] is None:
                     result["source_hash"] = loaded.source_hash
                 iteration = {"iteration": number, "skill": selected, "source_hash": loaded.source_hash,
+                             "source": loaded.source,
                              "parameters": dict(selected_parameters), "tests": {"status": "ABSENT"},
                              "trial": None, "assessment": None}
                 result["iterations"].append(iteration)

@@ -678,6 +678,11 @@ class MotorlessSkillSimulator:
             deadline = time.monotonic() + timeout_s
             while True:
                 self.runtime.brain.step()
+                # Brain status polling produces host interface evidence too.
+                # Drain it here, so a slow journal write cannot coincide with
+                # an unbounded stream of new polls into the bounded queue.
+                # This is offline host scheduling, outside the native ticks.
+                self.runtime._flush_evidence()
                 goal = self.runtime.brain.goal(goal["goal_id"])
                 run_id = goal.get("skill_run_id") or run_id
                 if run_id is not None and not self.runtime.skills.active:
