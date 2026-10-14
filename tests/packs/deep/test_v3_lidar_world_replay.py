@@ -229,7 +229,7 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
                 if abs(v)+abs(omega) <= 1e-6:
                     # A newly sampled wall can revoke an accepted trajectory.
                     # Hold at zero while the delayed planner closes a safe one.
-                    assert layers['L6'].reason == layers['L8'].stop_reason == 'LOCAL_PATH_BLOCKED'
+                    assert layers['L6'].reason == layers['L8'].stop_reason == 'PLANNER_GEOMETRY_HOLD'
                     assert result.final_actuation.left_output == result.final_actuation.right_output == 0.0
                     if blocked_since_ns is None:
                         blocked_since_ns = now

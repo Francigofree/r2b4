@@ -893,6 +893,11 @@ class ShadowWorldModel:
                     or observation.values != self._last_robot_relative_values
                 ):
                     raise ValueError("L4 robot-relative perception sequence was rewritten")
+                if observation.values is not self._last_robot_relative_values:
+                    # Scalar equality alone treats True and 1.0 as integer 1.
+                    # A reconstructed duplicate still needs the integer header
+                    # check; the original immutable tuple already passed it.
+                    _integer(_values(observation), "point_count")
                 # Equal sequence, time and immutable values were already fully
                 # validated. Do not rebuild point keys or parse at control rate.
                 return None

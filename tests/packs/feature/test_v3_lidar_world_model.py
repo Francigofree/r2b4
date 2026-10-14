@@ -350,3 +350,120 @@ def test_lidar_localization_recovery_retains_scan_time_and_requires_valid_measur
         assert recovered.local_costmap.source_sequence == (1 if measured_during_loss else 2)
         assert recovered.local_costmap.freshness_ns == 40_000_000
         assert recovered.robot_relative_geometry.captured_monotonic_ns == captured_ns
+
+
+def test_lidar_scan_parses_once_and_equal_reconstructed_duplicate_reuses_map(monkeypatch):
+    model = ShadowWorldModel(_config())
+    parsed = []
+    original = ShadowWorldModel._local_scan_points
+
+    def parse(self, observation):
+        parsed.append(observation.source_sequence)
+        return original(self, observation)
+
+    monkeypatch.setattr(ShadowWorldModel, "_local_scan_points", parse)
+    now = 1_000_000_000
+    observations = _scan(1, now, ((1.0, 0.2), (3.0, 0.0)))
+    initial = _tick(model, now, observations)
+    assert parsed == [1]
+    reconstructed = pickle.loads(pickle.dumps(observations))
+    assert reconstructed[1].values is not observations[1].values
+    duplicate = _tick(model, now + 20_000_000, reconstructed)
+    assert parsed == [1]
+    assert duplicate.local_costmap.revision == initial.local_costmap.revision
+    assert duplicate.local_costmap.occupied_cells is initial.local_costmap.occupied_cells
+    assert duplicate.robot_relative_geometry.point_count == 2
+    assert duplicate.robot_relative_geometry.freshness_ns == 20_000_000
+    now += 40_000_000
+    result = _tick(model, now, _scan(2, now, ()))
+    assert parsed == [1, 2]
+    assert result.local_costmap.source_sequence == result.robot_relative_geometry.source_sequence == 2
+    assert result.local_costmap.revision > duplicate.local_costmap.revision
+    assert result.robot_relative_geometry.point_count == 0
+
+
+@pytest.mark.parametrize("field,value", (
+    ("frame_id", "odom"),
+    ("point_count", True),
+    ("point_count", 1.0),
+    ("point_count", -1),
+    ("point_count", 10000),
+    ("point_000_x_m", True),
+    ("point_000_y_m", "bad"),
+    ("point_000_quality", False),
+    ("point_000_quality", -1),
+))
+@pytest.mark.parametrize("local_quality", (QualityState.GOOD, QualityState.LOST))
+def test_lidar_new_malformed_scan_fails_closed_before_geometry_and_map_update(field, value, local_quality):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    _tick(model, now, _scan(1, now))
+    before = model.checkpoint()
+    now += 20_000_000
+    health, scan = _scan(2, now)
+    malformed = replace(scan, values=tuple(
+        replace(item, value=value) if item.key == field else item
+        for item in scan.values
+    ))
+    with pytest.raises(ValueError):
+        _tick(model, now, (health, malformed),
+              quality=healthy_localization(local_translation=local_quality))
+    after = model.checkpoint()
+    assert after.robot_relative_geometry == before.robot_relative_geometry
+    assert after.pending_local_scan == before.pending_local_scan
+    assert after.last_local_sequence == before.last_local_sequence
+    assert after.cells == before.cells
+
+
+@pytest.mark.parametrize("fields", (
+    (DataField("extra", 1),),
+    (DataField("point_000_x_m", 1.0),),
+))
+def test_lidar_malformed_scan_schema_never_becomes_pending_during_localization_loss(fields):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    health, scan = _scan(1, now)
+    if fields[0].key == "extra":
+        malformed = replace(scan, values=scan.values + fields)
+    else:
+        malformed = replace(scan, values=tuple(item for item in scan.values if item.key != "point_000_quality"))
+    with pytest.raises(ValueError, match="fields do not match"):
+        _tick(model, now, (health, malformed),
+              quality=healthy_localization(local_translation=QualityState.LOST))
+    assert model.checkpoint().pending_local_scan is None
+    assert model.checkpoint().robot_relative_geometry is None
+
+
+@pytest.mark.parametrize("point_count", (True, 1.0))
+def test_lidar_equal_scalar_malformed_duplicate_keeps_header_validation(point_count):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    health, scan = _scan(1, now)
+    _tick(model, now, (health, scan))
+    malformed = replace(scan, values=tuple(
+        replace(item, value=point_count) if item.key == "point_count" else item
+        for item in scan.values
+    ))
+    assert malformed.values == scan.values
+    with pytest.raises(ValueError, match="point_count must be a non-negative integer"):
+        _tick(model, now + 20_000_000, (health, malformed))
+
+
+@pytest.mark.parametrize("rewrite", ("time", "coordinate", "fields"))
+def test_lidar_rewritten_scan_stays_rejected_after_checkpoint_restore(rewrite):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    observations = _scan(1, now)
+    _tick(model, now, observations)
+    restored = ShadowWorldModel(_config())
+    restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+    health, scan = observations
+    if rewrite == "time":
+        scan = replace(scan, captured_monotonic_ns=now + 1)
+    elif rewrite == "coordinate":
+        scan = _scan(1, now, ((0.8, 0.2),))[1]
+    else:
+        scan = replace(scan, values=scan.values + (DataField("extra", 1),))
+    for branch in (model, restored):
+        with pytest.raises(ValueError, match="rewritten"):
+            _tick(branch, now + 20_000_000, (health, scan))

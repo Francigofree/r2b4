@@ -32,7 +32,7 @@ def _navigation_tick(clock, *, tick=1, validity=None):
     completed = geometry_tick(clock, tick=tick, cells=4000)
     context = completed.trace.context
     validity = validity or MotionValidity(
-        TickContext(0, context.monotonic_ns - 20_000_000),
+        TickContext(0, context.monotonic_ns - 5_000_000),
         context.monotonic_ns + 100_000_000, "R2B4_ODOM_LOCAL", "mission-nav",
         LocalizationRequirement(global_position=False), 7, context.monotonic_ns - 10_000_000,
     )

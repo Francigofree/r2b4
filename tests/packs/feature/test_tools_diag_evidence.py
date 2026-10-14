@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 import sqlite3
 from types import SimpleNamespace
@@ -125,3 +126,82 @@ def test_diag_cli_no_args_means_full_latest(monkeypatch, tmp_path: Path, capsys)
     assert cli.main(["--json"], project_root=tmp_path) == 0
     assert called["value"] is None
     assert json.loads(capsys.readouterr().out)["mode"] == "full"
+
+
+def test_compact_navigation_lineage_survives_mcap_evi_and_diag(tmp_path: Path):
+    from rig import ROOT, resolved_config
+    from test_resident_status_freshness import _navigation_tick
+    from test_spatial_service import Clock
+    from tools.diag.context import open_context
+    from tools.diag.registry import build_default_registry
+    from tools.mcap_evidence.compiler import compile_evidence
+    from tools.mcap_evidence.query import query
+    from tools.mcap_evidence.verify import verify
+    from v3.capture_behavior import encode_behavior_record, project_behavior_record
+    from v3.contracts import (CommandMode, CommandRequest, LifecycleState, MissionIntent,
+                             MissionLifecycle, RawDeviceBatch)
+    from v3.engine import LayerRecord, TickInputs
+    from v3.execution import ExecutionRecord
+    from v3.layers.l7_motion_selection import MotionSelector
+    from v3.layers.l8_motion_realization import MotionRealizer
+    from v3.mcap_writer import StdlibMcapWriter
+
+    # This is passive evidence plumbing, using typed completed downstream
+    # values. It does not claim a complete control replay or physical motion.
+    clock = Clock()
+    config = resolved_config().runtime.composition.live_control.control
+    selector, realizer = MotionSelector(config.motion_selection), MotionRealizer(config.motion_realization)
+    first = _navigation_tick(clock)
+    validity = first.trace.layers[-1].output.motion_validity
+    source = tmp_path / "navigation.mcap"
+    with source.open("wb") as stream:
+        writer = StdlibMcapWriter(stream)
+        writer.start()
+        channel = writer.register_channel("/r2b4/tick")
+        for tick_id in (1, 2):
+            if tick_id == 2:
+                clock.now += 20_000_000
+            completed = _navigation_tick(clock, tick=tick_id, validity=validity)
+            estimate, world, plan = (layer.output for layer in completed.trace.layers)
+            if tick_id == 2:
+                world = replace(world, map_revision=world.map_revision + 1,
+                    local_costmap=replace(world.local_costmap, revision=8, source_sequence=9))
+                plan = replace(plan, goal_selection_reason="GOAL_HANDOFF")
+            mission = MissionIntent(plan.context, plan.mission_id, CommandMode.EXPLORE,
+                                    None, None, plan.constraints, MissionLifecycle.ACTIVE)
+            objective = selector.evaluate(plan)
+            motion = realizer.evaluate(objective, estimate, world)
+            completed = replace(completed, trace=replace(completed.trace, layers=(
+                LayerRecord("L3", estimate), LayerRecord("L4", world), LayerRecord("L5", mission),
+                LayerRecord("L6", plan), LayerRecord("L7", objective), LayerRecord("L8", motion),
+            )))
+            inputs = TickInputs(plan.context, RawDeviceBatch(plan.context, (), ()),
+                CommandRequest(plan.context, "nav", CommandMode.EXPLORE, (), tick_id), LifecycleState.ACTIVE)
+            payload = encode_behavior_record(project_behavior_record(ExecutionRecord(inputs, completed)))
+            assert "occupied_cells" not in payload["expected"]["layers"]["L4"]["local_costmap"]
+            assert "trajectory_candidates" not in payload["expected"]["layers"]["L6"]
+            writer.add_message(channel, log_time_ns=plan.context.monotonic_ns,
+                               data=json.dumps(payload).encode(), sequence=tick_id)
+        writer.finish()
+    original = source.read_bytes()
+    compiled = compile_evidence(source, tmp_path / "navigation.evidence", workers=1)
+    assert compiled["compiler_status"] == "COMPLETE"
+    assert verify(compiled["output"], source=source)["status"] == "PASS"
+    indexed = list(query(compiled["output"], field="/expected/layers/L6/motion_validity/geometry_revision"))
+    assert len(indexed) == 2
+    context = open_context(ROOT, compiled["output"])
+    registry = build_default_registry()
+    for analyzer_id in ("navigation", "world_model"):
+        analyzed = registry.run(analyzer_id, context)
+        assert analyzed.admission.applicable
+        profiles = analyzed.metrics["profiles"]
+        l4, l6 = profiles["layers/L4"]["fields"], profiles["layers/L6"]["fields"]
+        assert l4["/local_costmap/revision"]["change_count"] == 1
+        assert l4["/local_costmap/source_sequence"]["change_count"] == 1
+        assert l6["/goal_selection_reason"]["change_count"] == 1
+        assert l6["/motion_validity/geometry_captured_ns"]["change_count"] == 0
+        assert l6["/motion_validity/valid_until_ns"]["change_count"] == 0
+        reference = l6["/goal_selection_reason"]["examples"][0]["evidence_ref"]
+        assert reference["source_pointer"] == "/expected/layers/L6"
+        assert reference["field_path"] == "/goal_selection_reason"
+    assert source.read_bytes() == original

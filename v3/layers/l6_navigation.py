@@ -590,6 +590,9 @@ class NavigationStateCheckpoint:
     goal_selection_reason: str | None = None
     pending_goal_selection_reason: str | None = None
     initial_yaw_error_rad: float = 0.0
+    trajectory_geometry_key: tuple[str, int, int, float] | None = None
+    trajectory_map_revision: int | None = None
+    trajectory_local_sigma_m: float | None = None
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -748,6 +751,9 @@ class TrajectoryNavigator:
         "_rollout_release_tick_gap",
         "_static_planning_index",
         "_trajectory_candidates",
+        "_trajectory_geometry_key",
+        "_trajectory_map_revision",
+        "_trajectory_local_sigma_m",
     )
 
     def __init__(
@@ -821,6 +827,9 @@ class TrajectoryNavigator:
         self._pending_release_not_before_ns: int | None = None
         self._static_planning_index: _StaticPlanningIndex | None = None
         self._trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
+        self._trajectory_geometry_key: tuple[str, int, int, float] | None = None
+        self._trajectory_map_revision: int | None = None
+        self._trajectory_local_sigma_m: float | None = None
         self._face_person_track_id: str | None = None
         self._face_person_aligned = False
         self._follow_person_track_id: str | None = None
@@ -872,6 +881,9 @@ class TrajectoryNavigator:
             self._localization_recovery_direction, self._last_maneuver_direction,
             self._goal_selection_reason, self._pending_goal_selection_reason,
             self._initial_yaw_error_rad,
+            self._trajectory_geometry_key,
+            self._trajectory_map_revision,
+            self._trajectory_local_sigma_m,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -901,6 +913,9 @@ class TrajectoryNavigator:
         self._last_replan_ns = checkpoint.last_replan_ns
         self._last_replan_tick_id = checkpoint.last_replan_tick_id
         self._trajectory_candidates = checkpoint.trajectory_candidates
+        self._trajectory_geometry_key = checkpoint.trajectory_geometry_key
+        self._trajectory_map_revision = checkpoint.trajectory_map_revision
+        self._trajectory_local_sigma_m = checkpoint.trajectory_local_sigma_m
         self._face_person_track_id = checkpoint.face_person_track_id
         self._face_person_aligned = checkpoint.face_person_aligned
         self._follow_person_track_id = checkpoint.follow_person_track_id
@@ -978,6 +993,16 @@ class TrajectoryNavigator:
             self._localization_recovery_started_ns = None
             self._localization_recovery_mission_id = None
         plan = self._evaluate(mission, estimate, world, planner_input)
+        if (plan.status is NavigationStatus.ACTIVE and plan.trajectory_candidates
+                and plan.motion_validity is None
+                and self._cached_geometry_changed(estimate, world)):
+            # A young worker result is not proof against a newer obstacle map
+            # or larger localization footprint. Recheck one bounded proposal;
+            # a failed check must not fall back to the old candidate family.
+            plan = (self._local_continuation(mission, estimate, world,
+                        max_v_mps=plan.constraints.max_v_mps)
+                    or self._inactive(mission, NavigationStatus.IDLE,
+                                      "PLANNER_GEOMETRY_HOLD"))
         if plan.status is NavigationStatus.ACTIVE and plan.motion_validity is None:
             plan = replace(plan, motion_validity=self._guidance_validity(
                 mission, world, trajectory=bool(plan.trajectory_candidates),
@@ -1412,6 +1437,9 @@ class TrajectoryNavigator:
         self._last_replan_ns = None
         self._last_replan_tick_id = None
         self._trajectory_candidates = ()
+        self._trajectory_geometry_key = None
+        self._trajectory_map_revision = None
+        self._trajectory_local_sigma_m = None
         self._static_planning_index = None
         self._face_person_track_id = None
         self._face_person_aligned = False
@@ -2100,10 +2128,13 @@ class TrajectoryNavigator:
             return None
         proposals = tuple(c for c in self._trajectory_candidates
                           if not c.collision and c.progress_viable
-                          and (c.v_mps > 0 or (abs(c.v_mps) <= _MOTION_EPSILON
+                          and (c.v_mps > 0
+                               or (c.v_mps < 0 and c.candidate_id.startswith("escape-"))
+                               or (abs(c.v_mps) <= _MOTION_EPSILON
                                                and abs(c.omega_rad_s) > _MOTION_EPSILON)))
+        proposal = None
         if proposals:
-            proposal = max(proposals, key=lambda c: (c.total_score, c.candidate_id))
+            proposal = min(proposals, key=lambda c: (-c.total_score, c.candidate_id))
             v, omega = proposal.v_mps, proposal.omega_rad_s
         else:
             heading_error = _wrapped_angle(math.atan2(goal.y_m-estimate.y_m,
@@ -2126,8 +2157,21 @@ class TrajectoryNavigator:
         candidate = self._evaluate_trajectory(0, 0, v, omega, estimate, world, scene,
                                              goal, v_cap, omega_cap, clearance, planning=False)
         if candidate.collision:
-            return self._inactive(mission, NavigationStatus.INVALIDATED, "LOCAL_PATH_BLOCKED")
-        if not candidate.progress_viable and mission.mode is CommandMode.EXPLORE:
+            # Rejecting one old maneuver does not prove the mission unreachable.
+            # Keep its identity while the worker can supply a fresh alternative.
+            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_GEOMETRY_HOLD")
+        if proposal is not None and proposal.candidate_id.startswith("escape-"):
+            # Recovery progress is regained clearance or a footprint-proven
+            # next step, rather than progress toward the blocked local goal.
+            # Reapply that same bounded proof to the current scene. The start
+            # margin and every sample's collision gate remain unchanged.
+            candidate = _as_escape_candidate(
+                candidate, 0, 0, clearance, goal,
+                min(self._config.local_escape_reverse_max_v_mps, v_cap),
+                world, self._config, scene,
+            )
+            candidate = replace(candidate, candidate_id=proposal.candidate_id)
+        elif not candidate.progress_viable and mission.mode is CommandMode.EXPLORE:
             candidate = _exploration_detours(
                 [candidate], estimate, world, scene, self._config, v_cap, clearance)[0]
         if not candidate.progress_viable:
@@ -2149,7 +2193,8 @@ class TrajectoryNavigator:
             replace(mission.constraints, max_v_mps=min(mission.constraints.max_v_mps,
                 mission.constraints.max_v_mps if max_v_mps is None else max_v_mps)),
             0.0, self._progress, NavigationStatus.ACTIVE, "LOCAL_GUIDANCE_REVALIDATED",
-            goal, (replace(candidate, candidate_id="local-continuation"),), validity,
+            goal, (candidate if proposal is not None and proposal.candidate_id.startswith("escape-")
+                   else replace(candidate, candidate_id="local-continuation"),), validity,
         )
 
     def _build_planning_scene(self, world: WorldSnapshot) -> _LocalPlanningScene:
@@ -2241,6 +2286,8 @@ class TrajectoryNavigator:
                 context.tick_id,
                 goal,
                 candidates,
+                estimate=estimate,
+                world=world,
             )
             return
         if self._pending_rollout_id is not None:
@@ -2335,6 +2382,8 @@ class TrajectoryNavigator:
             request.context.tick_id,
             request.goal,
             result.trajectory_candidates,
+            estimate=request.estimate,
+            world=request.world,
         )
         self._abandon_pending_rollout()
         return _RolloutDisposition.ACCEPTED
@@ -2405,6 +2454,8 @@ class TrajectoryNavigator:
             result.source_context.tick_id,
             goal,
             result.trajectory_candidates,
+            estimate=request.estimate,
+            world=request.world,
         )
         return _RolloutDisposition.ACCEPTED
 
@@ -2433,17 +2484,40 @@ class TrajectoryNavigator:
         tick_id: int,
         local_goal: Waypoint,
         candidates: tuple[TrajectoryEvaluation, ...],
+        *,
+        estimate: RobotEstimate,
+        world: WorldSnapshot,
     ) -> None:
         self._last_replan_ns = monotonic_ns
         self._last_replan_tick_id = tick_id
         self._local_goal = local_goal
         self._trajectory_candidates = candidates
+        self._trajectory_geometry_key = (
+            _costmap_cache_key(world.local_costmap) if world.local_costmap is not None else None
+        )
+        self._trajectory_map_revision = world.map_revision
+        self._trajectory_local_sigma_m = estimate.localization_quality.local_sigma_m
+
+    def _cached_geometry_changed(self, estimate: RobotEstimate, world: WorldSnapshot) -> bool:
+        costmap = world.local_costmap
+        return (costmap is None
+                or self._trajectory_geometry_key != _costmap_cache_key(costmap)
+                or self._trajectory_map_revision != world.map_revision
+                or self._trajectory_local_sigma_m is None
+                or estimate.localization_quality.local_sigma_m > self._trajectory_local_sigma_m
+                or (self._last_replan_ns != estimate.context.monotonic_ns and any(
+                    obstacle.confidence >= self._config.obstacle_confidence_floor
+                    and (obstacle.vx_mps != 0.0 or obstacle.vy_mps != 0.0)
+                    for obstacle in world.obstacle_tracks)))
 
     def _clear_trajectory_plan(self) -> None:
         self._abandon_pending_rollout()
         self._last_replan_ns = None
         self._last_replan_tick_id = None
         self._trajectory_candidates = ()
+        self._trajectory_geometry_key = None
+        self._trajectory_map_revision = None
+        self._trajectory_local_sigma_m = None
 
     def _coverage_key(self, x_m: float, y_m: float) -> tuple[int, int]:
         size = self._config.coverage_cell_size_m
@@ -2540,239 +2614,32 @@ class TrajectoryNavigator:
         return min(near_best, key=lambda item: (item[5], -item[0], -item[1], item[2], item[3]))[4]
 
     def _trajectory_rollout(
-        self,
-        estimate: RobotEstimate,
-        world: WorldSnapshot,
-        scene: _LocalPlanningScene,
-        goal: Waypoint,
-        max_v_mps: float,
-        max_omega_rad_s: float,
+        self, estimate: RobotEstimate, world: WorldSnapshot, scene: _LocalPlanningScene,
+        goal: Waypoint, max_v_mps: float, max_omega_rad_s: float,
         *, allow_exploration_detour: bool = False,
     ) -> tuple[TrajectoryEvaluation, ...]:
         scene = replace(scene, uncertainty_m=self._config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m)
-        start_clearance_m = _footprint_clearance(
-            estimate.x_m,
-            estimate.y_m,
-            estimate.yaw_rad,
-            world,
-            self._config,
-            scene,
+        return _compute_rollout_candidates(
+            self._config, estimate, world, scene, goal, max_v_mps, max_omega_rad_s,
+            {key: visits for key, (visits, _tick_id) in self._coverage.items()},
+            allow_exploration_detour=allow_exploration_detour,
         )
-        evaluations: list[TrajectoryEvaluation] = []
-        for linear_index, angular_index, v_mps, omega_rad_s in self._config.wheel_limits.normal_samples(
-            self._config.rollout_linear_samples, self._config.rollout_angular_samples,
-            max_v_mps, max_omega_rad_s, self._config.minimum_planning_speed_mps,
-        ):
-            evaluations.append(
-                self._evaluate_trajectory(
-                    linear_index,
-                    angular_index,
-                    v_mps,
-                    omega_rad_s,
-                    estimate,
-                    world,
-                    scene,
-                    goal,
-                    max_v_mps,
-                    max_omega_rad_s,
-                    start_clearance_m,
-                )
-            )
-        if allow_exploration_detour:
-            evaluations = _exploration_detours(
-                evaluations, estimate, world, scene, self._config, max_v_mps, start_clearance_m)
-        # Normal navigation is useful only if at least one collision-free
-        # candidate can improve distance or heading toward the local goal. Keep the
-        # full 54-candidate family for diagnostics/L7 ranking once that invariant holds.
-        if any(
-            not candidate.collision and candidate.progress_viable
-            for candidate in evaluations
-        ):
-            return tuple(evaluations)
-
-        # Preserve the rejected forward commands as explicit L7 invalidation
-        # evidence. Escape selection must not keep one as a braking origin.
-        # Rejected paths need only their terminal sample, not a second raw
-        # rollout family on the worker-to-control transport.
-        evaluations = [replace(c, samples=(c.samples[-1],)) for c in evaluations]
-        reverse_limit_mps = min(self._config.local_escape_reverse_max_v_mps, max_v_mps)
-        for linear_index in range(self._config.rollout_linear_samples):
-            v_mps = -self._config.wheel_limits.linear_sample(
-                linear_index, self._config.rollout_linear_samples, reverse_limit_mps,
-                self._config.minimum_planning_speed_mps)
-            for angular_index in range(self._config.rollout_angular_samples):
-                # Reverse recovery is straight at every angular index. Reuse its
-                # immutable geometry while preserving the bounded family and IDs.
-                if linear_index > 0 and angular_index > 0:
-                    evaluations.append(replace(
-                        evaluations[-1],
-                        candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
-                    ))
-                    continue
-                angular_ratio = (
-                    2.0 * angular_index
-                    / (self._config.rollout_angular_samples - 1)
-                    - 1.0
-                )
-                omega_rad_s = (
-                    max_omega_rad_s * angular_ratio
-                    if linear_index == 0
-                    else 0.0
-                )
-                candidate = self._evaluate_trajectory(
-                    linear_index,
-                    angular_index,
-                    v_mps,
-                    omega_rad_s,
-                    estimate,
-                    world,
-                    scene,
-                    goal,
-                    max_v_mps,
-                    max_omega_rad_s,
-                    start_clearance_m,
-                )
-                evaluations.append(
-                    _as_escape_candidate(
-                        candidate,
-                        linear_index,
-                        angular_index,
-                        start_clearance_m,
-                        goal,
-                        reverse_limit_mps,
-                        world,
-                        self._config,
-                        scene,
-                    )
-                )
-        return tuple(evaluations)
 
     def _evaluate_trajectory(
-        self,
-        linear_index: int,
-        angular_index: int,
-        v_mps: float,
-        omega_rad_s: float,
-        estimate: RobotEstimate,
-        world: WorldSnapshot,
-        scene: _LocalPlanningScene,
-        goal: Waypoint,
-        max_v_mps: float,
-        max_omega_rad_s: float,
-        start_clearance_m: float,
-        *, planning: bool = True,
+        self, linear_index: int, angular_index: int, v_mps: float, omega_rad_s: float,
+        estimate: RobotEstimate, world: WorldSnapshot, scene: _LocalPlanningScene,
+        goal: Waypoint, max_v_mps: float, max_omega_rad_s: float,
+        start_clearance_m: float, *, planning: bool = True,
     ) -> TrajectoryEvaluation:
-        v_mps, omega_rad_s = self._config.wheel_limits.constrain(v_mps, omega_rad_s, planning=planning,
-            max_v_mps=min(max_v_mps, self._config.operational_max_v_mps),
-            max_omega_rad_s=min(max_omega_rad_s, self._config.operational_max_omega_rad_s),
-            max_curvature_rad_per_m=self._config.operational_max_curvature_rad_per_m)
-        step_ns = self._config.rollout_horizon_ns // self._config.rollout_step_count
-        samples: list[TrajectoryPose] = []
-        x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
-        min_clearance = start_clearance_m
-        start_collision = min_clearance <= self._config.footprint_safety_margin_m
-        collision = start_collision
-        for step in range(1, self._config.rollout_step_count + 1):
-            offset_ns = (
-                self._config.rollout_horizon_ns
-                if step == self._config.rollout_step_count
-                else step_ns * step
-            )
-            dt_s = (offset_ns - (samples[-1].time_offset_ns if samples else 0)) / 1e9
-            x_m, y_m, yaw_rad = _integrate_constant_twist(
-                x_m,
-                y_m,
-                yaw_rad,
-                v_mps,
-                omega_rad_s,
-                dt_s,
-            )
-            sample = TrajectoryPose(x_m, y_m, yaw_rad, offset_ns)
-            samples.append(sample)
-            if not start_collision:
-                clearance = _footprint_clearance(
-                    x_m,
-                    y_m,
-                    yaw_rad,
-                    world,
-                    self._config,
-                    scene,
-                    clearance_limit_m=min_clearance,
-                )
-                min_clearance = min(min_clearance, clearance)
-                collision = collision or clearance <= self._config.footprint_safety_margin_m
-
-        if (
-            v_mps > _MOTION_EPSILON
-            and min_clearance <= self._config.local_escape_trigger_clearance_m
-        ):
-            collision = True
-
-        start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
-        approach_scoring = start_distance <= abs(v_mps) * self._config.rollout_horizon_ns / 1e9
-        score_x, score_y, score_yaw = _goal_progress_pose(estimate, goal, samples, approach_scoring=approach_scoring)
-        final_distance = math.hypot(goal.x_m - score_x, goal.y_m - score_y)
-        progress = _clamp_signed(
-            (start_distance - final_distance) / max(start_distance, 1e-9)
+        v_mps, omega_rad_s = _constrain_rollout_motion(
+            self._config, v_mps, omega_rad_s, max_v_mps, max_omega_rad_s,
+            planning=planning,
         )
-        progress_potential = _trajectory_progress_potential(
-            estimate, goal, score_x, score_y, score_yaw, progress,
-            max_omega_rad_s * self._config.rollout_horizon_ns / 1e9,
-            approach_scoring=approach_scoring,
-        )
-        progress_viable = (
-            progress_potential + 1e-12 >= self._config.progress_viability_floor
-        )
-        linear_change = abs(v_mps - estimate.v_mps) / max(max_v_mps, 1e-9)
-        angular_change = abs(omega_rad_s - estimate.omega_rad_s) / max(
-            max_omega_rad_s,
-            1e-9,
-        )
-        smoothness = max(0.0, 1.0 - min(1.0, 0.5 * (linear_change + angular_change)))
-        novelty = sum(
-            1.0
-            / (
-                1.0
-                + self._coverage.get(
-                    self._coverage_key(sample.x_m, sample.y_m),
-                    (0, 0),
-                )[0]
-            )
-            for sample in samples
-        ) / len(samples)
-        bounded_clearance = min(
-            self._config.clearance_score_cap_m,
-            max(0.0, min_clearance),
-        )
-        clearance_score = _trajectory_clearance_score(
-            bounded_clearance, v_mps, self._config
-        )
-        clearance_penalty = _trajectory_clearance_penalty(
-            clearance_score, v_mps, self._config
-        )
-        total_score = (
-            self._config.progress_weight * progress_potential
-            + self._config.clearance_weight * clearance_score
-            + self._config.smoothness_weight * smoothness
-            + self._config.novelty_weight * novelty
-            - self._config.speed_clearance_penalty_weight * clearance_penalty
-            - self._config.localization_observability_weight * (1.0-estimate.localization_quality.observability)
-            * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
-        )
-        return TrajectoryEvaluation(
-            candidate_id=f"trajectory-{linear_index:02d}-{angular_index:02d}",
-            v_mps=v_mps,
-            omega_rad_s=omega_rad_s,
-            horizon_ns=self._config.rollout_horizon_ns,
-            samples=tuple(samples),
-            collision=collision,
-            min_clearance_m=bounded_clearance,
-            progress_score=progress,
-            progress_potential_score=progress_potential,
-            progress_viable=progress_viable,
-            smoothness_score=smoothness,
-            novelty_score=novelty,
-            total_score=total_score,
+        return _evaluate_rollout_candidate(
+            self._config, linear_index, angular_index, v_mps, omega_rad_s,
+            estimate, world, scene, goal, max_v_mps, max_omega_rad_s,
+            start_clearance_m,
+            {key: visits for key, (visits, _tick_id) in self._coverage.items()},
         )
 
 
@@ -2804,247 +2671,227 @@ class TrajectoryRolloutComputer:
         )
         return _LocalPlanningScene(static_index, dynamic_obstacles)
 
-    def _coverage_key(self, x_m: float, y_m: float) -> tuple[int, int]:
-        size = self._config.coverage_cell_size_m
-        return math.floor(x_m / size), math.floor(y_m / size)
-
     def compute(self, request: TrajectoryRolloutRequest) -> TrajectoryRolloutResult:
         if not isinstance(request, TrajectoryRolloutRequest):
             raise TypeError("request must be TrajectoryRolloutRequest")
-        config = self._config
-        estimate = request.estimate
-        world = request.world
-        goal = request.goal
-        scene = replace(self._planning_scene(world), uncertainty_m=config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m)
-        coverage = {
-            (x_index, y_index): visits
-            for x_index, y_index, visits in request.coverage
-        }
-        start_clearance_m = _footprint_clearance(
-            estimate.x_m,
-            estimate.y_m,
-            estimate.yaw_rad,
-            world,
-            config,
-            scene,
+        scene = replace(self._planning_scene(request.world),
+                        uncertainty_m=self._config.localization_inflation_sigma * request.estimate.localization_quality.local_sigma_m)
+        candidates = _compute_rollout_candidates(
+            self._config, request.estimate, request.world, scene, request.goal,
+            request.max_v_mps, request.max_omega_rad_s,
+            {(x_index, y_index): visits for x_index, y_index, visits in request.coverage},
+            allow_exploration_detour=request.allow_exploration_detour,
         )
-        evaluations: list[TrajectoryEvaluation] = []
-        for linear_index, angular_index, v_mps, omega_rad_s in config.wheel_limits.normal_samples(
-            config.rollout_linear_samples, config.rollout_angular_samples,
-            request.max_v_mps, request.max_omega_rad_s, config.minimum_planning_speed_mps,
-        ):
-            evaluations.append(
-                self._evaluate_candidate(
-                    linear_index,
-                    angular_index,
-                    v_mps,
-                    omega_rad_s,
-                    estimate,
-                    world,
-                    scene,
-                    goal,
-                    request.max_v_mps,
-                    request.max_omega_rad_s,
-                    start_clearance_m,
-                    coverage,
-                )
-            )
-        if request.allow_exploration_detour:
-            evaluations = _exploration_detours(
-                evaluations, estimate, world, scene, config, request.max_v_mps, start_clearance_m)
-        if not any(
-            not candidate.collision and candidate.progress_viable
-            for candidate in evaluations
-        ):
-            # L7 needs the rejected forward family when revoking its previous
-            # objective. These results are already computed in the worker.
-            evaluations = [replace(c, samples=(c.samples[-1],)) for c in evaluations]
-            reverse_limit_mps = min(
-                config.local_escape_reverse_max_v_mps,
-                request.max_v_mps,
-            )
-            for linear_index in range(config.rollout_linear_samples):
-                v_mps = -config.wheel_limits.linear_sample(
-                    linear_index, config.rollout_linear_samples, reverse_limit_mps,
-                    config.minimum_planning_speed_mps)
-                for angular_index in range(config.rollout_angular_samples):
-                    if linear_index > 0 and angular_index > 0:
-                        evaluations.append(replace(
-                            evaluations[-1],
-                            candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
-                        ))
-                        continue
-                    angular_ratio = (
-                        2.0 * angular_index
-                        / (config.rollout_angular_samples - 1)
-                        - 1.0
-                    )
-                    omega_rad_s = (
-                        request.max_omega_rad_s * angular_ratio
-                        if linear_index == 0
-                        else 0.0
-                    )
-                    candidate = self._evaluate_candidate(
-                        linear_index,
-                        angular_index,
-                        v_mps,
-                        omega_rad_s,
-                        estimate,
-                        world,
-                        scene,
-                        goal,
-                        request.max_v_mps,
-                        request.max_omega_rad_s,
-                        start_clearance_m,
-                        coverage,
-                    )
-                    evaluations.append(
-                        _as_escape_candidate(
-                            candidate,
-                            linear_index,
-                            angular_index,
-                            start_clearance_m,
-                            goal,
-                            reverse_limit_mps,
-                            world,
-                            config,
-                            scene,
-                        )
-                    )
-        return TrajectoryRolloutResult(request.context, tuple(evaluations))
+        return TrajectoryRolloutResult(request.context, candidates)
 
-    def _evaluate_candidate(
-        self,
-        linear_index: int,
-        angular_index: int,
-        v_mps: float,
-        omega_rad_s: float,
-        estimate: RobotEstimate,
-        world: WorldSnapshot,
-        scene: _LocalPlanningScene,
-        goal: Waypoint,
-        max_v_mps: float,
-        max_omega_rad_s: float,
-        start_clearance_m: float,
-        coverage: dict[tuple[int, int], int],
-    ) -> TrajectoryEvaluation:
-        config = self._config
-        v_mps, omega_rad_s = config.wheel_limits.constrain(v_mps, omega_rad_s, planning=True,
-            max_v_mps=min(max_v_mps, config.operational_max_v_mps),
-            max_omega_rad_s=min(max_omega_rad_s, config.operational_max_omega_rad_s),
-            max_curvature_rad_per_m=config.operational_max_curvature_rad_per_m)
-        step_ns = config.rollout_horizon_ns // config.rollout_step_count
-        samples: list[TrajectoryPose] = []
-        x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
-        min_clearance = start_clearance_m
-        start_collision = min_clearance <= config.footprint_safety_margin_m
-        collision = start_collision
-        for step in range(1, config.rollout_step_count + 1):
-            offset_ns = (
-                config.rollout_horizon_ns
-                if step == config.rollout_step_count
-                else step_ns * step
-            )
-            dt_s = (
-                offset_ns - (samples[-1].time_offset_ns if samples else 0)
-            ) / 1e9
-            x_m, y_m, yaw_rad = _integrate_constant_twist(
+
+def _constrain_rollout_motion(
+    config: NavigationConfig, v_mps: float, omega_rad_s: float,
+    max_v_mps: float, max_omega_rad_s: float, *, planning: bool = True,
+) -> tuple[float, float]:
+    return config.wheel_limits.constrain(
+        v_mps, omega_rad_s, planning=planning,
+        max_v_mps=min(max_v_mps, config.operational_max_v_mps),
+        max_omega_rad_s=min(max_omega_rad_s, config.operational_max_omega_rad_s),
+        max_curvature_rad_per_m=config.operational_max_curvature_rad_per_m,
+    )
+
+
+def _compute_rollout_candidates(
+    config: NavigationConfig, estimate: RobotEstimate, world: WorldSnapshot,
+    scene: _LocalPlanningScene, goal: Waypoint,
+    max_v_mps: float, max_omega_rad_s: float, coverage: dict[tuple[int, int], int],
+    *, allow_exploration_detour: bool = False,
+) -> tuple[TrajectoryEvaluation, ...]:
+    """Evaluate each exact motion once within one immutable request.
+
+    Pose, geometry, uncertainty, coverage and goal remain fixed. Stable grid
+    IDs and rejected forward evidence remain visible to L7. Velocities are
+    never approximately grouped, and no evaluation is reused across requests.
+    """
+    start_clearance_m = _footprint_clearance(
+        estimate.x_m, estimate.y_m, estimate.yaw_rad, world, config, scene)
+    motion_cache: dict[tuple[float, float], TrajectoryEvaluation] = {}
+    projection_cache: dict[tuple[float, float], tuple[float, float]] = {}
+
+    def evaluate(linear_index: int, angular_index: int,
+                 v_mps: float, omega_rad_s: float) -> TrajectoryEvaluation:
+        requested_motion = (v_mps, omega_rad_s)
+        motion = projection_cache.get(requested_motion)
+        if motion is None:
+            motion = _constrain_rollout_motion(
+                config, v_mps, omega_rad_s, max_v_mps, max_omega_rad_s)
+            projection_cache[requested_motion] = motion
+        cached = motion_cache.get(motion)
+        candidate_id = f"trajectory-{linear_index:02d}-{angular_index:02d}"
+        if cached is None:
+            cached = _evaluate_rollout_candidate(
+                config, linear_index, angular_index, *motion, estimate, world,
+                scene, goal, max_v_mps, max_omega_rad_s, start_clearance_m, coverage)
+            motion_cache[motion] = cached
+        return cached if cached.candidate_id == candidate_id else replace(
+            cached, candidate_id=candidate_id)
+
+    evaluations = [
+        evaluate(linear_index, angular_index, v_mps, omega_rad_s)
+        for linear_index, angular_index, v_mps, omega_rad_s
+        in config.wheel_limits.normal_samples(
+            config.rollout_linear_samples, config.rollout_angular_samples,
+            max_v_mps, max_omega_rad_s, config.minimum_planning_speed_mps)
+    ]
+    if allow_exploration_detour:
+        evaluations = _exploration_detours(
+            evaluations, estimate, world, scene, config, max_v_mps, start_clearance_m)
+    if any(not candidate.collision and candidate.progress_viable
+           for candidate in evaluations):
+        return tuple(evaluations)
+
+    # The rejected prior IDs remain explicit L7 invalidation evidence. Their
+    # terminal samples suffice without transporting a second raw family.
+    evaluations = [replace(c, samples=(c.samples[-1],)) for c in evaluations]
+    reverse_limit_mps = min(config.local_escape_reverse_max_v_mps, max_v_mps)
+    escape_cache: dict[tuple[float, float], TrajectoryEvaluation] = {}
+    for linear_index in range(config.rollout_linear_samples):
+        v_mps = -config.wheel_limits.linear_sample(
+            linear_index, config.rollout_linear_samples, reverse_limit_mps,
+            config.minimum_planning_speed_mps)
+        for angular_index in range(config.rollout_angular_samples):
+            angular_ratio = 2.0 * angular_index / (config.rollout_angular_samples - 1) - 1.0
+            omega_rad_s = max_omega_rad_s * angular_ratio if linear_index == 0 else 0.0
+            candidate = evaluate(linear_index, angular_index, v_mps, omega_rad_s)
+            motion = (candidate.v_mps, candidate.omega_rad_s)
+            escape = escape_cache.get(motion)
+            candidate_id = f"escape-{linear_index:02d}-{angular_index:02d}"
+            if escape is None:
+                escape = _as_escape_candidate(
+                    candidate, linear_index, angular_index, start_clearance_m,
+                    goal, reverse_limit_mps, world, config, scene)
+                escape_cache[motion] = escape
+            evaluations.append(escape if escape.candidate_id == candidate_id else replace(
+                escape, candidate_id=candidate_id))
+    return tuple(evaluations)
+
+
+def _evaluate_rollout_candidate(
+    config: NavigationConfig, linear_index: int, angular_index: int,
+    v_mps: float, omega_rad_s: float, estimate: RobotEstimate,
+    world: WorldSnapshot, scene: _LocalPlanningScene, goal: Waypoint,
+    max_v_mps: float, max_omega_rad_s: float, start_clearance_m: float,
+    coverage: dict[tuple[int, int], int],
+) -> TrajectoryEvaluation:
+    """Evaluate one already-realizable motion against one immutable scene."""
+    step_ns = config.rollout_horizon_ns // config.rollout_step_count
+    samples: list[TrajectoryPose] = []
+    x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
+    min_clearance = start_clearance_m
+    start_collision = min_clearance <= config.footprint_safety_margin_m
+    collision = start_collision
+    for step in range(1, config.rollout_step_count + 1):
+        offset_ns = (
+            config.rollout_horizon_ns
+            if step == config.rollout_step_count
+            else step_ns * step
+        )
+        dt_s = (
+            offset_ns - (samples[-1].time_offset_ns if samples else 0)
+        ) / 1e9
+        x_m, y_m, yaw_rad = _integrate_constant_twist(
+            x_m,
+            y_m,
+            yaw_rad,
+            v_mps,
+            omega_rad_s,
+            dt_s,
+        )
+        sample = TrajectoryPose(x_m, y_m, yaw_rad, offset_ns)
+        samples.append(sample)
+        if not start_collision:
+            clearance = _footprint_clearance(
                 x_m,
                 y_m,
                 yaw_rad,
-                v_mps,
-                omega_rad_s,
-                dt_s,
+                world,
+                config,
+                scene,
+                clearance_limit_m=min_clearance,
             )
-            sample = TrajectoryPose(x_m, y_m, yaw_rad, offset_ns)
-            samples.append(sample)
-            if not start_collision:
-                clearance = _footprint_clearance(
-                    x_m,
-                    y_m,
-                    yaw_rad,
-                    world,
-                    config,
-                    scene,
-                    clearance_limit_m=min_clearance,
-                )
-                min_clearance = min(min_clearance, clearance)
-                collision = (
-                    collision
-                    or clearance <= config.footprint_safety_margin_m
-                )
-        if (
-            v_mps > _MOTION_EPSILON
-            and min_clearance <= config.local_escape_trigger_clearance_m
-        ):
-            collision = True
+            min_clearance = min(min_clearance, clearance)
+            collision = (
+                collision
+                or clearance <= config.footprint_safety_margin_m
+            )
+    if (
+        v_mps > _MOTION_EPSILON
+        and min_clearance <= config.local_escape_trigger_clearance_m
+    ):
+        collision = True
 
-        start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
-        approach_scoring = start_distance <= abs(v_mps) * config.rollout_horizon_ns / 1e9
-        score_x, score_y, score_yaw = _goal_progress_pose(estimate, goal, samples, approach_scoring=approach_scoring)
-        final_distance = math.hypot(goal.x_m - score_x, goal.y_m - score_y)
-        progress = _clamp_signed(
-            (start_distance - final_distance) / max(start_distance, 1e-9)
-        )
-        progress_potential = _trajectory_progress_potential(
-            estimate, goal, score_x, score_y, score_yaw, progress,
-            max_omega_rad_s * config.rollout_horizon_ns / 1e9,
-            approach_scoring=approach_scoring,
-        )
-        progress_viable = (
-            progress_potential + 1e-12 >= config.progress_viability_floor
-        )
-        linear_change = abs(v_mps - estimate.v_mps) / max(max_v_mps, 1e-9)
-        angular_change = abs(omega_rad_s - estimate.omega_rad_s) / max(
-            max_omega_rad_s,
-            1e-9,
-        )
-        smoothness = max(
-            0.0,
-            1.0 - min(1.0, 0.5 * (linear_change + angular_change)),
-        )
-        novelty = sum(
+    start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
+    approach_scoring = start_distance <= abs(v_mps) * config.rollout_horizon_ns / 1e9
+    score_x, score_y, score_yaw = _goal_progress_pose(estimate, goal, samples, approach_scoring=approach_scoring)
+    final_distance = math.hypot(goal.x_m - score_x, goal.y_m - score_y)
+    progress = _clamp_signed(
+        (start_distance - final_distance) / max(start_distance, 1e-9)
+    )
+    progress_potential = _trajectory_progress_potential(
+        estimate, goal, score_x, score_y, score_yaw, progress,
+        max_omega_rad_s * config.rollout_horizon_ns / 1e9,
+        approach_scoring=approach_scoring,
+    )
+    progress_viable = (
+        progress_potential + 1e-12 >= config.progress_viability_floor
+    )
+    linear_change = abs(v_mps - estimate.v_mps) / max(max_v_mps, 1e-9)
+    angular_change = abs(omega_rad_s - estimate.omega_rad_s) / max(
+        max_omega_rad_s,
+        1e-9,
+    )
+    smoothness = max(
+        0.0,
+        1.0 - min(1.0, 0.5 * (linear_change + angular_change)),
+    )
+    novelty = sum(
+        1.0
+        / (
             1.0
-            / (
-                1.0
-                + coverage.get(self._coverage_key(sample.x_m, sample.y_m), 0)
-            )
-            for sample in samples
-        ) / len(samples)
-        bounded_clearance = min(
-            config.clearance_score_cap_m,
-            max(0.0, min_clearance),
+            + coverage.get(_bucket_key(sample.x_m, sample.y_m, config.coverage_cell_size_m), 0)
         )
-        clearance_score = _trajectory_clearance_score(
-            bounded_clearance, v_mps, config
-        )
-        clearance_penalty = _trajectory_clearance_penalty(
-            clearance_score, v_mps, config
-        )
-        total_score = (
-            config.progress_weight * progress_potential
-            + config.clearance_weight * clearance_score
-            + config.smoothness_weight * smoothness
-            + config.novelty_weight * novelty
-            - config.speed_clearance_penalty_weight * clearance_penalty
-            - config.localization_observability_weight * (1.0-estimate.localization_quality.observability)
-            * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
-        )
-        return TrajectoryEvaluation(
-            candidate_id=f"trajectory-{linear_index:02d}-{angular_index:02d}",
-            v_mps=v_mps,
-            omega_rad_s=omega_rad_s,
-            horizon_ns=config.rollout_horizon_ns,
-            samples=tuple(samples),
-            collision=collision,
-            min_clearance_m=bounded_clearance,
-            progress_score=progress,
-            progress_potential_score=progress_potential,
-            progress_viable=progress_viable,
-            smoothness_score=smoothness,
-            novelty_score=novelty,
-            total_score=total_score,
-        )
+        for sample in samples
+    ) / len(samples)
+    bounded_clearance = min(
+        config.clearance_score_cap_m,
+        max(0.0, min_clearance),
+    )
+    clearance_score = _trajectory_clearance_score(
+        bounded_clearance, v_mps, config
+    )
+    clearance_penalty = _trajectory_clearance_penalty(
+        clearance_score, v_mps, config
+    )
+    total_score = (
+        config.progress_weight * progress_potential
+        + config.clearance_weight * clearance_score
+        + config.smoothness_weight * smoothness
+        + config.novelty_weight * novelty
+        - config.speed_clearance_penalty_weight * clearance_penalty
+        - config.localization_observability_weight * (1.0-estimate.localization_quality.observability)
+        * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
+    )
+    return TrajectoryEvaluation(
+        candidate_id=f"trajectory-{linear_index:02d}-{angular_index:02d}",
+        v_mps=v_mps,
+        omega_rad_s=omega_rad_s,
+        horizon_ns=config.rollout_horizon_ns,
+        samples=tuple(samples),
+        collision=collision,
+        min_clearance_m=bounded_clearance,
+        progress_score=progress,
+        progress_potential_score=progress_potential,
+        progress_viable=progress_viable,
+        smoothness_score=smoothness,
+        novelty_score=novelty,
+        total_score=total_score,
+    )
 
 
 def _goal_progress_pose(estimate: RobotEstimate, goal: Waypoint,
