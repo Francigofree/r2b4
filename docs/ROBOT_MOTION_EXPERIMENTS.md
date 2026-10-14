@@ -137,3 +137,59 @@ ideje külön mezőben marad a host publikációs idejétől. A per-trial 50 Hz-
 capture tartalmazza az exact replayhez szükséges natív inputot. Élő üzemben
 a meglévő 10 Hz-es behavior capture rögzíti a natív scalar állapotot és a
 tanulási eseményeket.
+
+Az élő tanulás teljes folyamatához a `full` módú, 10 Hz-es capture session
+már az engedélykérés előtt induljon. A mérési MCAP-ot az explicit compiler
+előtt le kell zárni; az ezt követő értékelési események rögzítéséhez újabb
+aktív 10 Hz-es session szükséges. A session-határokon a megőrzött host
+journal, run/source/clock azonosítók és artifact-hivatkozások kötik össze
+az eseményeket. A public-runtime journal követője a session kezdetén
+az aktuális fájlvéghez áll; a korábban publikált engedélykérési eseményt
+nem importálja történeti adatként. A voice/HRI út meglévő, azonos boothoz
+kötött 60 másodperces lookbackje korábbi eseményeket is megőrizhet, de a
+teljes tanulási folyamat rögzítéséhez az aktív session szükséges. A capture
+indítása önmagában nem mozgásengedély; mozgás továbbra is csak a konkrét,
+felülvizsgált próbára adott felhasználói engedély után indulhat.
+
+## Fejlesztési bizonyítás, 2026-10-14
+
+A valódi SDK/socket → skill-worker → Brain → canonical gateway → V3
+láncon egy 0,1 m-t kérő baseline-t javítottunk 0,4 m-t kérő skillre.
+A független cél mindkét környezetben 0,4 m volt, azonos seed mellett;
+csak a kerékválasz időállandója változott 0,08-ról 0,10 másodpercre.
+A javítást egy determinisztikus, scripted AgentCore modellválasz adta:
+ez az integráció és a mérési döntés bizonyítása, nem a valódi LLM
+általános javítási képességének minősítése.
+
+| Környezet | Baseline végponti hiba | Javított és újrahasznált skill hibája |
+| --- | ---: | ---: |
+| Névleges | 0,2931 m | 0,0226 m |
+| Lassabb kerékválasz | 0,2890 m | 0,0181 m |
+
+Hat teljes, eredeti source-hoz és eredményhez kötött mérés készült.
+Mind a hat 50 Hz-es native replay `VERIFIED MATCH`. A páros összevetés
+`IMPROVED`, két eltérő fizikai környezet-fingerprinttel. Egy javító
+modellhívás történt; a megfelelő baseline újrahasználata nulla hívást
+igényelt. Mindkét teljes learning MCAP 10 Hz-es és veszteségmentes,
+kezdés/iteráció/mérés/lezárás eseményekkel; a javító futás az összevetést
+is rögzítette. A végső státusz
+`LIVE_VALIDATION_REQUIRED`, fizikai robotmozgás nélkül.
+
+A relatív SDK próba külön igazolja, hogy 0,1 m célra a canonical 0,01 m
+céltűrés jut el a natív commandba, a fordulás relatív yaw-tűrése is
+megmarad, és a kezdeti/cél/végső pose azonos lokális keretben van.
+A simulator polling producer-vesztését kis pufferrel, eredeti journal
+és MCAP sequence/id/time egyezéssel ellenőriztük. A live feedback
+FAILED/CANCELLED/FAULT és hiányos eseményscan esetén sem ad pozitív sikert.
+
+Két meglévő 2026-10-14-i production capture és EVI forrásellenőrzése
+`PASS`, 10 Hz-es teljes behavior scope-pal. Skill-terminal,
+`run_id`/`source_hash` és lezárt skill-időablak hiányában scope-juk
+`CAPTURE_WIDE`; belőlük skillfejlődés vagy fizikai pontosság nem igazolt.
+
+A célzott fejlesztői tesztek mellett a canonical kis gate 14 tesztje és
+a közös production boundary-k release gate-je 23 teszttel sikeres volt.
+A végső simulator pack mind a 16 célzott esete sikeres; az új live feedback
+eseményscan-határ a 9 célzott verdict-esettel együtt igazolt.
+Fizikai modellhűség, élő funkcionális javulás és nem tesztelt környezetekben
+való általánosíthatóság továbbra is külön mérési feladat.

@@ -229,17 +229,19 @@ def test_actual_simulated_capture_cannot_validate_live_robot_motion(learning_roo
     assert full["data"] == "VERIFIED"
 
 
-@pytest.mark.parametrize("terminal_state,safety_decision,safety_reason,action_status,expected", [
-    ("SUCCEEDED", "ALLOW", None, "COMPLETED", "PASSED"),
-    ("SUCCEEDED", "STOP", "NOT_ACTIVE", "COMPLETED", "PASSED"),
-    ("FAILED", "ALLOW", None, "COMPLETED", "FAILED"),
-    ("CANCELLED", "ALLOW", None, "COMPLETED", "FAILED"),
-    ("SUCCEEDED", "FAULT", "CRITICAL_DEVICE_FAILED", "COMPLETED", "FAILED"),
-    ("SUCCEEDED", "STOP", "LIDAR_CLEARANCE_LOW", "COMPLETED", "FAILED"),
-    ("SUCCEEDED", "ALLOW", None, "INTERRUPTED", "FAILED"),
+@pytest.mark.parametrize("terminal_state,safety_decision,safety_reason,action_status,event_count,expected", [
+    ("SUCCEEDED", "ALLOW", None, "COMPLETED", 1, "PASSED"),
+    ("SUCCEEDED", "STOP", "NOT_ACTIVE", "COMPLETED", 1, "PASSED"),
+    ("FAILED", "ALLOW", None, "COMPLETED", 1, "FAILED"),
+    ("CANCELLED", "ALLOW", None, "COMPLETED", 1, "FAILED"),
+    ("SUCCEEDED", "FAULT", "CRITICAL_DEVICE_FAILED", "COMPLETED", 1, "FAILED"),
+    ("SUCCEEDED", "STOP", "LIDAR_CLEARANCE_LOW", "COMPLETED", 1, "FAILED"),
+    ("SUCCEEDED", "ALLOW", None, "INTERRUPTED", 1, "FAILED"),
+    ("SUCCEEDED", "ALLOW", None, "COMPLETED", 4096, "PASSED"),
+    ("SUCCEEDED", "ALLOW", None, "INTERRUPTED", 4098, "EVIDENCE_BLOCKED"),
 ])
 def test_passing_live_metric_cannot_hide_terminal_fault_or_interrupted_action(
-        learning_root, monkeypatch, terminal_state, safety_decision, safety_reason, action_status, expected):
+        learning_root, monkeypatch, terminal_state, safety_decision, safety_reason, action_status, event_count, expected):
     from r2b4_orchestration import agent_evidence_tools
     from tools.mcap_evidence.reader import EvidenceBundle
     from v3 import mcap_reader
@@ -269,7 +271,11 @@ def test_passing_live_metric_cannot_hide_terminal_fault_or_interrupted_action(
     monkeypatch.setattr(mcap_reader, "McapReader", Reader)
 
     class Bundle:
-        def iter_view(self, view, **_kwargs):
+        def view_count(self, view):
+            assert view == "events"
+            return event_count
+
+        def iter_view(self, view, **kwargs):
             if view == "ticks":
                 # Actual motion first, then a failed boundary. A small tracking
                 # error on the earlier motion must not turn that run successful.
@@ -278,10 +284,14 @@ def test_passing_live_metric_cannot_hide_terminal_fault_or_interrupted_action(
                         "expected": {"layers": {"L12": {"left_output": .3, "right_output": .3,
                             "safety_decision": decision, "reason": reason}, "L3": {"local_v_mps": .2}}}})
             elif view == "events":
-                yield SimpleNamespace(payload={"source_topic": PUBLIC_RUNTIME_EVENT_TOPIC, "payload": {
-                    "kind": "interface", "clock_epoch": "source-boot", "value": {
-                        "kind": "ACTION_RESULT", "action": "v3.command.move_relative", "measurement_time_ns": 200,
-                        "status": action_status, "reason": "SAFETY_STOP" if action_status == "INTERRUPTED" else None}}})
+                # A failure after the old 4097-row scan must block a positive
+                # verdict even though the preceding metrics and events pass.
+                for index in range(min(event_count, kwargs.get("limit", event_count))):
+                    status = action_status if index == event_count - 1 else "COMPLETED"
+                    yield SimpleNamespace(payload={"source_topic": PUBLIC_RUNTIME_EVENT_TOPIC, "payload": {
+                        "kind": "interface", "clock_epoch": "source-boot", "value": {
+                            "kind": "ACTION_RESULT", "action": "v3.command.move_relative", "measurement_time_ns": 200,
+                            "status": status, "reason": "SAFETY_STOP" if status == "INTERRUPTED" else None}}})
 
     monkeypatch.setattr(EvidenceBundle, "open", lambda *args, **kwargs: Bundle())
     result = handlers(root)["learning.live_feedback"]({"evidence": "explicit.evidence", "capture": "explicit.mcap",
@@ -289,6 +299,8 @@ def test_passing_live_metric_cannot_hide_terminal_fault_or_interrupted_action(
     assert result["checks"][0]["passed"] is True
     assert result["status"] == expected
     assert result["goal_satisfaction"] == ("ASSESSED_BY_LIVE_METRICS" if expected == "PASSED" else "UNASSESSED")
+    if event_count > 4096:
+        assert result["reason"] == "LIVE_EVENT_SCAN_INCOMPLETE"
 
 
 def test_actual_learning_cli_records_model_and_final_events_in_full_10hz_capture(learning_root):

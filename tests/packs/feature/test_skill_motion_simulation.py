@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,7 @@ from r2b4_orchestration.skill_library import SkillLibrary
 from r2b4_orchestration.skill_simulation import MotorlessSkillSimulator, compare_trials
 from r2b4_orchestration.motion_simulation import motion_scenario, next_motion_experiment
 from v3.mcap_reader import McapReader
-from v3.mcap_capture import EVENT_TOPIC
+from v3.mcap_capture import EVENT_TOPIC, TICK_TOPIC
 from v3.public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
 
 
@@ -22,6 +23,39 @@ MOVE = '''async def run(robot):
     scenario = await robot.read("simulation.scenario")
     return await robot.call("v3.command.move_relative", forward_m=scenario["goal"]["x_m"], max_v_mps=.2)
 '''
+
+
+def test_relative_sdk_motion_keeps_frame_and_canonical_completion_tolerances(tmp_path):
+    from v3.config import ConfigResolver
+    from v3.finite_navigation import _RELATIVE_COMPLETION_ERROR_FRACTION
+    library = SkillLibrary(tmp_path / "skills")
+    library.create("relative_probe", '''async def run(robot):
+    moved = await robot.call("v3.command.move_relative", forward_m=.1, max_v_mps=.2)
+    turned = await robot.call("v3.command.turn_by", angle_deg=15)
+    return {"moved": moved, "turned": turned}
+''')
+    scenario = {**SCENARIO, "goal": {"x_m": .1, "y_m": 0., "yaw_rad": math.radians(15)}}
+    with MotorlessSkillSimulator(ROOT, library) as simulator:
+        trial = simulator.trial("relative_probe", {}, scenario, timeout_s=30)
+    assert trial["runtime"]["state"] == "SUCCEEDED", trial["runtime"]
+    assert trial["assessment"]["status"] == "PASSED", trial["assessment"]
+    commands = trial["performance"]["commands"]
+    assert len(commands) == 2 and all(row["status"] == "COMPLETED" for row in commands)
+    for command in commands:
+        assert {command[key]["frame_id"] for key in ("start_pose", "target_pose", "final_pose")} == {"R2B4_ODOM_LOCAL"}
+    moved = commands[0]
+    assert math.hypot(moved["final_pose"]["x_m"]-moved["target_pose"]["x_m"],
+                      moved["final_pose"]["y_m"]-moved["target_pose"]["y_m"]) <= .1*_RELATIVE_COMPLETION_ERROR_FRACTION
+    constraints = {}
+    for message in McapReader(trial["capture"]).iter_messages(topics=(TICK_TOPIC,)):
+        mission = message.json()["expected"]["layers"]["L5"]
+        if mission["mode"] == "NAVIGATE":
+            constraints.setdefault(mission["mission_id"], mission["constraints"])
+    assert constraints[moved["mission_id"]]["goal_tolerance_m"] == pytest.approx(.1*_RELATIVE_COMPLETION_ERROR_FRACTION)
+    turned = commands[1]
+    assert constraints[turned["mission_id"]]["yaw_tolerance_rad"] == pytest.approx(math.radians(15)*_RELATIVE_COMPLETION_ERROR_FRACTION)
+    control = ConfigResolver.for_project(ROOT).resolve().runtime.composition.live_control.control
+    assert constraints[turned["mission_id"]]["max_omega_rad_s"] >= control.navigation.wheel_limits.target_center_spin_rad_s
 
 
 def test_saved_motion_skill_has_independent_truth_native_replay_and_complete_learning_events(tmp_path):

@@ -535,9 +535,11 @@ def build_learning_tools(project_root: Path, *, interface=None, event_sink=None)
         execution_failure = native_failure or execution_failure
         if not blocker and not timing_bound:
             blocker = "DIAG_SCOPE_NOT_BOUND_TO_SKILL_RUN"
-        if timing_bound:
+        if timing_bound and bundle.view_count("events") > 4096:
+            blocker = blocker or "LIVE_EVENT_SCAN_INCOMPLETE"
+        elif timing_bound:
             from v3.public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
-            for row in bundle.iter_view("events", limit=4097):
+            for row in bundle.iter_view("events", limit=4096):
                 envelope = row.payload
                 if not isinstance(envelope, Mapping) or envelope.get("source_topic") != PUBLIC_RUNTIME_EVENT_TOPIC:
                     continue

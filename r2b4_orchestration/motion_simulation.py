@@ -302,7 +302,7 @@ class DifferentialDriveExperiment:
         if self.fault_layer:
             raise RuntimeError("SIMULATION_FAULT_REQUIRES_NEW_TRIAL")
         pose = self.status["estimate"]["local_pose"]
-        start_pose = {key: pose[key] for key in ("x_m", "y_m", "yaw_rad")}
+        start_pose = {key: pose[key] for key in ("frame_id", "x_m", "y_m", "yaw_rad")}
         yaw = start_pose["yaw_rad"]
         if action == "v3.command.navigate":
             if params.pop("frame_id", "R2B4_ODOM_LOCAL") != "R2B4_ODOM_LOCAL":
@@ -319,6 +319,7 @@ class DifferentialDriveExperiment:
                 target["yaw_rad"] = _wrap(yaw+math.radians(_number(params["angle_deg"], "angle_deg", -180., 180.)))
             elif "final_yaw_rad" in params:
                 target["yaw_rad"] = _wrap(yaw+_number(params["final_yaw_rad"], "final_yaw_rad"))
+        target["frame_id"] = start_pose["frame_id"]
         max_v = _number(params.get("max_v_mps", .2), "max_v_mps", .01, .5)
         max_omega = _number(params.get("max_omega_rad_s", min(1.2, self.config.navigation.wheel_limits.target_center_spin_rad_s)), "max_omega_rad_s", .01, 1.2)
         goal_tolerance = self.config.mission.default_constraints.goal_tolerance_m
@@ -339,7 +340,7 @@ class DifferentialDriveExperiment:
             with self._lock:
                 if self._cancelled.is_set():
                     break
-                self.client.publish_navigate(command_id, **target, frame_id="R2B4_ODOM_LOCAL",
+                self.client.publish_navigate(command_id, **target,
                     max_v_mps=max_v, max_omega_rad_s=max_omega, ttl_ns=200_000_000,
                     goal_tolerance_m=goal_tolerance, yaw_tolerance_rad=yaw_tolerance)
                 result = self.step(active=True)
@@ -356,14 +357,14 @@ class DifferentialDriveExperiment:
         if self._cancelled.is_set():
             reason = "CANCELLED"
         self.stop()
-        final = self.status["estimate"]
+        final = self.status["estimate"]["local_pose"]
         result = {"status": "COMPLETED" if reason == "GOAL_REACHED" else "FAILED", "reason": reason,
             "command_id": command_id, "mission_id": "mission-"+command_id, "source": "simulation",
             "physical_output": False, "elapsed_s": (self.now_ns-started)/1e9,
             "request_measurement_monotonic_ns": started, "completion_status_monotonic_ns": self.now_ns,
             "request_tick_id": start_tick, "clock_domain": "simulation_monotonic",
             "start_pose": start_pose, "target_pose": target,
-            "final_pose": {key: final[key] for key in ("x_m", "y_m", "yaw_rad")}}
+            "final_pose": {key: final[key] for key in ("frame_id", "x_m", "y_m", "yaw_rad")}}
         self.commands.append({"action": action, "parameters": dict(parameters), **result})
         self.event("simulation_motion_completed", result)
         return result
