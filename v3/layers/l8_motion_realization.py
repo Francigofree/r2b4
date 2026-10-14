@@ -185,6 +185,19 @@ class MotionRealizer:
             max_v_mps=objective.constraints.max_v_mps,
             max_omega_rad_s=objective.constraints.max_omega_rad_s,
         )
+        proof = objective.geometry_proof
+        if (proof is not None and proof.maneuver_bounds is not None
+                and proof.usable_at(objective.context, objective.validity)):
+            low_v, high_v, low_omega, high_omega = proof.maneuver_bounds
+            requested_v_mps = min(high_v, max(low_v, requested_v_mps))
+            requested_omega_rad_s = min(high_omega, max(low_omega, requested_omega_rad_s))
+            # Projection can approach the calibrated deadband. Reapply the
+            # physical envelope; L9 independently checks the resulting ramp.
+            requested_v_mps, requested_omega_rad_s = self._config.wheel_limits.constrain(
+                requested_v_mps, requested_omega_rad_s,
+                max_v_mps=objective.constraints.max_v_mps,
+                max_omega_rad_s=objective.constraints.max_omega_rad_s,
+            )
         return MotionIntent(
             context=objective.context,
             requested_v_mps=requested_v_mps,

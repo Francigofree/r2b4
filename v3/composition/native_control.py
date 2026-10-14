@@ -352,11 +352,14 @@ class NativeControlComposition:
 
     @property
     def tick_evidence(self) -> tuple[object, ...]:
-        """Expose bounded EKF facts plus any caught L1-L11 exception detail."""
+        """Expose bounded EKF, wheel-feedback and caught exception facts."""
 
         follow = self._navigation.follow_person_evidence
         follow_evidence = () if follow is None else (follow,)
-        return self._estimator.last_update_evidence + self._engine.fault_evidence + follow_evidence
+        feedback = self._actuator_control.feedback_evidence
+        feedback_evidence = (() if feedback is None or feedback.context != self._engine.checkpoint()
+                             else (feedback,))
+        return self._estimator.last_update_evidence + self._engine.fault_evidence + follow_evidence + feedback_evidence
 
     def set_timing_observer(
         self, observer: Callable[[str, int], None] | None

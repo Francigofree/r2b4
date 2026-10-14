@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from v3.adapters.gpio_motor import (
     GpioMotorFrameSink,
     GpioMotorFrameSinkConfig,
@@ -51,6 +53,11 @@ class NativeMotorOutputComposition:
         if self.closed:
             raise OSError("the native motor output composition is closed")
         self._writer.write(command)
+
+    def set_timing_observer(self, observer: Callable[[str, int], None] | None) -> None:
+        """Forward passive timing over the sole normal motor writer."""
+
+        self._writer.set_timing_observer(observer)
 
     def close(self) -> None:
         """Zero the physical output and release the owned handle once."""

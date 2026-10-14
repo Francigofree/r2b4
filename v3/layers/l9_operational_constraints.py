@@ -174,8 +174,8 @@ class OperationalConstraintLayer:
             if altered and (allowed_v_mps != 0.0 or allowed_omega_rad_s != 0.0):
                 proof = motion.geometry_proof
                 if (proof is None or not proof.usable_at(motion.context, motion.motion_validity)
-                        or not proof.covers(allowed_v_mps)
-                        or (motion.transition_allowed and not proof.covers(previous_v))):
+                        or not proof.covers(allowed_v_mps, allowed_omega_rad_s)
+                        or (motion.transition_allowed and not proof.covers(previous_v, previous_omega))):
                     return self._stop(motion, (ConstraintCode.LOCAL_CLEARANCE,))
         transition = motion.transition_allowed and ConstraintCode.ACCELERATION_LIMIT in codes and dt_s > 0.0
         subfloor = any(1e-12 < abs(w) < self._config.wheel_limits.minimum_mps - 1e-12

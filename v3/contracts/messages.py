@@ -755,7 +755,7 @@ class MotionValidity:
 
 @dataclass(frozen=True, slots=True)
 class LocalMotionProof:
-    """L6's current rotation-safe free-displacement bound, consumed by L9.
+    """L6's current free-displacement or escape sweep bound, consumed by L9.
 
     No obstacle payload or upstream control state crosses this forward edge.
     Expiry governs admission; horizon bounds the next control-gap movement.
@@ -769,6 +769,9 @@ class LocalMotionProof:
     valid_until_ns: int
     horizon_ns: int
     max_displacement_m: float
+    # A compact velocity box proved for the whole next control gap. Unlike
+    # the free circle, it admits only the certified pivot/reverse family.
+    maneuver_bounds: tuple[float, float, float, float] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.context, TickContext):
@@ -782,6 +785,14 @@ class LocalMotionProof:
                 or self.geometry_captured_ns > self.context.monotonic_ns
                 or self.valid_until_ns < self.context.monotonic_ns):
             raise ContractValidationError("invalid local motion proof bounds")
+        if self.maneuver_bounds is not None:
+            if not isinstance(self.maneuver_bounds, tuple) or len(self.maneuver_bounds) != 4:
+                raise ContractValidationError("maneuver bounds require v/omega intervals")
+            for value in self.maneuver_bounds:
+                require_finite(value, "proof.maneuver_bound")
+            low_v, high_v, low_omega, high_omega = self.maneuver_bounds
+            if not low_v <= 0.0 <= high_v or not low_omega <= 0.0 <= high_omega:
+                raise ContractValidationError("maneuver bounds must include zero")
 
     def usable_at(self, context: TickContext, validity: MotionValidity | None) -> bool:
         return (validity is not None and validity.usable_at(context)
@@ -789,7 +800,13 @@ class LocalMotionProof:
                 and self.frame_id == validity.frame_id and self.scope == validity.scope
                 and context.monotonic_ns <= self.valid_until_ns <= validity.valid_until_ns)
 
-    def covers(self, v_mps: float) -> bool:
+    def covers(self, v_mps: float, omega_rad_s: float | None = None) -> bool:
+        if self.maneuver_bounds is not None:
+            if omega_rad_s is None:
+                return False
+            low_v, high_v, low_omega, high_omega = self.maneuver_bounds
+            return (low_v - 1e-12 <= v_mps <= high_v + 1e-12
+                    and low_omega - 1e-12 <= omega_rad_s <= high_omega + 1e-12)
         # The certified robot circle permits every heading; only translation
         # consumes its displacement radius. L9 still enforces angular caps.
         return abs(v_mps) * self.horizon_ns / 1e9 <= self.max_displacement_m + 1e-12

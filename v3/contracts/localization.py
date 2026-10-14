@@ -75,13 +75,29 @@ class LocalizationQuality:
     relative_age_ns: int = 2**63-1
     slip_suspected: bool = False
     observability: float = 0.0
+    # Passive evidence: the existing consistency scalar is accumulated bias,
+    # while these errors belong to one accepted independent scan interval.
+    relative_interval_translation_error_m: float | None = None
+    relative_interval_yaw_error_rad: float | None = None
+    accumulated_yaw_error_rad: float | None = None
+    relative_interval_start_ns: int | None = None
+    relative_interval_end_ns: int | None = None
+    relative_interval_source_sequence: int | None = None
+    relative_interval_source_id: str | None = None
+    # This tick's L3 boundary result; NO_ADMITTED_FIX does not identify why
+    # the producer/L2 supplied no pose. Accepted fix age remains independent.
+    global_fix_status: str = "NO_ADMITTED_FIX"
+    global_fix_measurement_ns: int | None = None
+    global_fix_source_sequence: int | None = None
+    global_fix_last_accepted_ns: int | None = None
 
     def __post_init__(self) -> None:
         for name in ("local_translation", "heading", "global_position"):
             if not isinstance(getattr(self, name), QualityState):
                 raise ContractValidationError("invalid localization quality state")
         for name in ("local_sigma_m", "global_sigma_m", "yaw_sigma_rad", "observability",
-                     "lidar_relative_consistency_m", "encoder_lidar_consistency_m"):
+                     "lidar_relative_consistency_m", "encoder_lidar_consistency_m",
+                     "relative_interval_translation_error_m"):
             value = getattr(self, name)
             if value is not None:
                 require_finite(value, name)
@@ -96,3 +112,24 @@ class LocalizationQuality:
                 raise ContractValidationError(f"invalid {name}")
         if self.observability > 1.0:
             raise ContractValidationError("observability exceeds one")
+        for name in ("relative_interval_yaw_error_rad", "accumulated_yaw_error_rad"):
+            value = getattr(self, name)
+            if value is not None:
+                require_finite(value, name)
+        for name in ("relative_interval_start_ns", "relative_interval_end_ns",
+                     "relative_interval_source_sequence", "global_fix_measurement_ns",
+                     "global_fix_source_sequence", "global_fix_last_accepted_ns"):
+            value = getattr(self, name)
+            if value is not None and (type(value) is not int or value < 0):
+                raise ContractValidationError(f"invalid {name}")
+        if (self.relative_interval_start_ns is not None
+                and self.relative_interval_end_ns is not None
+                and self.relative_interval_start_ns >= self.relative_interval_end_ns):
+            raise ContractValidationError("invalid relative interval")
+        if self.relative_interval_source_id is not None:
+            require_token(self.relative_interval_source_id, "relative_interval_source_id")
+        if self.global_fix_status not in {
+            "NO_ADMITTED_FIX", "INVALID_MEASUREMENT_TIME", "STALE",
+            "LOCAL_HISTORY_MISSING", "NIS_REJECTED", "ACCEPTED",
+        }:
+            raise ContractValidationError("invalid global_fix_status")

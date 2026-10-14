@@ -1309,6 +1309,8 @@ class NativeEstimatorStateCheckpoint:
     relative_failure: ConsistencyFailure | None = None
     last_relative_start_ns: int | None = None
     wheel_gyro_qualification: str = "UNQUALIFIED"
+    last_relative_source_sequence: int | None = None
+    last_relative_source_id: str | None = None
 
 
 class NativeStateEstimator:
@@ -1341,6 +1343,8 @@ class NativeStateEstimator:
         self._wheel_failure = self._relative_failure = None
         self._last_relative_start_ns = None
         self._wheel_gyro_qualification = "UNQUALIFIED"
+        self._last_relative_source_sequence = None
+        self._last_relative_source_id = None
 
     @property
     def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
@@ -1358,6 +1362,7 @@ class NativeStateEstimator:
             self._local_loss_relative_ns, self._relative_yaw_error_rad,
             self._wheel_failure, self._relative_failure,
             self._last_relative_start_ns, self._wheel_gyro_qualification,
+            self._last_relative_source_sequence, self._last_relative_source_id,
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -1414,6 +1419,15 @@ class NativeStateEstimator:
             self._wheel_failure = self._relative_failure = None
             self._last_relative_start_ns = None
             self._local_loss_relative_ns = now
+            self._last_relative_source_sequence = None
+            self._last_relative_source_id = None
+        # Record this tick's global-fix boundary before filtering stale inputs.
+        # A missing admitted observation cannot diagnose producer/L2 rejection.
+        received_lidar = _optional_observation(frame, "lidar_pose")
+        global_fix_status = "NO_ADMITTED_FIX"
+        if received_lidar is not None:
+            age = now - received_lidar.captured_monotonic_ns
+            global_fix_status = "INVALID_MEASUREMENT_TIME" if age < 0 else "STALE"
         # Consumer freshness is evaluated here, even when L2 admits no new event.
         fresh = tuple(o for o in frame.accepted if 0 <= now-o.captured_monotonic_ns <= self._config.max_measurement_age_ns)
         frame = replace(frame, accepted=fresh)
@@ -1497,6 +1511,7 @@ class NativeStateEstimator:
         if lidar is not None:
             measured_local = self._pose_at(lidar.captured_monotonic_ns)
             if measured_local is None:
+                global_fix_status = "LOCAL_HISTORY_MISSING"
                 frame = replace(frame, accepted=tuple(o for o in fresh if o.kind != "lidar_pose"))
             else:
                 values = {v.key: v.value for v in lidar.values}
@@ -1528,9 +1543,11 @@ class NativeStateEstimator:
             )
 
         global_estimate = self._global(frame)
-        if any(e.update_type == "LIDAR_POSE" and e.accepted for e in self.last_update_evidence):
+        correction = next((e for e in self.last_update_evidence if e.update_type == "LIDAR_POSE"), None)
+        if correction is not None:
+            global_fix_status = "ACCEPTED" if correction.accepted else "NIS_REJECTED"
+        if correction is not None and correction.accepted:
             self._last_fix_ns = lidar.captured_monotonic_ns
-            correction = next(e for e in self.last_update_evidence if e.update_type == "LIDAR_POSE" and e.accepted)
             if math.hypot(*correction.innovation[:2]) > .05 or abs(correction.innovation[2]) > .03:
                 self._transform_revision += 1
         global_pose = Pose2D(self._config.frame_id, global_estimate.x_m, global_estimate.y_m, global_estimate.yaw_rad)
@@ -1621,7 +1638,23 @@ class NativeStateEstimator:
         quality = LocalizationQuality(local_state, heading_state, global_state, sigma, global_sigma,
             yaw_sigma, encoder_age, imu_age, lidar_age, fix_age, continuous, not continuous,
             self._relative_rmse_m, disagreement if self._last_relative_ns is not None else None,
-            self._generation, relative_age, self._slip_suspected, self._observability)
+            self._generation, relative_age, self._slip_suspected, self._observability,
+            relative_interval_translation_error_m=(
+                self._relative_translation_error_m if self._last_relative_ns is not None else None),
+            relative_interval_yaw_error_rad=(
+                self._relative_yaw_error_rad if self._last_relative_ns is not None else None),
+            accumulated_yaw_error_rad=(
+                self._consistency_yaw_rad if self._last_relative_ns is not None else None),
+            relative_interval_start_ns=self._last_relative_start_ns,
+            relative_interval_end_ns=self._last_relative_ns,
+            relative_interval_source_sequence=self._last_relative_source_sequence,
+            relative_interval_source_id=self._last_relative_source_id,
+            global_fix_status=global_fix_status,
+            global_fix_measurement_ns=(
+                received_lidar.captured_monotonic_ns if received_lidar is not None else None),
+            global_fix_source_sequence=(
+                received_lidar.source_sequence if received_lidar is not None else None),
+            global_fix_last_accepted_ns=self._last_fix_ns)
         return replace(global_estimate, local_pose=pose, global_pose=global_pose,
                        map_to_odom=transform, localization_quality=quality,
                        transform_revision=self._transform_revision,
@@ -1676,6 +1709,8 @@ class NativeStateEstimator:
         self._relative_rmse_m = _numeric_value(observation, "rmse_m")
         self._last_relative_ns = end_ns
         self._last_relative_start_ns = start_ns
+        self._last_relative_source_sequence = observation.source_sequence
+        self._last_relative_source_id = observation.source_device_id
         self._unverified_sigma_m = .01 + self._relative_rmse_m
         failed = (abs(error_yaw) > cfg.relative_yaw_slip_rad
                   or math.hypot(error_x, error_y) > cfg.consistency_lost_m)

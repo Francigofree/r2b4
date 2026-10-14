@@ -271,18 +271,19 @@ _HISTOGRAM_STEP_NS = 100_000  # 0.1 ms resolution
 _HISTOGRAM_MAX_NS = 100_000_000  # 100 ms + overflow bin
 
 # These are code-region elapsed-time labels, not V3 contracts or replay state.
-# PIPELINE_TOTAL intentionally overlaps L1-L12.
+# PIPELINE_TOTAL intentionally overlaps L1-L12; MOTOR_WRITE is inside L12.
 CONTROL_PHASE_ORDER = (
     "L0_READ",
     "COMMAND_SNAPSHOT",
     "PIPELINE_TOTAL",
     *(f"L{index}" for index in range(1, 13)),
+    "MOTOR_WRITE",
     "POST_CONTROL",
     "ASYNC_L6_DISPATCH",
     "CAPTURE_CHECKPOINT",
     "CAPTURE_TAP",
     *(name + "_CPU" for name in ("L0_READ", "COMMAND_SNAPSHOT", "PIPELINE_TOTAL",
-                                 *(f"L{i}" for i in range(1, 13)), "POST_CONTROL")),
+                                 *(f"L{i}" for i in range(1, 13)), "MOTOR_WRITE", "POST_CONTROL")),
 )
 
 
@@ -396,6 +397,7 @@ class RuntimeTimingEvidence:
                 "scope": "NORMAL_TICKS_ONLY",
                 "causal_claim": False,
                 "pipeline_total_overlaps_layers": True,
+                "motor_write_overlaps_l12": True,
                 "note": (
                     "Code-region elapsed wall time; *_CPU uses time.thread_time_ns. "
                     "Wall minus thread CPU includes blocking, GIL waits and scheduler "

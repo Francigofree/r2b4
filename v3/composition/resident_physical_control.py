@@ -106,6 +106,7 @@ class ResidentPhysicalControlComposition:
     ) -> None:
         """Forward passive resident timing to the live-control composition."""
 
+        self._motor_output.set_timing_observer(observer)
         self._live_control.set_timing_observer(observer)
 
     def tick(self, context: TickContext) -> TickResult:

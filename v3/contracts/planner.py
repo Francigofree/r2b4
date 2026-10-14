@@ -20,6 +20,7 @@ class TrajectoryRolloutRequest:
     max_omega_rad_s: float
     coverage: tuple[tuple[int, int, int], ...]
     allow_exploration_detour: bool = False
+    alternate_goals: tuple[Waypoint, ...] = ()
 
     def __post_init__(self) -> None:
         if self.estimate.context != self.context or self.world.context != self.context:
@@ -28,6 +29,11 @@ class TrajectoryRolloutRequest:
             raise TypeError("goal must be Waypoint")
         if type(self.allow_exploration_detour) is not bool:
             raise TypeError("allow_exploration_detour must be bool")
+        if (not isinstance(self.alternate_goals, tuple) or len(self.alternate_goals) > 3
+                or any(not isinstance(goal, Waypoint) for goal in self.alternate_goals)):
+            raise ValueError("alternate goals must contain at most three Waypoints")
+        if self.alternate_goals and not self.allow_exploration_detour:
+            raise ValueError("alternate goals are only available to local exploration")
         for name in ("max_v_mps", "max_omega_rad_s"):
             value = getattr(self, name)
             if (
@@ -51,10 +57,16 @@ class TrajectoryRolloutRequest:
 class TrajectoryRolloutResult:
     source_context: TickContext
     trajectory_candidates: tuple[TrajectoryEvaluation, ...]
+    selected_goal: Waypoint | None = None
+    goal_reachable: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_context, TickContext):
             raise TypeError("source_context must be TickContext")
+        if self.selected_goal is not None and not isinstance(self.selected_goal, Waypoint):
+            raise TypeError("selected_goal must be a Waypoint or None")
+        if type(self.goal_reachable) is not bool:
+            raise TypeError("goal_reachable must be bool")
         if (
             not isinstance(self.trajectory_candidates, tuple)
             or not self.trajectory_candidates

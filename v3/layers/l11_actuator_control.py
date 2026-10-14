@@ -34,6 +34,49 @@ WHEEL_CURVE_NAMES = (
 _FULL_TRUST_EPSILON = 1e-12
 
 
+@dataclass(frozen=True, slots=True)
+class WheelFeedbackEvidence:
+    """Scalar source/admission/watchdog facts, including the first L11 fault.
+
+    This is passive evidence, never feedback or motion authority. Native raw
+    pulse/fit diagnostics remain on the existing sensor-debug capture path.
+    """
+
+    context: TickContext
+    source_device_id: str | None
+    source_sequence: int | None
+    captured_monotonic_ns: int | None
+    admission_state: str
+    admission_source_sequence: int | None
+    admission_reason: str | None
+    measurement_stale: bool | None
+    measurement_timing_valid: bool | None
+    rejection_code: str | None
+    left_target_mps: float
+    right_target_mps: float
+    left_last_accepted_edge_timestamp_ns: int | None
+    right_last_accepted_edge_timestamp_ns: int | None
+    left_last_accepted_edge_direction: int | None
+    right_last_accepted_edge_direction: int | None
+    left_estimation_timebase: str | None
+    right_estimation_timebase: str | None
+    left_measurement_trust: float | None
+    right_measurement_trust: float | None
+    left_velocity_feedback_ready: bool
+    right_velocity_feedback_ready: bool
+    left_motion_live: bool
+    right_motion_live: bool
+    left_direction_epoch_ns: int | None
+    right_direction_epoch_ns: int | None
+    left_uncertain_since_ns: int | None
+    right_uncertain_since_ns: int | None
+    feedback_uncertain_since_ns: int | None
+    feedback_deadline_ns: int | None
+    feedback_transition_until_ns: int | None
+    error_type: str | None
+    error_message: str | None
+
+
 def _finite_float(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be numeric")
@@ -332,6 +375,8 @@ class WheelActuatorController:
         "_left_motion_started_ns", "_right_motion_started_ns",
         "_left_requested_direction", "_right_requested_direction",
         "_left_direction_epoch_ns", "_right_direction_epoch_ns",
+        "_last_feedback_evidence",
+        "_feedback_watchdog_deadline_ns",
     )
 
     def __init__(self, speed_map: WheelSpeedMap, config: WheelPiConfig) -> None:
@@ -351,6 +396,8 @@ class WheelActuatorController:
         self._left_motion_started_ns = self._right_motion_started_ns = None
         self._left_requested_direction = self._right_requested_direction = 0
         self._left_direction_epoch_ns = self._right_direction_epoch_ns = None
+        self._last_feedback_evidence: WheelFeedbackEvidence | None = None
+        self._feedback_watchdog_deadline_ns: int | None = None
 
     def reset(self) -> None:
         self._left_pi.reset()
@@ -367,6 +414,8 @@ class WheelActuatorController:
         self._left_motion_started_ns = self._right_motion_started_ns = None
         self._left_requested_direction = self._right_requested_direction = 0
         self._left_direction_epoch_ns = self._right_direction_epoch_ns = None
+        self._last_feedback_evidence = None
+        self._feedback_watchdog_deadline_ns = None
 
     def checkpoint(self) -> WheelActuatorStateCheckpoint:
         return WheelActuatorStateCheckpoint(
@@ -392,6 +441,8 @@ class WheelActuatorController:
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
         if not isinstance(checkpoint, WheelActuatorStateCheckpoint):
             raise TypeError("checkpoint must be WheelActuatorStateCheckpoint")
+        self._last_feedback_evidence = None
+        self._feedback_watchdog_deadline_ns = None
         for value in (
             checkpoint.left_integral,
             checkpoint.right_integral,
@@ -454,7 +505,78 @@ class WheelActuatorController:
             setattr(self, f"_{side}_motion_feedback_seen", seen)
             setattr(self, f"_{side}_motion_started_ns", getattr(checkpoint, f"{side}_motion_started_ns"))
 
+    @property
+    def feedback_evidence(self) -> WheelFeedbackEvidence | None:
+        return self._last_feedback_evidence
+
     def __call__(
+        self,
+        wheels: WheelVelocitySetpoint,
+        frame: AdmittedFrame,
+    ) -> ActuatorRequest:
+        self._last_feedback_evidence = None
+        previous_feedback = self._last_feedback
+        error = None
+        try:
+            return self._evaluate(wheels, frame)
+        except Exception as exc:
+            error = exc
+            raise
+        finally:
+            self._last_feedback_evidence = self._feedback_evidence(wheels, frame, error, previous_feedback)
+
+    def _feedback_evidence(
+        self,
+        wheels: WheelVelocitySetpoint,
+        frame: AdmittedFrame,
+        error: Exception | None,
+        previous_feedback: Observation | None,
+    ) -> WheelFeedbackEvidence:
+        feedback = self._last_feedback or previous_feedback
+        values = {} if feedback is None else {item.key: item.value for item in feedback.values}
+        source = None if feedback is None else feedback.source_device_id
+        rejected = next((item for item in frame.rejected if item.source_device_id == source), None)
+        accepted = any(item.kind == WHEEL_FEEDBACK_KIND for item in frame.accepted)
+        state = "ACCEPTED" if accepted else "MISSING" if feedback is None else "CACHED"
+        if rejected is not None:
+            state = rejected.reason.value
+
+        def scalar(name: str, kind: type):
+            value = values.get(name)
+            if kind is float:
+                return (float(value) if type(value) in (int, float) and math.isfinite(value) else None)
+            return value if type(value) is kind else None
+
+        started = self._feedback_uncertain_since_ns
+        return WheelFeedbackEvidence(
+            wheels.context, source,
+            None if feedback is None else feedback.source_sequence,
+            None if feedback is None else feedback.captured_monotonic_ns,
+            state, (None if feedback is None else feedback.source_sequence)
+            if rejected is None else rejected.source_sequence,
+            None if rejected is None else rejected.reason.value,
+            scalar("measurement_stale", bool), scalar("measurement_timing_valid", bool), scalar("rejection_code", str),
+            wheels.left_mps, wheels.right_mps,
+            scalar("left_last_accepted_edge_timestamp_ns", int),
+            scalar("right_last_accepted_edge_timestamp_ns", int),
+            scalar("left_last_accepted_edge_direction", int),
+            scalar("right_last_accepted_edge_direction", int),
+            scalar("left_estimation_timebase", str), scalar("right_estimation_timebase", str),
+            scalar("left_measurement_trust", float), scalar("right_measurement_trust", float),
+            self._left_velocity_feedback_ready, self._right_velocity_feedback_ready,
+            abs(wheels.left_mps) > 1e-9 and self._fresh_signed_motion(
+                values, "left", wheels.left_mps, wheels.context.monotonic_ns),
+            abs(wheels.right_mps) > 1e-9 and self._fresh_signed_motion(
+                values, "right", wheels.right_mps, wheels.context.monotonic_ns),
+            self._left_direction_epoch_ns, self._right_direction_epoch_ns,
+            self._left_uncertain_since_ns, self._right_uncertain_since_ns,
+            started, None if started is None else self._feedback_watchdog_deadline_ns,
+            self._feedback_transition_until_ns,
+            None if error is None else type(error).__name__,
+            None if error is None else str(error)[:256],
+        )
+
+    def _evaluate(
         self,
         wheels: WheelVelocitySetpoint,
         frame: AdmittedFrame,
@@ -718,15 +840,19 @@ class WheelActuatorController:
         *, transition_until_ns: int | None = None,
         reason: str = "VELOCITY_QUALITY",
     ) -> int:
+        deadline = bounded_deadline_ns(
+            now_ns if started_ns is None else started_ns,
+            self._config.max_feedback_uncertainty_ns,
+            extension_until_ns=transition_until_ns,
+        )
+        if side == "feedback":
+            # Record the exact checked deadline rather than reconstructing the
+            # transition/edge qualification policy in the diagnostic path.
+            self._feedback_watchdog_deadline_ns = deadline
         if started_ns is None:
             return now_ns
         if now_ns < started_ns:
             raise ValueError("L11 feedback uncertainty time must be monotonic")
-        deadline = bounded_deadline_ns(
-            started_ns,
-            self._config.max_feedback_uncertainty_ns,
-            extension_until_ns=transition_until_ns,
-        )
         if deadline_reached(now_ns, deadline):
             if side == "feedback":
                 raise ValueError(f"L11 feedback remained uncertain too long: {reason}")
@@ -1098,6 +1224,7 @@ __all__ = [
     "WHEEL_SPEED_MAP_SCHEMA",
     "WheelActuatorController",
     "WheelActuatorStateCheckpoint",
+    "WheelFeedbackEvidence",
     "WheelPiConfig",
     "WheelSpeedCurve",
     "WheelSpeedMap",
