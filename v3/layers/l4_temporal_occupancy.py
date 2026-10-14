@@ -157,6 +157,23 @@ class TemporalOccupancyGrid:
             self._next_expiry_ns = min(self._next_expiry_ns or expiry_ns, expiry_ns)
         return changed
 
+    def clear_free_cells(self, evidence: ScanCellEvidence) -> bool:
+        """Retire occupancy contradicted by an explicitly trusted free ray.
+
+        L4 decides whether the pose-aligned scan is trustworthy enough for
+        this immediate veto. Keep the normal accumulator for other scans.
+        """
+        if not isinstance(evidence, ScanCellEvidence):
+            raise TypeError("evidence must be ScanCellEvidence")
+        hit_keys = frozenset(evidence.hit_keys)
+        changed = False
+        for key in evidence.free_keys:
+            if key not in hit_keys and self._cells.pop(key, None) is not None:
+                changed = True
+        if not self._cells:
+            self._next_expiry_ns = None
+        return changed
+
     def prune(self, *, now_ns: int, center_x_m: float, center_y_m: float) -> bool:
         remove = tuple(
             key

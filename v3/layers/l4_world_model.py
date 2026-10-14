@@ -983,6 +983,10 @@ class ShadowWorldModel:
                     captured_ns=observation.captured_monotonic_ns,
                     ignored_hit_keys=ignored_hit_keys,
                 )
+                # The current snapshot already gives these trusted free rays
+                # veto authority. Retire their temporal residue as well, so a
+                # subsequent scan elsewhere cannot resurrect old occupancy.
+                self._occupancy.clear_free_cells(evidence)
                 self._structural_recall_ready = True
             else:
                 # Do not learn or clear long-lived geometry from a spatially

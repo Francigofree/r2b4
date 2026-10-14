@@ -169,6 +169,88 @@ def test_lidar_rolling_window_recall_free_space_and_continuity():
     assert reframed.local_costmap is None
 
 
+@pytest.mark.parametrize("free_scan_count", (1, 7))
+def test_lidar_newer_free_observation_survives_other_rays_until_a_new_hit(free_scan_count):
+    config = _config()
+    model = ShadowWorldModel(config)
+    now, sequence, initial = _confirmed_wall(model, config, point=(0.35, 0.05))
+    blocked_key = (3, 0)
+
+    def occupied(result):
+        return {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+
+    assert blocked_key in occupied(initial)
+    for _ in range(free_scan_count):
+        now += 20_000_000
+        sequence += 1
+        cleared = _tick(model, now, _scan(sequence, now, ((2.45, 0.05),)))
+        assert blocked_key not in occupied(cleared)
+
+    restored = ShadowWorldModel(config)
+    restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+    now += 20_000_000
+    sequence += 1
+    unrelated = _scan(sequence, now, ((0.05, 2.45),))
+    result = _tick(model, now, unrelated)
+    assert _tick(restored, now, unrelated) == result
+    assert blocked_key not in occupied(result)
+
+    now += 20_000_000
+    sequence += 1
+    new_hit = _scan(sequence, now, ((0.35, 0.05),))
+    result = _tick(model, now, new_hit)
+    assert _tick(restored, now, new_hit) == result
+    assert blocked_key in occupied(result)
+
+
+def test_lidar_trusted_free_ray_clears_dynamic_masked_temporal_residue():
+    model = ShadowWorldModel(_config())
+    start = 1_000_000_000
+    for sequence in range(1, 9):
+        now = start + sequence * 20_000_000
+        moving_obstacle = _observation(
+            "obstacle_track", sequence, now, track_id="moving-cart",
+            x_m=0.35, y_m=0.05, radius_m=0.1, vx_mps=0.1, vy_mps=0.0,
+            confidence=1.0,
+        )
+        result = _tick(model, now, _scan(sequence, now, ((0.35, 0.05),)) + (moving_obstacle,))
+    blocked_key = (3, 0)
+
+    def occupied(result):
+        return {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+
+    assert blocked_key in occupied(result)
+    now += 20_000_000
+    cleared = _tick(model, now, _scan(9, now, ((2.45, 0.05),)))
+    assert blocked_key not in occupied(cleared)
+    now += 20_000_000
+    unrelated = _tick(model, now, _scan(10, now, ((0.05, 2.45),)))
+    assert blocked_key not in occupied(unrelated)
+    now += 20_000_000
+    moving_obstacle = _observation(
+        "obstacle_track", 11, now, track_id="moving-cart",
+        x_m=0.35, y_m=0.05, radius_m=0.1, vx_mps=0.1, vy_mps=0.0,
+        confidence=1.0,
+    )
+    new_hit = _tick(model, now, _scan(11, now, ((0.35, 0.05),)) + (moving_obstacle,))
+    assert blocked_key in occupied(new_hit)
+
+
+def test_lidar_uncertain_free_ray_does_not_retire_existing_occupancy():
+    config = _config()
+    model = ShadowWorldModel(config)
+    now, sequence, _ = _confirmed_wall(model, config, point=(0.35, 0.05))
+    now += 20_000_000
+    result = _tick(
+        model, now, _scan(sequence + 1, now, ((2.45, 0.05),)),
+        quality=healthy_localization(heading=QualityState.DEGRADED),
+    )
+    assert (3, 0) in {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+    now += 20_000_000
+    result = _tick(model, now, _scan(sequence + 2, now, ((0.05, 2.45),)))
+    assert (3, 0) in {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+
+
 def test_lidar_checkpoint_restore_preserves_cache_and_future_invalidation(monkeypatch):
     config = _config()
     original = ShadowWorldModel(config)

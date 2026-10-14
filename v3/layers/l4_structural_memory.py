@@ -258,7 +258,9 @@ class StructuralMemoryGrid:
             if key in excluded_keys:
                 continue
             cell = self._cells[key]
-            if not cell.confirmed:
+            if not cell.confirmed or cell.last_observed_ns > cell.last_hit_ns:
+                # A later scan that misses this cell does not undo the last
+                # explicit free observation. Only a newer hit can restore it.
                 continue
             if self._cell_distance_m(key, center_x_m, center_y_m) > radius_m:
                 continue
