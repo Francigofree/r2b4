@@ -755,7 +755,7 @@ class MotionValidity:
 
 @dataclass(frozen=True, slots=True)
 class LocalMotionProof:
-    """L6's current free-displacement or escape sweep bound, consumed by L9.
+    """L6's current free-displacement or directional sweep bound, consumed by L9.
 
     No obstacle payload or upstream control state crosses this forward edge.
     Expiry governs admission; horizon bounds the next control-gap movement.
@@ -770,7 +770,7 @@ class LocalMotionProof:
     horizon_ns: int
     max_displacement_m: float
     # A compact velocity box proved for the whole next control gap. Unlike
-    # the free circle, it admits only the certified pivot/reverse family.
+    # the free circle, it admits only the certified maneuver family.
     maneuver_bounds: tuple[float, float, float, float] | None = None
 
     def __post_init__(self) -> None:

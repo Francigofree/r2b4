@@ -40,6 +40,7 @@ _POINT_CLEARANCE_EPSILON_M = 1e-9
 # half-length/cell radius are accounted for. It gives L6 room to replan before
 # L12 has to reject the same forward command repeatedly.
 _MOTION_EPSILON = 1e-9
+_FAILED_LOCAL_GOAL_CAPACITY = 4
 
 
 def _speed_clearance_ratio(v_mps: float, config: "NavigationConfig") -> float:
@@ -601,6 +602,10 @@ class NavigationStateCheckpoint:
     failed_goals: tuple[tuple[int, int, int], ...] = ()
     no_viable_since_ns: int | None = None
     goal_reachable: bool = True
+    explore_progress_origin: tuple[float, float] | None = None
+    explore_progress_started_ns: int | None = None
+    explore_stall_count: int = 0
+    explore_retry_after_ns: int | None = None
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -765,6 +770,8 @@ class TrajectoryNavigator:
         "_coverage_last_cell", "_escape_candidate", "_escape_goal",
         "_escape_started_ns", "_escape_origin", "_failed_goals", "_no_viable_since_ns",
         "_goal_reachable",
+        "_explore_progress_origin", "_explore_progress_started_ns",
+        "_explore_stall_count", "_explore_retry_after_ns",
     )
 
     def __init__(
@@ -835,6 +842,10 @@ class TrajectoryNavigator:
         self._failed_goals: dict[tuple[int, int], int] = {}
         self._no_viable_since_ns: int | None = None
         self._goal_reachable = True
+        self._explore_progress_origin: tuple[float, float] | None = None
+        self._explore_progress_started_ns: int | None = None
+        self._explore_stall_count = 0
+        self._explore_retry_after_ns: int | None = None
         self._local_goal: Waypoint | None = None
         self._goal_selected_ns = 0
         self._last_replan_ns: int | None = None
@@ -908,6 +919,8 @@ class TrajectoryNavigator:
             tuple((x, y, until) for (x, y), until in sorted(self._failed_goals.items())),
             self._no_viable_since_ns,
             self._goal_reachable,
+            self._explore_progress_origin, self._explore_progress_started_ns,
+            self._explore_stall_count, self._explore_retry_after_ns,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -948,6 +961,10 @@ class TrajectoryNavigator:
         self._failed_goals = {(x, y): until for x, y, until in checkpoint.failed_goals}
         self._no_viable_since_ns = checkpoint.no_viable_since_ns
         self._goal_reachable = checkpoint.goal_reachable
+        self._explore_progress_origin = checkpoint.explore_progress_origin
+        self._explore_progress_started_ns = checkpoint.explore_progress_started_ns
+        self._explore_stall_count = checkpoint.explore_stall_count
+        self._explore_retry_after_ns = checkpoint.explore_retry_after_ns
         self._face_person_track_id = checkpoint.face_person_track_id
         self._face_person_aligned = checkpoint.face_person_aligned
         self._follow_person_track_id = checkpoint.follow_person_track_id
@@ -1065,6 +1082,23 @@ class TrajectoryNavigator:
             ))
         if plan.status in (NavigationStatus.ACTIVE, NavigationStatus.PENDING):
             proof = self._motion_geometry_proof(plan, estimate, world)
+            viable = tuple(c for c in plan.trajectory_candidates if not c.collision and c.progress_viable)
+            if proof is None and plan.status is NavigationStatus.ACTIVE and len(viable) > 1:
+                # A free circle cannot certify every candidate in this family.
+                # Revalidate one current proposal, as at the geometry-change
+                # boundary; no worker search or downstream authority is read.
+                rejected = tuple(replace(c, samples=(c.samples[-1],))
+                                 for c in plan.trajectory_candidates if c.collision or not c.progress_viable)
+                plan = (self._local_continuation(mission, estimate, world,
+                            max_v_mps=plan.constraints.max_v_mps)
+                        or self._inactive(mission, NavigationStatus.IDLE, "PLANNER_EXECUTION_HOLD"))
+                if plan.status is NavigationStatus.ACTIVE:
+                    plan = replace(plan, trajectory_candidates=rejected + plan.trajectory_candidates)
+                    proof = self._motion_geometry_proof(plan, estimate, world)
+            if proof is None and plan.status is NavigationStatus.ACTIVE and viable:
+                # An unproved realizable transition is an explicit HOLD, not
+                # an ACTIVE goal whose motion is repeatedly rejected in L9.
+                plan = self._inactive(mission, NavigationStatus.IDLE, "PLANNER_EXECUTION_HOLD")
             plan = replace(plan, geometry_proof=proof)
         if plan.status is NavigationStatus.ACTIVE:
             omega = (plan.velocity_target.omega_rad_s if plan.velocity_target is not None
@@ -1113,14 +1147,19 @@ class TrajectoryNavigator:
         until = min(validity.valid_until_ns,
                     captured_ns + self._config.max_costmap_freshness_ns,
                     now + self._config.max_world_freshness_ns - world.freshness_ns)
-        if clearance >= margin:
-            return LocalMotionProof(plan.context, world.frame_id, validity.scope,
-                costmap.revision, captured_ns, until, horizon_ns, max(0., min(bound, clearance-margin)))
-        # A close obstacle can rule out the all-heading circle while a single
-        # freshly revalidated escape still has a clear rectangular sweep.
         candidates = tuple(c for c in plan.trajectory_candidates
                            if not c.collision and c.progress_viable)
-        if len(candidates) != 1 or not candidates[0].candidate_id.startswith("escape-"):
+        displacement = max(0., min(bound, clearance-margin))
+        required_speed = max((abs(c.v_mps) for c in candidates), default=0.)
+        if self._escape_candidate is not None:
+            required_speed = max(required_speed, abs(self._escape_candidate.v_mps))
+        if clearance >= margin and required_speed * horizon_ns / 1e9 <= displacement:
+            return LocalMotionProof(plan.context, world.frame_id, validity.scope,
+                costmap.revision, captured_ns, until, horizon_ns, displacement)
+        # An insufficient circle also needs a directional certificate, even
+        # when its radius is positive. One freshly revalidated proposal keeps
+        # the control-side computation bounded for normal and escape motion.
+        if len(candidates) != 1:
             return None
         scene = replace(scene, uncertainty_m=uncertainty)
         candidate = candidates[0]
@@ -1137,8 +1176,12 @@ class TrajectoryNavigator:
                     and abs(candidate.omega_rad_s) <= _MOTION_EPSILON
                     and abs(phase.omega_rad_s) <= _MOTION_EPSILON):
                 candidate = replace(candidate, v_mps=min(candidate.v_mps, phase.v_mps))
-        bounds = _escape_motion_bounds(candidate, estimate, world, scene,
-                                       self._config, horizon_ns)
+        bounds = (_escape_motion_bounds(candidate, estimate, world, scene, self._config, horizon_ns)
+                  if candidate.candidate_id.startswith("escape-") else None)
+        if bounds is None:
+            bounds = _normal_motion_bounds(candidate, estimate, world, scene,
+                self._config, horizon_ns, min(plan.constraints.max_v_mps, self._config.operational_max_v_mps),
+                min(plan.constraints.max_omega_rad_s, self._config.operational_max_omega_rad_s))
         if bounds is None:
             return None
         return LocalMotionProof(plan.context, world.frame_id, validity.scope,
@@ -1211,6 +1254,7 @@ class TrajectoryNavigator:
             self._coverage_last_cell = None
             self._progress = 0.0
             self._failed_goals.clear()
+            self._clear_explore_progress()
             self._localization_generation = quality.generation
         if (global_target and quality.global_position is QualityState.GOOD
                 and self._global_transform_revision != estimate.transform_revision):
@@ -1319,6 +1363,7 @@ class TrajectoryNavigator:
             if mission.mode is CommandMode.EXPLORE:
                 self._mark_coverage(estimate.x_m, estimate.y_m, mission.context.tick_id)
                 self._progress = min(1.0, len(self._coverage) / self._config.coverage_max_cells)
+                self._observe_explore_progress(estimate)
             recovery = self._active_escape_plan(mission, estimate, world)
             if recovery is not None:
                 return recovery
@@ -1523,6 +1568,7 @@ class TrajectoryNavigator:
         self._failed_goals.clear()
         self._no_viable_since_ns = None
         self._goal_reachable = True
+        self._clear_explore_progress()
         self._clear_escape_phase()
         self._local_goal = None
         self._goal_selected_ns = 0
@@ -2107,6 +2153,9 @@ class TrajectoryNavigator:
         self._progress = min(1.0, len(self._coverage) / self._config.coverage_max_cells)
         now = mission.context.monotonic_ns
         self._failed_goals = {cell: until for cell, until in self._failed_goals.items() if until > now}
+        no_progress = self._explore_no_progress_plan(mission, estimate)
+        if no_progress is not None:
+            return no_progress
         goal = self._local_goal
         if self._replan_due(
             mission.context.monotonic_ns,
@@ -2121,7 +2170,7 @@ class TrajectoryNavigator:
             goal_reason = None
             alternate_goals: tuple[Waypoint, ...] = ()
             if goal is None:
-                goal_reason = "INITIAL_GOAL"
+                goal_reason = ("NO_PROGRESS_RESELECT" if self._explore_stall_count else "INITIAL_GOAL")
             elif self._trajectory_candidates and not any(
                     not c.collision and c.progress_viable for c in self._trajectory_candidates):
                 if self._no_viable_since_ns is None:
@@ -2201,6 +2250,75 @@ class TrajectoryNavigator:
             local_goal=goal,
             trajectory_candidates=candidates,
         )
+
+    def _clear_explore_progress(self) -> None:
+        self._explore_progress_origin = None
+        self._explore_progress_started_ns = None
+        self._explore_stall_count = 0
+        self._explore_retry_after_ns = None
+
+    def _observe_explore_progress(self, estimate: RobotEstimate) -> None:
+        """Credit measured local translation, never a goal or planner refresh."""
+        quality = estimate.localization_quality
+        if (quality.local_translation is QualityState.LOST
+                or not quality.local_pose_continuous or quality.pose_discontinuity):
+            return
+        origin = self._explore_progress_origin
+        if (origin is None or math.hypot(estimate.x_m-origin[0], estimate.y_m-origin[1])
+                >= self._config.local_goal_tolerance_m):
+            if self._explore_retry_after_ns is not None:
+                self._local_goal = None
+                self._goal_reachable = True
+            self._explore_progress_origin = (estimate.x_m, estimate.y_m)
+            self._explore_progress_started_ns = estimate.context.monotonic_ns
+            self._explore_stall_count = 0
+            self._explore_retry_after_ns = None
+
+    def _explore_no_progress_plan(
+        self, mission: MissionIntent, estimate: RobotEstimate,
+    ) -> NavigationPlan | None:
+        # Candidate viability predicts a path; only local odometry proves that
+        # a repeatedly published path actually moves. Handoffs and fresh worker
+        # results cannot renew this window. A committed escape has its own
+        # measured completion/2*horizon budget and bypasses this expiry check.
+        self._observe_explore_progress(estimate)
+        now = mission.context.monotonic_ns
+        retry_after = self._explore_retry_after_ns
+        if retry_after is not None:
+            if self._explore_stall_count >= _FAILED_LOCAL_GOAL_CAPACITY:
+                return self._inactive(mission, NavigationStatus.IDLE, "NO_PROGRESS_EXHAUSTED_HOLD")
+            if now < retry_after:
+                return self._inactive(mission, NavigationStatus.IDLE, "NO_PROGRESS_HOLD")
+            self._explore_retry_after_ns = None
+            self._explore_progress_started_ns = now
+            self._local_goal = None
+            self._goal_reachable = True
+            return None
+        if not self._goal_reachable:
+            # An explicit worker no-path result already publishes HOLD and
+            # keeps its bounded retry policy. Time spent without an admitted
+            # path is not a failed execution attempt of a viable trajectory.
+            self._explore_progress_started_ns = now
+            return None
+        started = self._explore_progress_started_ns
+        if started is None or now-started < self._config.local_goal_max_age_ns:
+            return None
+        goal = self._local_goal
+        if goal is None and self._pending_rollout_request is not None:
+            goal = self._pending_rollout_request.goal
+        if goal is not None:
+            self._remember_failed_goal(goal, now)
+        self._clear_trajectory_plan()
+        self._goal_reachable = False
+        self._goal_selection_reason = "NO_PROGRESS"
+        self._explore_stall_count += 1
+        # Reuse the existing no-viable hysteresis and failed-goal capacity.
+        # Exhaustion remains HOLD until actual translation or a new mission /
+        # odometry lineage; periodic map revisions are not physical progress.
+        self._explore_retry_after_ns = now + 2*self._config.trajectory_replan_interval_ns
+        reason = ("NO_PROGRESS_EXHAUSTED_HOLD"
+                  if self._explore_stall_count >= _FAILED_LOCAL_GOAL_CAPACITY else "NO_PROGRESS_HOLD")
+        return self._inactive(mission, NavigationStatus.IDLE, reason)
 
     def _local_continuation(
         self, mission: MissionIntent, estimate: RobotEstimate, world: WorldSnapshot,
@@ -2364,7 +2482,7 @@ class TrajectoryNavigator:
 
     def _remember_failed_goal(self, goal: Waypoint, now: int) -> None:
         self._failed_goals[self._coverage_key(goal.x_m, goal.y_m)] = now + self._config.local_goal_max_age_ns
-        if len(self._failed_goals) > 4:
+        if len(self._failed_goals) > _FAILED_LOCAL_GOAL_CAPACITY:
             del self._failed_goals[min(self._failed_goals, key=lambda cell: (self._failed_goals[cell], cell))]
 
     def _build_planning_scene(self, world: WorldSnapshot) -> _LocalPlanningScene:
@@ -3611,6 +3729,114 @@ def _rectangle_disc_clearance(
     outside_x = max(0.0, abs(local_x) - half_length_m)
     outside_y = max(0.0, abs(local_y) - half_width_m)
     return max(0.0, math.hypot(outside_x, outside_y) - obstacle.radius_m)
+
+
+def _motion_sweep_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Small convex sweep of one bounded local maneuver's rectangle corners."""
+    ordered = sorted(set(points))
+    def cross(a, b, c):
+        return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
+    lower, upper = [], []
+    for target, sequence in ((lower, ordered), (upper, reversed(ordered))):
+        for point in sequence:
+            while len(target) >= 2 and cross(target[-2], target[-1], point) <= 0.0:
+                target.pop()
+            target.append(point)
+    return lower[:-1] + upper[:-1]
+
+
+def _motion_sweep_point_distance(x: float, y: float, hull: list[tuple[float, float]]) -> float:
+    inside, minimum = True, math.inf
+    for index, (ax, ay) in enumerate(hull):
+        bx, by = hull[(index+1) % len(hull)]
+        dx, dy = bx-ax, by-ay
+        inside = inside and dx*(y-ay)-dy*(x-ax) >= -1e-12
+        length_sq = dx*dx + dy*dy
+        fraction = 0.0 if length_sq == 0.0 else max(0.0, min(1.0,
+            ((x-ax)*dx + (y-ay)*dy) / length_sq))
+        minimum = min(minimum, math.hypot(x-ax-fraction*dx, y-ay-fraction*dy))
+    return 0.0 if inside else minimum
+
+
+def _normal_motion_bounds(
+    candidate: TrajectoryEvaluation, estimate: RobotEstimate, world: WorldSnapshot,
+    scene: _LocalPlanningScene, config: NavigationConfig, horizon_ns: int,
+    max_v_mps: float, max_omega_rad_s: float,
+) -> tuple[float, float, float, float] | None:
+    """Prove a time-varying signed velocity box over the next control gap.
+
+    The swept rectangle hull includes the heading interval. A chord-sagitta
+    pad covers yaw between mesh poses, and a center-deviation pad covers every
+    v/omega ramp in the box. Remaining clearance funds tracking and braking
+    edits through Lipschitz displacement bounds, without another search.
+    """
+    horizon_s = horizon_ns / 1e9
+    low_v, high_v = sorted((0., candidate.v_mps))
+    low_omega, high_omega = sorted((0., candidate.omega_rad_s))
+    speed, turn = abs(candidate.v_mps), abs(candidate.omega_rad_s)
+    half_length = config.footprint_length_m/2 + scene.uncertainty_m
+    half_width = config.footprint_width_m/2 + scene.uncertainty_m
+    radius = math.hypot(half_length, half_width)
+    heading = config.localization_inflation_sigma * estimate.localization_quality.yaw_sigma_rad
+    travel = speed * horizon_s
+    yaw_low, yaw_high = low_omega*horizon_s-heading, high_omega*horizon_s+heading
+    steps = config.rollout_step_count
+    yaw_step = (yaw_high-yaw_low) / steps
+    if yaw_step > math.pi or world.local_costmap.radius_m <= radius+travel+config.footprint_safety_margin_m:
+        return None
+    low_distance, high_distance = low_v*horizon_s, high_v*horizon_s
+    if yaw_low < -math.pi/2 or yaw_high > math.pi/2:
+        low_distance, high_distance = -travel, travel
+    cosine, sine = math.cos(estimate.yaw_rad), math.sin(estimate.yaw_rad)
+    points = []
+    for step in range(steps+1):
+        yaw = estimate.yaw_rad + yaw_low + step*yaw_step
+        c, s = math.cos(yaw), math.sin(yaw)
+        for distance in (low_distance, high_distance):
+            x, y = estimate.x_m+distance*cosine, estimate.y_m+distance*sine
+            for length, width in ((-half_length,-half_width),(-half_length,half_width),
+                                  (half_length,-half_width),(half_length,half_width)):
+                points.append((x+c*length-s*width, y+s*length+c*width))
+    hull = _motion_sweep_hull(points)
+    sagitta = radius * (1.0-math.cos(yaw_step/2))
+    lateral = min(travel, speed*(heading*horizon_s+turn*horizon_s*horizon_s/2))
+    padding = config.footprint_safety_margin_m + sagitta + lateral
+    min_x, max_x = min(x for x,y in hull), max(x for x,y in hull)
+    min_y, max_y = min(y for x,y in hull), max(y for x,y in hull)
+    clearance = config.clearance_score_cap_m
+    static = scene.static_index
+    if static is not None:
+        # Only nearby cells can reduce the capped clearance/slack. Their disc
+        # radius is included before broadphase, so no intersecting cell is lost.
+        reach = clearance + static.cell_radius_m
+        for obstacle in _static_obstacles_in_bounds(static, min_x-reach, max_x+reach,
+                                                    min_y-reach, max_y+reach):
+            clearance = min(clearance, _motion_sweep_point_distance(obstacle.x_m, obstacle.y_m, hull)
+                             - obstacle.radius_m)
+            if clearance <= padding:
+                return None
+    for obstacle in world.obstacle_tracks:
+        if obstacle.confidence >= config.obstacle_confidence_floor:
+            clearance = min(clearance, _motion_sweep_point_distance(obstacle.x_m, obstacle.y_m, hull)
+                - obstacle.radius_m - math.hypot(obstacle.vx_mps, obstacle.vy_mps)*horizon_s)
+            if clearance <= padding:
+                return None
+    slack = clearance-padding
+    if slack <= 0.0:
+        return None
+    # Each edit spends at most a quarter of the proved clearance slack.
+    # Center change from delta-v <= delta-v*h, independent of heading; delta
+    # omega moves corners <= R*delta*h and center <= speed*delta*h^2/2.
+    scope_speed = (world.local_costmap.radius_m-radius-config.footprint_safety_margin_m) / horizon_s
+    extra_v = min(max(0., max_v_mps-speed), max(0., (scope_speed-speed)/2), slack/(4*horizon_s))
+    extra_omega = min(max(0., max_omega_rad_s-turn),
+        slack/(4*(radius*horizon_s+speed*horizon_s*horizon_s/2)))
+    if candidate.v_mps > _MOTION_EPSILON:
+        high_v += extra_v
+    elif candidate.v_mps < -_MOTION_EPSILON:
+        low_v -= extra_v
+    return (low_v, high_v, max(-max_omega_rad_s, low_omega-extra_omega),
+            min(max_omega_rad_s, high_omega+extra_omega))
 
 
 def _escape_motion_bounds(

@@ -168,12 +168,11 @@ class OperationalConstraintLayer:
                 or (abs(allowed_omega_rad_s) > 1e-12 and quality.heading is QualityState.LOST)):
             return self._stop(motion, (ConstraintCode.LOCALIZATION_DEGRADED,))
         if motion.geometry_required:
-            approved = motion.approved_velocity
-            altered = (approved is None or (allowed_v_mps, allowed_omega_rad_s)
-                       != (approved.v_mps, approved.omega_rad_s))
             proof = motion.geometry_proof
-            directional = proof is not None and proof.maneuver_bounds is not None
-            if (altered or directional) and (allowed_v_mps != 0.0 or allowed_omega_rad_s != 0.0):
+            # Nominal endpoint equality does not prove a starting/braking
+            # ramp or current uncertainty. Geometry-required movement always
+            # needs the current certificate, including retained prior motion.
+            if allowed_v_mps != 0.0 or allowed_omega_rad_s != 0.0:
                 if (proof is None or not proof.usable_at(motion.context, motion.motion_validity)
                         or not proof.covers(allowed_v_mps, allowed_omega_rad_s)
                         or (motion.transition_allowed and not proof.covers(previous_v, previous_omega))):
