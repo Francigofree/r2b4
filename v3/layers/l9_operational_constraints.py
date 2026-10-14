@@ -171,8 +171,9 @@ class OperationalConstraintLayer:
             approved = motion.approved_velocity
             altered = (approved is None or (allowed_v_mps, allowed_omega_rad_s)
                        != (approved.v_mps, approved.omega_rad_s))
-            if altered and (allowed_v_mps != 0.0 or allowed_omega_rad_s != 0.0):
-                proof = motion.geometry_proof
+            proof = motion.geometry_proof
+            directional = proof is not None and proof.maneuver_bounds is not None
+            if (altered or directional) and (allowed_v_mps != 0.0 or allowed_omega_rad_s != 0.0):
                 if (proof is None or not proof.usable_at(motion.context, motion.motion_validity)
                         or not proof.covers(allowed_v_mps, allowed_omega_rad_s)
                         or (motion.transition_allowed and not proof.covers(previous_v, previous_omega))):

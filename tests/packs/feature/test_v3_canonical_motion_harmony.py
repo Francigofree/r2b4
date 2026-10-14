@@ -81,7 +81,7 @@ def test_escape_preserves_rejected_forward_evidence_and_revokes_braking_origin()
     pending.evaluate(mission, estimate, world)
     request = pending.pending_rollout_request
     computed = TrajectoryRolloutComputer(config.navigation).compute(request)
-    assert computed.trajectory_candidates == plan.trajectory_candidates
+    assert computed.trajectory_candidates == direct.checkpoint().trajectory_candidates
     rejected = next(c for c in plan.trajectory_candidates if c.candidate_id == old_id)
     assert rejected.collision or not rejected.progress_viable
     selected = selector.evaluate(plan)

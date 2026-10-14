@@ -165,7 +165,7 @@ def test_fresh_scan_revalidates_existing_reverse_and_pivot_escape(kind):
     assert changed.motion_validity.source_context == estimate.context
     assert changed.motion_validity.geometry_revision == world.local_costmap.revision
     assert changed.motion_validity.geometry_captured_ns == estimate.context.monotonic_ns
-    assert plan.motion_validity.source_context == request.context
+    assert plan.motion_validity.source_context == plan.context
     assert result.source_context == request.context
 
 

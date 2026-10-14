@@ -60,11 +60,17 @@ def test_navigation_status_preserves_goal_and_guidance_lineage_without_geometry(
         initial = _wait_status(config.path, 1)
         clock.now += 20_000_000
         latest = _navigation_tick(clock, tick=2, validity=validity)
+        navigation_row = latest.trace.layers[-1]
+        latest = replace(latest, trace=replace(latest.trace, layers=(
+            *latest.trace.layers[:-1], replace(navigation_row,
+                output=replace(navigation_row.output, reason="GEOMETRY_HOLD")),
+        )))
         publisher.publish_tick(latest)
         received = _wait_status(config.path, 2)
         assert received == _tick_status(latest)
         navigation = received["navigation"]
-        assert navigation == initial["navigation"]
+        assert navigation == {**initial["navigation"], "reason": "GEOMETRY_HOLD"}
+        assert navigation["progress"] == initial["navigation"]["progress"] > 0.0
         assert navigation["goal_selection_reason"] == "INITIAL_GOAL"
         assert navigation["goal_selected_ns"] == validity.source_context.monotonic_ns
         assert navigation["motion_validity"] == {

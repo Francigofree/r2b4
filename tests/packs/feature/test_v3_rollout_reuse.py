@@ -84,8 +84,10 @@ def test_direct_and_worker_rollout_keep_same_candidate_semantics(mode, clearance
     pending.evaluate(mission, request.estimate, request.world)
     closed_request = pending.pending_rollout_request
     result = TrajectoryRolloutComputer(config.navigation).compute(closed_request)
-    assert result.trajectory_candidates == plan.trajectory_candidates
-    assert closed_request.goal == plan.local_goal
+    # L6 may commit and freshly revalidate one bounded recovery phase from
+    # that identical pure family before publishing the motion guidance.
+    assert result.trajectory_candidates == direct.checkpoint().trajectory_candidates
+    assert (result.selected_goal or closed_request.goal) == direct.checkpoint().local_goal
 
 
 def test_reuse_does_not_cross_geometry_coverage_or_uncertainty_requests():

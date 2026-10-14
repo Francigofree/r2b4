@@ -139,12 +139,13 @@ def test_compact_navigation_lineage_survives_mcap_evi_and_diag(tmp_path: Path):
     from tools.mcap_evidence.verify import verify
     from v3.capture_behavior import encode_behavior_record, project_behavior_record
     from v3.contracts import (CommandMode, CommandRequest, LifecycleState, MissionIntent,
-                             MissionLifecycle, RawDeviceBatch)
+                             MissionLifecycle, NavigationStatus, RawDeviceBatch, VelocityTarget)
     from v3.engine import LayerRecord, TickInputs
     from v3.execution import ExecutionRecord
     from v3.layers.l7_motion_selection import MotionSelector
     from v3.layers.l8_motion_realization import MotionRealizer
     from v3.mcap_writer import StdlibMcapWriter
+    from v3.resident_status import _tick_status
 
     # This is passive evidence plumbing, using typed completed downstream
     # values. It does not claim a complete control replay or physical motion.
@@ -153,20 +154,26 @@ def test_compact_navigation_lineage_survives_mcap_evi_and_diag(tmp_path: Path):
     selector, realizer = MotionSelector(config.motion_selection), MotionRealizer(config.motion_realization)
     first = _navigation_tick(clock)
     validity = first.trace.layers[-1].output.motion_validity
+    progress = first.trace.layers[-1].output.progress
+    assert progress > 0.0
+    upper_progress = []
     source = tmp_path / "navigation.mcap"
     with source.open("wb") as stream:
         writer = StdlibMcapWriter(stream)
         writer.start()
         channel = writer.register_channel("/r2b4/tick")
-        for tick_id in (1, 2):
-            if tick_id == 2:
+        for tick_id in (1, 2, 3):
+            if tick_id > 1:
                 clock.now += 20_000_000
             completed = _navigation_tick(clock, tick=tick_id, validity=validity)
             estimate, world, plan = (layer.output for layer in completed.trace.layers)
-            if tick_id == 2:
+            if tick_id > 1:
                 world = replace(world, map_revision=world.map_revision + 1,
                     local_costmap=replace(world.local_costmap, revision=8, source_sequence=9))
                 plan = replace(plan, goal_selection_reason="GOAL_HANDOFF")
+            plan = replace(plan, status=NavigationStatus.ACTIVE if tick_id < 3 else NavigationStatus.PENDING,
+                reason=(None, "LOCAL_GUIDANCE_REVALIDATED", "GEOMETRY_HOLD")[tick_id - 1],
+                velocity_target=VelocityTarget(.15, 0.0) if tick_id < 3 else None)
             mission = MissionIntent(plan.context, plan.mission_id, CommandMode.EXPLORE,
                                     None, None, plan.constraints, MissionLifecycle.ACTIVE)
             objective = selector.evaluate(plan)
@@ -178,6 +185,8 @@ def test_compact_navigation_lineage_survives_mcap_evi_and_diag(tmp_path: Path):
             inputs = TickInputs(plan.context, RawDeviceBatch(plan.context, (), ()),
                 CommandRequest(plan.context, "nav", CommandMode.EXPLORE, (), tick_id), LifecycleState.ACTIVE)
             payload = encode_behavior_record(project_behavior_record(ExecutionRecord(inputs, completed)))
+            upper_progress.append(_tick_status(completed)["navigation"]["progress"])
+            assert payload["expected"]["layers"]["L6"]["progress"] == upper_progress[-1] == progress
             assert "occupied_cells" not in payload["expected"]["layers"]["L4"]["local_costmap"]
             assert "trajectory_candidates" not in payload["expected"]["layers"]["L6"]
             writer.add_message(channel, log_time_ns=plan.context.monotonic_ns,
@@ -188,8 +197,11 @@ def test_compact_navigation_lineage_survives_mcap_evi_and_diag(tmp_path: Path):
     assert compiled["compiler_status"] == "COMPLETE"
     assert verify(compiled["output"], source=source)["status"] == "PASS"
     indexed = list(query(compiled["output"], field="/expected/layers/L6/motion_validity/geometry_revision"))
-    assert len(indexed) == 2
+    assert len(indexed) == 3
     context = open_context(ROOT, compiled["output"])
+    navigation_rows = list(context.bundle.iter_view("layers/L6"))
+    assert [row.payload["progress"] for row in navigation_rows] == upper_progress == [progress] * 3
+    assert navigation_rows[-1].payload["reason"] == "GEOMETRY_HOLD"
     registry = build_default_registry()
     for analyzer_id in ("navigation", "world_model"):
         analyzed = registry.run(analyzer_id, context)
@@ -199,6 +211,9 @@ def test_compact_navigation_lineage_survives_mcap_evi_and_diag(tmp_path: Path):
         assert l4["/local_costmap/revision"]["change_count"] == 1
         assert l4["/local_costmap/source_sequence"]["change_count"] == 1
         assert l6["/goal_selection_reason"]["change_count"] == 1
+        if analyzer_id == "navigation":
+            assert l6["/progress"]["change_count"] == 0
+            assert l6["/progress"]["numeric"]["min"] == l6["/progress"]["numeric"]["max"] == progress
         assert l6["/motion_validity/geometry_captured_ns"]["change_count"] == 0
         assert l6["/motion_validity/valid_until_ns"]["change_count"] == 0
         reference = l6["/goal_selection_reason"]["examples"][0]["evidence_ref"]

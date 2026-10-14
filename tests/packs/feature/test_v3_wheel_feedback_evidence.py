@@ -4,11 +4,12 @@ import json
 
 import pytest
 
-from rig import resolved_config
+from rig import ROOT, resolved_config
 from test_v3_motion_feedback_quality import _NativeFeedback, _warm_native_feedback
 from tools.mcap_evidence.compiler import compile_evidence
 from tools.mcap_evidence.reader import EvidenceBundle
 from tools.mcap_evidence.verify import verify
+from v3.capture import CaptureSink
 from v3.capture_behavior import encode_behavior_record, project_behavior_record
 from v3.capture_encoding import encode_capture_record, encode_value
 from v3.composition.full_fake import OfflineMotorSink
@@ -20,15 +21,16 @@ from v3.contracts import (
 )
 from v3.engine import TickInputs
 from v3.execution import ExecutionRecord
-from v3.layers.l11_actuator_control import WheelFeedbackEvidence
+from v3.layers.l11_actuator_control import WheelActuatorController, WheelFeedbackEvidence
 from v3.mcap_reader import McapReader
 from v3.mcap_writer import StdlibMcapWriter
+from v3.replay import replay_capture
 
 
 def test_cached_feedback_rejection_preserves_measurement_and_exact_watchdog_deadline():
     resolved = resolved_config()
     config = resolved.runtime.composition.live_control.control
-    native, controller = _warm_native_feedback(resolved, None)
+    native, controller = _warm_native_feedback(resolved, None, sign=-1)
     frame = native.frame(30, .25, .25)
     controller(WheelVelocitySetpoint(frame.context, .19, .19), frame)
     source = frame.accepted[0]
@@ -94,6 +96,27 @@ def test_invalid_feedback_evidence_preserves_error_without_admitting_motion(key,
         assert evidence.measurement_timing_valid is False
 
 
+def test_passive_feedback_evidence_failure_preserves_actuation_and_original_error(monkeypatch):
+    resolved = resolved_config()
+    native, controller = _warm_native_feedback(resolved, None, sign=-1)
+    frame = native.frame(30, .25, .25)
+    wheels = WheelVelocitySetpoint(frame.context, .19, .19)
+    checkpoint = controller.checkpoint()
+    expected = controller(wheels, frame)
+    controller.restore(checkpoint)
+
+    def broken_evidence(*args):
+        raise RuntimeError("diagnostic failure")
+
+    monkeypatch.setattr(WheelActuatorController, "_feedback_evidence", broken_evidence)
+    assert controller(wheels, frame) == expected
+    assert controller.feedback_evidence is None
+    invalid = replace(frame, context=TickContext(31, frame.context.monotonic_ns + 20_000_000))
+    with pytest.raises(ValueError, match="L11 inputs must use the same tick context"):
+        controller(wheels, invalid)
+    assert controller.feedback_evidence is None
+
+
 def _silent_encoder_records():
     """Native source, admission and L1-L12; the writer is only memory."""
     resolved = resolved_config()
@@ -105,7 +128,13 @@ def _silent_encoder_records():
         set(config.critical_device_ids) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
     records = []
     try:
-        for tick in range(100):
+        # The first L9 wheel-floor transition is a finite startup allowance;
+        # fresh standstill snapshots cannot renew it. Run beyond that deadline.
+        startup_ns = 2 * config.operational_constraints.wheel_limits.maximum_mps / (
+            config.operational_constraints.max_acceleration_mps2
+            * config.operational_constraints.degraded_acceleration_scale) * 1e9
+        max_ticks = int((startup_ns + config.wheel_pi.max_feedback_uncertainty_ns) / 20_000_000) + 4
+        for tick in range(max_ticks):
             feedback = native.frame(tick, 0., 0.)
             context = feedback.context
             observation = feedback.accepted[0]
@@ -137,12 +166,13 @@ def _silent_encoder_records():
                 break
         else:
             pytest.fail("silent native encoder did not fault within its finite watchdog")
-        # Faulting before L11 on a subsequent tick must not republish its old
-        # feedback evidence as facts about that later tick.
-        context = TickContext(tick + 1, context.monotonic_ns + 20_000_000)
-        composition.run_tick(TickInputs(context, RawDeviceBatch(context, (), health),
+        # Skipping a tick faults in TickEngine before L11. Its earlier feedback
+        # evidence must not become facts about this later control boundary.
+        context = TickContext(tick + 2, context.monotonic_ns + 40_000_000)
+        skipped = composition.run_tick(TickInputs(context, RawDeviceBatch(context, (), health),
             CommandRequest(context, "feedback-debug", CommandMode.TELEOP,
-                (DataField("v_mps", .19), DataField("omega_rad_s", 0.)), tick + 1), LifecycleState.ACTIVE))
+                (DataField("v_mps", .19), DataField("omega_rad_s", 0.)), tick + 2), LifecycleState.ACTIVE))
+        assert skipped.trace.fault_layer == "TickEngine"
         assert not any(isinstance(item, WheelFeedbackEvidence) for item in composition.tick_evidence)
     finally:
         composition.close()
@@ -175,5 +205,16 @@ def test_first_native_feedback_fault_survives_mcap_and_explicit_evi_compilation(
     compiled = compile_evidence(path, tmp_path / "evi", workers=1)
     assert verify(compiled["output"], source=path)["status"] == "PASS"
     bundle = EvidenceBundle.open(compiled["output"])
-    ticks = list(bundle.iter_view("tick"))
+    ticks = list(bundle.iter_view("ticks"))
     assert encoded in ticks[-1].payload["tick_evidence"]
+    if not behavior:
+        # The complete synthetic prefix uses the canonical capture/replay path,
+        # including the terminal L11 fault. It proves no live hardware cause.
+        control = resolved_config().runtime.composition.live_control.control
+        sink = CaptureSink("feedback-loss", configuration={"production_control": control})
+        for record in records:
+            sink.write(record)
+        capture = sink.finalize("FAULT", tmp_path / "feedback.json")
+        replay = replay_capture(capture, project_root=ROOT)
+        assert replay["status"] == "MATCH", replay["diagnostics"]
+        assert replay["determinism"]["repeated_trace_match"]

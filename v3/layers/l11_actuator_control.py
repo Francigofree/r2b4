@@ -523,7 +523,12 @@ class WheelActuatorController:
             error = exc
             raise
         finally:
-            self._last_feedback_evidence = self._feedback_evidence(wheels, frame, error, previous_feedback)
+            try:
+                self._last_feedback_evidence = self._feedback_evidence(wheels, frame, error, previous_feedback)
+            except Exception:
+                # Passive evidence cannot replace the actuator result or the
+                # original fail-closed exception with a diagnostic failure.
+                self._last_feedback_evidence = None
 
     def _feedback_evidence(
         self,
