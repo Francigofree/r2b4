@@ -13,6 +13,7 @@ TOKENS = (
     "goal", "route", "waypoint", "trajectory", "candidate", "selected", "selection",
     "reason", "status", "progress", "corridor", "clearance", "curvature", "velocity",
     "requested", "omega", "turn", "priority", "transition", "motion_validity",
+    "revision", "sequence", "freshness", "geometry",
 )
 
 CONTRACT = AnalyzerContract(

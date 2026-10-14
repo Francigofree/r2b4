@@ -11,6 +11,7 @@ TOKENS = (
     "world", "map", "occup", "obstacle", "clearance", "corridor", "person", "dynamic",
     "static", "free", "range", "distance", "pose", "goal", "route", "valid", "quality",
     "confidence", "revision", "timestamp", "captured", "point", "scan",
+    "sequence", "freshness", "geometry",
 )
 
 CONTRACT = AnalyzerContract(

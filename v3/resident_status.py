@@ -179,6 +179,7 @@ def _tick_status(
 
     navigation_payload: dict[str, object] | None = None
     if isinstance(navigation, NavigationPlan):
+        validity = navigation.motion_validity
         navigation_payload = {
             "mission_id": navigation.mission_id,
             "status": navigation.status.value,
@@ -186,6 +187,26 @@ def _tick_status(
             "progress": navigation.progress,
             "route_waypoint_count": len(navigation.route),
             "trajectory_candidate_count": len(navigation.trajectory_candidates),
+            "goal_selection_reason": navigation.goal_selection_reason,
+            "goal_selected_ns": navigation.goal_selected_ns,
+            "motion_validity": (
+                None if validity is None else {
+                    "source_context": {
+                        "tick_id": validity.source_context.tick_id,
+                        "monotonic_ns": validity.source_context.monotonic_ns,
+                    },
+                    "valid_until_ns": validity.valid_until_ns,
+                    "frame_id": validity.frame_id,
+                    "scope": validity.scope,
+                    "geometry_revision": validity.geometry_revision,
+                    "geometry_captured_ns": validity.geometry_captured_ns,
+                    "localization_requirement": {
+                        "local_translation": validity.localization_requirement.local_translation,
+                        "heading": validity.localization_requirement.heading,
+                        "global_position": validity.localization_requirement.global_position,
+                    },
+                }
+            ),
             "local_goal": (
                 None
                 if navigation.local_goal is None

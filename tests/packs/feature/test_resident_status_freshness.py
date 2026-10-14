@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 import time
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +22,64 @@ def _wait_status(path, tick_id):
             return received
         time.sleep(.005)
     pytest.fail(f"status did not deliver tick {tick_id}")
+
+
+def _navigation_tick(clock, *, tick=1, validity=None):
+    from v3.contracts import MissionConstraints, MotionValidity, NavigationPlan, NavigationStatus, TickContext
+    from v3.contracts.localization import LocalizationRequirement
+    from v3.engine import LayerRecord
+
+    completed = geometry_tick(clock, tick=tick, cells=4000)
+    context = completed.trace.context
+    validity = validity or MotionValidity(
+        TickContext(0, context.monotonic_ns - 20_000_000),
+        context.monotonic_ns + 100_000_000, "R2B4_ODOM_LOCAL", "mission-nav",
+        LocalizationRequirement(global_position=False), 7, context.monotonic_ns - 10_000_000,
+    )
+    navigation = NavigationPlan(
+        context, "mission-nav", (), None, MissionConstraints(.2, .6, .2, .1, .1), .2, .25,
+        NavigationStatus.PENDING, "ASYNC_L6_PENDING", motion_validity=validity,
+        goal_selection_reason="INITIAL_GOAL", goal_selected_ns=validity.source_context.monotonic_ns,
+    )
+    return replace(completed, trace=replace(completed.trace,
+        layers=(*completed.trace.layers, LayerRecord("L6", navigation))))
+
+
+@pytest.mark.parametrize("process", [False, True])
+def test_navigation_status_preserves_goal_and_guidance_lineage_without_geometry(tmp_path, process):
+    from v3_process_runtime import AsyncResidentStatusPublisher, ResidentStatusConfig
+
+    clock = Clock()
+    first = _navigation_tick(clock)
+    validity = first.trace.layers[-1].output.motion_validity
+    config = ResidentStatusConfig(path=tmp_path / "navigation.json")
+    publisher = ProcessResidentStatusPublisher(config) if process else AsyncResidentStatusPublisher(config)
+    publisher.start()
+    try:
+        publisher.publish_tick(first)
+        initial = _wait_status(config.path, 1)
+        clock.now += 20_000_000
+        latest = _navigation_tick(clock, tick=2, validity=validity)
+        publisher.publish_tick(latest)
+        received = _wait_status(config.path, 2)
+        assert received == _tick_status(latest)
+        navigation = received["navigation"]
+        assert navigation == initial["navigation"]
+        assert navigation["goal_selection_reason"] == "INITIAL_GOAL"
+        assert navigation["goal_selected_ns"] == validity.source_context.monotonic_ns
+        assert navigation["motion_validity"] == {
+            "source_context": {"tick_id": 0, "monotonic_ns": validity.source_context.monotonic_ns},
+            "valid_until_ns": validity.valid_until_ns,
+            "frame_id": validity.frame_id, "scope": validity.scope,
+            "geometry_revision": validity.geometry_revision,
+            "geometry_captured_ns": validity.geometry_captured_ns,
+            "localization_requirement": {"local_translation": True, "heading": True, "global_position": False},
+        }
+        assert "occupied_cells" not in received["world"]["local_costmap"]
+        assert not {"route", "trajectory_candidates", "geometry_proof"} & navigation.keys()
+        assert len(json.dumps(received)) < 10_000
+    finally:
+        publisher.finish()
 
 
 def _blocked_status_sidecar(entered, release, written, *arguments):

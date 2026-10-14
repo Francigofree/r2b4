@@ -494,9 +494,13 @@ class ShadowWorldModel:
         )
 
         self._update_lidar_health(frame)
+        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
+        if len(local) > 1:
+            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
+        local_observation = local[0] if local else None
         # Pose-independent scan lineage must continue through localization loss.
         # Only the pose-aligned occupancy path below is allowed to freeze.
-        self._update_robot_relative_geometry(frame)
+        local_points = self._update_robot_relative_geometry(local_observation)
 
         changed_tracks = False
         for observation in frame.accepted:
@@ -520,7 +524,9 @@ class ShadowWorldModel:
                 observed_ns=frame.context.monotonic_ns,
             ) or changed_tracks
 
-        costmap_changed = self._update_local_scan(frame, estimate)
+        costmap_changed = self._update_local_scan(
+            frame, estimate, local_observation, local_points,
+        )
 
         if self._config.person_tracking_enabled and estimate.localization_quality.local_translation is not QualityState.LOST:
             person_observations = tuple(
@@ -839,19 +845,8 @@ class ShadowWorldModel:
             self._last_lidar_sequence = observation.source_sequence
             self._last_lidar_measurement_ns = measurement_ns
 
-    def _update_robot_relative_geometry(self, frame: AdmittedFrame) -> None:
-        """Track fresh ROBOT_BASE geometry independently of localization quality.
-
-        This intentionally does not integrate, transform or persist obstacle
-        geometry.  It only carries scan lineage/freshness so recovery can keep
-        observing while pose-aligned mapping remains fail-closed.
-        """
-        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
-        if len(local) > 1:
-            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
-        if not local:
-            return
-        observation = local[0]
+    def _local_scan_points(self, observation: Observation) -> tuple[tuple[float, float], ...]:
+        """Validate one bounded immutable scan and parse its robot-frame points."""
         values = _values(observation)
         if values.get("frame_id") != "ROBOT_BASE":
             raise ValueError("lidar local points must use the ROBOT_BASE frame")
@@ -866,6 +861,25 @@ class ShadowWorldModel:
         )
         if set(values) != expected_keys:
             raise ValueError("lidar local point fields do not match point_count")
+        points: list[tuple[float, float]] = []
+        for index in range(point_count):
+            local_x = _number(values, f"point_{index:03d}_x_m")
+            local_y = _number(values, f"point_{index:03d}_y_m")
+            _integer(values, f"point_{index:03d}_quality")
+            points.append((local_x, local_y))
+        return tuple(points)
+
+    def _update_robot_relative_geometry(
+        self, observation: Observation | None,
+    ) -> tuple[tuple[float, float], ...] | None:
+        """Track fresh ROBOT_BASE geometry independently of localization quality.
+
+        This intentionally does not integrate, transform or persist obstacle
+        geometry.  It only carries scan lineage/freshness so recovery can keep
+        observing while pose-aligned mapping remains fail-closed.
+        """
+        if observation is None:
+            return None
 
         previous = self._robot_relative_geometry
         if previous is not None:
@@ -879,28 +893,31 @@ class ShadowWorldModel:
                     or observation.values != self._last_robot_relative_values
                 ):
                     raise ValueError("L4 robot-relative perception sequence was rewritten")
-                return
+                # Equal sequence, time and immutable values were already fully
+                # validated. Do not rebuild point keys or parse at control rate.
+                return None
 
-        for index in range(point_count):
-            _number(values, f"point_{index:03d}_x_m")
-            _number(values, f"point_{index:03d}_y_m")
-            _integer(values, f"point_{index:03d}_quality")
+        points = self._local_scan_points(observation)
 
         self._robot_relative_geometry = RobotRelativeGeometry(
             frame_id="ROBOT_BASE",
             source_sequence=observation.source_sequence,
             captured_monotonic_ns=observation.captured_monotonic_ns,
-            point_count=point_count,
+            point_count=len(points),
             freshness_ns=0,
         )
         self._last_robot_relative_values = observation.values
+        return points
 
-    def _update_local_scan(self, frame: AdmittedFrame, estimate: RobotEstimate) -> bool:
-        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
-        if len(local) > 1:
-            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
-        if local:
-            self._pending_local_scan = local[0]
+    def _update_local_scan(
+        self,
+        frame: AdmittedFrame,
+        estimate: RobotEstimate,
+        local_observation: Observation | None,
+        local_points: tuple[tuple[float, float], ...] | None,
+    ) -> bool:
+        if local_observation is not None:
+            self._pending_local_scan = local_observation
         if (estimate.localization_quality.local_translation is QualityState.LOST
                 or estimate.localization_quality.heading is QualityState.LOST):
             self._structural_recall_ready = False
@@ -911,20 +928,6 @@ class ShadowWorldModel:
         # Retry only an already admitted immutable scan. Its original sequence
         # and time remain authoritative; downstream freshness is not renewed.
         self._pending_local_scan = None
-        values = _values(observation)
-        if values.get("frame_id") != "ROBOT_BASE":
-            raise ValueError("lidar local points must use the ROBOT_BASE frame")
-        point_count = _integer(values, "point_count")
-        if point_count > self._config.local_costmap_max_points_per_scan:
-            raise ValueError("lidar local point_count exceeds the configured bound")
-        expected_keys = {"frame_id", "point_count"}
-        expected_keys.update(
-            f"point_{index:03d}_{suffix}"
-            for index in range(point_count)
-            for suffix in ("x_m", "y_m", "quality")
-        )
-        if set(values) != expected_keys:
-            raise ValueError("lidar local point fields do not match point_count")
         if self._last_local_sequence is not None and observation.source_sequence < self._last_local_sequence:
             raise ValueError("L4 local perception sequence must not move backwards")
         if (
@@ -950,13 +953,14 @@ class ShadowWorldModel:
             return False
         if not pose.local_geometry_usable:
             return False
+        if local_points is None:
+            # A later eligible tick retries the admitted scan, including after
+            # checkpoint restore. No new persistent parsed-payload state is needed.
+            local_points = self._local_scan_points(observation)
         yaw_cos = math.cos(pose.yaw_rad)
         yaw_sin = math.sin(pose.yaw_rad)
         endpoints: list[tuple[float, float]] = []
-        for index in range(point_count):
-            local_x = _number(values, f"point_{index:03d}_x_m")
-            local_y = _number(values, f"point_{index:03d}_y_m")
-            _integer(values, f"point_{index:03d}_quality")
+        for local_x, local_y in local_points:
             if math.hypot(local_x, local_y) > self._config.local_costmap_radius_m:
                 continue
             endpoints.append(
