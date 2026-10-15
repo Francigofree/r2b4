@@ -22,7 +22,10 @@ fizikai művelet indulhat.
 
 A navigációs toolok opcionális `max_v_mps` és `max_omega_rad_s` korlátot
 fogadnak; a turn csak szögsebességkorlátot. Ezek nem emelhetik az ER2
-konfigurált korlátait. A toleranciákat a meglévő L5 konfiguráció adja.
+konfigurált korlátait. A toleranciák felső korlátját a meglévő L5 konfiguráció
+adja. A relatív transzláció érkezési toleranciája ezen belül legfeljebb 2 cm,
+rövid kérésnél legfeljebb a kért távolság 10%-a. Ez a becsült pose hibájának
+korlátja; a fizikai 2 cm-es pontosságot külön mérésnek kell igazolnia.
 A `robot_drive` csak explicit `Er2RobotTools(..., debug_drive=True)` esetén
 kerülhet a modell tooljai közé; a közvetlen metódus diagnosztikához megmarad.
 
@@ -53,13 +56,32 @@ esetén a provider session hibával megszakad, nem kap sikeres tool-eredményt.
 A finite relative action admissionje egyetlen hostoldali state/action
 tranzakció: capture/runtime stabilizálás és szükséges re-arm → STOP/IDLE →
 friss pose → relatív target → ugyanazon resident runtime-session NAVIGATE
-admission. A pose és a target ezért nem élhet túl egy capture által kiváltott
-runtime restartot. A runtime PID/session változása `RUNTIME_SESSION_CHANGED`,
-a lokális odometria generation váltása `LOCALIZATION_FRAME_CHANGED` okkal
-fail-closed megszakítást jelent.
+admission. A transzlációs `move_relative` az induló, friss `GOOD` globális és
+`GOOD` heading minőségű
+pose-ból egyszer képez rögzített `R2B4_BOOT_ROBOT_MAP` célt. Nincs automatikus
+lokális fallback: a LiDARral korrigált globális pose határozza meg az érkezést,
+így az encoder lokális összegzett hibája nem válik célhibává. Az átmeneti
+globális bizonytalanság és a map–odom transzformáció kezelése továbbra is L6
+feladata; a host nem képez új célt és nem korrigál külön mozgást. A `turn_by`
+és a nulla transzlációs relatív yaw cél lokális marad.
+
+A pose és a target nem élhet túl egy capture által kiváltott runtime restartot.
+A runtime PID/session változása `RUNTIME_SESSION_CHANGED`, lokális cél esetén
+az odometria generation váltása `LOCALIZATION_FRAME_CHANGED` okkal fail-closed
+megszakítást jelent. Transzlációs relatív kérés `COMPLETE` eredményéhez a végső
+globális pose-nak is friss `GOOD` minőségűnek kell lennie, az indulási fixnél
+újabb elfogadott globális mérésből. A canonical STOP után a host a teljes
+határidőn belül, legfeljebb egy másodpercig csak megfigyel: a completion ticknél
+újabb globális mérést és a futó estimator policy szerinti álló állapotot vár,
+majd ismét ellenőrzi a rögzített cél residualját. Hiányzó evidence vagy a
+STOP utáni toleranciatúllépés `INTERRUPTED`, új mozgás vagy automatikus
+korrekció nélkül. A visszatérő final pose és `final_pose_status_monotonic_ns`
+ebből a STOP utáni megfigyelésből származik; a completion eredeti ideje és
+navigációs metadata megmarad. A becslés fizikai pontosságát továbbra is
+független mérés igazolja.
 
 A visszatérés `frame_provenance` mezőben megőrzi a frame ID-t, a resident
-runtime PID-t, a lokalizáció generationt és a pose-státusz monotonic
+runtime PID-t, lokális célnál az odometria generationt és a pose-státusz monotonic
 időbélyegét. Ez fejlesztési/evidence adat; nem motor-authority.
 
 A visszatérés tartalmazza a command és mission ID-t, a kért paramétereket,

@@ -23,6 +23,7 @@ from v3.wheel_motion import WheelMotionLimits
 # A finite relative request must not disappear into the room-navigation arrival
 # envelope. The running config remains the upper bound on accepted pose error.
 _RELATIVE_COMPLETION_ERROR_FRACTION = 0.10
+_RELATIVE_TRANSLATION_TOLERANCE_M = 0.02
 
 
 class FiniteNavigationSafetyError(RuntimeError):
@@ -118,6 +119,8 @@ class FiniteNavigationExecutor:
         reason = "CANCELLED"
         preparation = None
         goal_tolerance = yaw_tolerance = None
+        global_anchor = False
+        anchor_fix_ns = None
         requested = dict(parameters)
         try:
             params = dict(parameters)
@@ -140,7 +143,11 @@ class FiniteNavigationExecutor:
                 left = _finite(params.pop("left_m", 0.0), "left_m")
                 value = params.pop("final_yaw_rad", None)
                 yaw_delta = None if value is None else _finite(value, "final_yaw_rad")
-                frame_id = LOCAL_FRAME_ID
+                # Anchor translation once in the corrected map frame. Wheel
+                # odometry remains continuous, but its accumulated displacement
+                # error must not become the finite action's arrival metric.
+                global_anchor = forward != 0.0 or left != 0.0
+                frame_id = GLOBAL_FRAME_ID if global_anchor else LOCAL_FRAME_ID
             elif action == "v3.command.turn_by":
                 angle = _finite(params.pop("angle_deg"), "angle_deg")
                 if not -180.0 <= angle <= 180.0:
@@ -188,9 +195,12 @@ class FiniteNavigationExecutor:
                         min(deadline, self._monotonic() + 8.0),
                         cancel_event,
                         runtime_pid=preparation.runtime_pid,
+                        require_global_fix=global_anchor,
                     )
                     final = start_status
                     if pose is not None:
+                        if global_anchor:
+                            anchor_fix_ns = self._global_fix_ns(start_status)
                         if action != "v3.command.navigate":
                             yaw = float(pose["yaw_rad"])
                             target = {
@@ -209,6 +219,8 @@ class FiniteNavigationExecutor:
                         if action != "v3.command.navigate":
                             if distance is not None and distance > 0.0:
                                 goal_tolerance = min(goal_tolerance, distance * _RELATIVE_COMPLETION_ERROR_FRACTION)
+                                if global_anchor:
+                                    goal_tolerance = min(goal_tolerance, _RELATIVE_TRANSLATION_TOLERANCE_M)
                             if yaw_error is not None and abs(yaw_error) > 0.0:
                                 yaw_tolerance = min(yaw_tolerance, abs(yaw_error) * _RELATIVE_COMPLETION_ERROR_FRACTION)
                         needs_spin = yaw_error is not None and abs(yaw_error) > yaw_tolerance
@@ -259,6 +271,8 @@ class FiniteNavigationExecutor:
                         target=target,
                         goal_tolerance_m=goal_tolerance,
                         yaw_tolerance_rad=yaw_tolerance,
+                        require_global_fix=global_anchor,
+                        after_global_fix_ns=anchor_fix_ns,
                     )
         except TimeoutError:
             reason = "CANCELLED" if cancel_event is not None and cancel_event.is_set() else "TIMEOUT"
@@ -272,9 +286,19 @@ class FiniteNavigationExecutor:
                     "status": "INTERRUPTED", "reason": reason,
                 }) from exc
 
+        completion_ns = final.get("monotonic_ns")
         navigation = final.get("navigation")
         navigation = navigation if isinstance(navigation, Mapping) else {}
-        final_pose = self._pose(final, target.get("frame_id", LOCAL_FRAME_ID))
+        if reason == "COMPLETE" and global_anchor:
+            final, reason = self._post_stop_global_pose(
+                runtime_pid=preparation.runtime_pid,
+                completion_ns=completion_ns,
+                target=target, goal_tolerance_m=goal_tolerance,
+                yaw_tolerance_rad=yaw_tolerance, deadline=deadline,
+                cancel_event=cancel_event,
+            )
+
+        final_pose = self._pose(final, target.get("frame_id", frame_id))
         comparable = (reason not in {"LOCALIZATION_FRAME_CHANGED", "RUNTIME_SESSION_CHANGED"}
                       and (frame_id != LOCAL_FRAME_ID or self._generation(final) == start_generation))
         return {
@@ -292,7 +316,8 @@ class FiniteNavigationExecutor:
             "goal_tolerance_m": goal_tolerance,
             "yaw_tolerance_rad": yaw_tolerance,
             "runtime_pid": None if preparation is None else preparation.runtime_pid,
-            "completion_status_monotonic_ns": final.get("monotonic_ns"),
+            "completion_status_monotonic_ns": completion_ns,
+            "final_pose_status_monotonic_ns": final.get("monotonic_ns"),
             "frame_provenance": {
                 "frame_id": target.get("frame_id", frame_id),
                 "runtime_pid": None if preparation is None else preparation.runtime_pid,
@@ -319,12 +344,94 @@ class FiniteNavigationExecutor:
         return quality.get("generation") if isinstance(quality, Mapping) else None
 
     @staticmethod
+    def _global_fix_ready(status: Mapping[str, object]) -> bool:
+        """Consume the runtime's quality and freshness; never infer a map fix."""
+        estimate = status.get("estimate")
+        quality = estimate.get("localization_quality") if isinstance(estimate, Mapping) else None
+        if (not isinstance(quality, Mapping) or quality.get("global_position") != "GOOD"
+                or quality.get("heading") != "GOOD"):
+            return False
+        age_ns = quality.get("global_fix_age_ns")
+        fix_ns = FiniteNavigationExecutor._global_fix_ns(status)
+        status_ns = status.get("monotonic_ns")
+        try:
+            maximum_age_ns = status["effective_config"]["runtime"]["composition"]["live_control"]["control"][
+                "estimation"]["quality"]["global_fix_max_age_ns"]
+        except (KeyError, TypeError):
+            return False
+        return (fix_ns is not None and type(status_ns) is int and fix_ns <= status_ns
+                and type(age_ns) is int and type(maximum_age_ns) is int
+                and 0 <= age_ns <= maximum_age_ns
+                and 0 <= status_ns - fix_ns <= maximum_age_ns)
+
+    @staticmethod
+    def _global_fix_ns(status: Mapping[str, object]) -> int | None:
+        estimate = status.get("estimate")
+        quality = estimate.get("localization_quality") if isinstance(estimate, Mapping) else None
+        value = quality.get("global_fix_last_accepted_ns") if isinstance(quality, Mapping) else None
+        return value if type(value) is int and value >= 0 else None
+
+    @staticmethod
+    def _stationary(status: Mapping[str, object]) -> bool:
+        try:
+            estimate = status["estimate"]
+            config = status["effective_config"]["runtime"]["composition"]["live_control"]["control"]["estimation"]
+            v = _finite(estimate["v_mps"], "reported velocity")
+            omega = _finite(estimate["omega_rad_s"], "reported angular velocity")
+            v_limit = _finite(config["still_velocity_threshold_mps"], "stationary velocity limit")
+            omega_limit = _finite(config["stationary_bias_omega_max_rad_s"], "stationary angular limit")
+        except (KeyError, TypeError, ValueError):
+            return False
+        return 0 <= abs(v) <= v_limit and 0 <= abs(omega) <= omega_limit
+
+    def _post_stop_global_pose(
+        self, *, runtime_pid: int, completion_ns: object, target: Mapping[str, object],
+        goal_tolerance_m: float, yaw_tolerance_rad: float, deadline: float,
+        cancel_event: threading.Event | None,
+    ) -> tuple[Mapping[str, object], str]:
+        """Observe one post-completion fix after STOP, without issuing motion."""
+        final: Mapping[str, object] = {}
+        if type(completion_ns) is not int:
+            return final, "FINAL_POSE_UNCONFIRMED"
+        deadline = min(deadline, self._monotonic() + 1.0)
+        while self._monotonic() < deadline:
+            if cancel_event is not None and cancel_event.is_set():
+                return final, "CANCELLED"
+            try:
+                if self.controller.snapshot().runtime_pid != runtime_pid:
+                    return final, "RUNTIME_SESSION_CHANGED"
+                payload = self.controller.live_runtime_status()
+                if self.controller.snapshot().runtime_pid != runtime_pid:
+                    return {}, "RUNTIME_SESSION_CHANGED"
+            except Exception:
+                return final, "STATUS_UNAVAILABLE"
+            if not isinstance(payload, Mapping):
+                return final, "STATUS_UNAVAILABLE"
+            final = payload
+            if self._fault(payload):
+                return final, "RUNTIME_FAULT"
+            if not OperatorController._stopped(payload):
+                return final, "POST_STOP_MOTION_ACTIVE"
+            fix_ns = self._global_fix_ns(payload)
+            if (self._global_fix_ready(payload) and fix_ns > completion_ns
+                    and self._stationary(payload)):
+                pose = self._pose(payload, GLOBAL_FRAME_ID)
+                distance, angle = _pose_distance(pose, target), _pose_angle(pose, target)
+                if (distance is None or distance > goal_tolerance_m
+                        or target.get("yaw_rad") is not None
+                        and (angle is None or abs(angle) > yaw_tolerance_rad)):
+                    return final, "POST_STOP_OUTSIDE_TOLERANCE"
+                return final, "COMPLETE"
+            self._sleep(min(.05, max(0., deadline - self._monotonic())))
+        return final, "FINAL_POSE_UNCONFIRMED"
+
+    @staticmethod
     def _fault(status: Mapping[str, object]) -> bool:
         return status.get("state") != "RUNNING" or bool(status.get("fault_layer")) or status.get("safety_decision") == "FAULT"
 
     def _pose_snapshot(
         self, frame_id: str, deadline: float, cancel_event: threading.Event | None,
-        *, runtime_pid: int,
+        *, runtime_pid: int, require_global_fix: bool = False,
     ) -> tuple[Mapping[str, object] | None, Mapping[str, object], str]:
         status: Mapping[str, object] = {}
         while True:
@@ -340,7 +447,9 @@ class FiniteNavigationExecutor:
                 if self._fault(status):
                     return None, status, "RUNTIME_FAULT"
                 pose = self._pose(status, frame_id)
-                if pose is not None and pose.get("frame_id") == frame_id and status.get("ready_for_active") is True:
+                if (pose is not None and pose.get("frame_id") == frame_id
+                        and status.get("ready_for_active") is True
+                        and (not require_global_fix or self._global_fix_ready(status))):
                     for key in ("x_m", "y_m", "yaw_rad"):
                         _finite(pose.get(key), key)
                     return pose, status, "READY"
@@ -350,6 +459,8 @@ class FiniteNavigationExecutor:
         self, mission_id: str, frame_id: str, generation: object,
         deadline: float, cancel_event: threading.Event | None, *, runtime_pid: int,
         target: Mapping[str, object], goal_tolerance_m: float, yaw_tolerance_rad: float,
+        require_global_fix: bool = False,
+        after_global_fix_ns: int | None = None,
     ) -> tuple[Mapping[str, object], str]:
         final: Mapping[str, object] = {}
         progress_at = self._monotonic()
@@ -391,6 +502,11 @@ class FiniteNavigationExecutor:
             if mission.get("mode") != "NAVIGATE":
                 return final, "MISSION_INVALID"
             if nav_status == "COMPLETE":
+                if require_global_fix:
+                    fix_ns = self._global_fix_ns(payload)
+                    if (not self._global_fix_ready(payload) or after_global_fix_ns is None
+                            or fix_ns <= after_global_fix_ns):
+                        return final, "GLOBAL_LOCALIZATION_UNAVAILABLE"
                 distance = _pose_distance(estimate, target)
                 angle = _pose_angle(estimate, target)
                 if (distance is None or distance > goal_tolerance_m

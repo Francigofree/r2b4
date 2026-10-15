@@ -549,8 +549,9 @@ class MotorlessSkillSimulator:
         directory = self.root / f"trial-{number}"
         directory.mkdir()
         conf = self.project_root / "conf"
-        config = ConfigResolver(conf / "hardver.json", conf / "fizika.json", conf / "speed_map.json",
-                                conf / "vezerles.json").resolve().runtime.composition.live_control.control
+        resolved = ConfigResolver(conf / "hardver.json", conf / "fizika.json", conf / "speed_map.json",
+                                  conf / "vezerles.json").resolve()
+        config = resolved.runtime.composition.live_control.control
         simulation_config = None
         if resolved_scenario["kind"] == "differential_drive":
             from v3.capture_encoding import encode_value
@@ -611,7 +612,8 @@ class MotorlessSkillSimulator:
                 if session.failed or self._learning_session.failed:
                     raise RuntimeError("SIMULATION_CAPTURE_INTEGRITY_FAILURE")
             physics = DifferentialDriveExperiment(resolved_scenario, config, composition, writer, directory,
-                start_ns, observe_motion, self.runtime._queue_evidence)
+                start_ns, observe_motion, self.runtime._queue_evidence, lidar_config=resolved.lidar,
+                lidar_pose_r_scale=resolved.runtime.sensor_inputs.inputs.lidar_backend.pose_r_scale)
             physics.simulation_config = simulation_config
             self.source.physics = physics
 

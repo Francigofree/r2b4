@@ -201,7 +201,7 @@ _DESCRIPTORS = (
     ),
     ActionDescriptor(
         "v3.command.move_relative",
-        "Move to a relative local pose using closed-loop navigation; blocks until completion or failure and STOP. Negative forward_m requests a goal behind the robot.",
+        "Move relative to the starting pose, anchored in fresh global localization, using closed-loop navigation; blocks until completion or failure and STOP. Negative forward_m requests a goal behind the robot.",
         (
             _p("forward_m", "Forward distance in metres relative to the starting pose; negative means behind.", required=True),
             _p("left_m", "Leftward relative goal offset in metres, not sideways driving.", default=0.0),

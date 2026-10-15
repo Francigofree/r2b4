@@ -1435,6 +1435,12 @@ class TrajectoryNavigator:
         self._progress = min(math.nextafter(1.0, 0.0), max(self._progress, progress))
         yaw_reached = yaw_error_rad <= mission.constraints.yaw_tolerance_rad
         if distance_m <= mission.constraints.goal_tolerance_m and yaw_reached:
+            # A wheel-propagated map pose can cross the arrival envelope
+            # between independent fixes. Hold until L3 accepts a current fix;
+            # prediction alone must not latch a global mission as complete.
+            if (mission.target_frame_id != LOCAL_FRAME_ID
+                    and estimate.localization_quality.global_fix_status != "ACCEPTED"):
+                return self._inactive(mission, NavigationStatus.IDLE, "GLOBAL_ARRIVAL_PENDING")
             self._completed = True
             self._progress = 1.0
             return self._complete_plan(mission)
@@ -2353,7 +2359,19 @@ class TrajectoryNavigator:
         if goal is None:
             return None
         distance = math.hypot(goal.x_m-estimate.x_m, goal.y_m-estimate.y_m)
-        if distance <= self._config.local_goal_tolerance_m:
+        # A resolvable NAVIGATE target is closed-loop: _evaluate checks its
+        # actual arrival on every tick. The rolling waypoint tolerance must
+        # not strand that mission before its tighter completion tolerance.
+        # Without a global fix only the committed local segment is available;
+        # retain its original endpoint bounds until the target can be resolved.
+        navigating_to_target = (mission.mode is CommandMode.NAVIGATE
+            and self._escape_candidate is None
+            and (mission.target_frame_id == LOCAL_FRAME_ID
+                 or quality.global_position is QualityState.GOOD))
+        arrival_tolerance = (min(self._config.local_goal_tolerance_m,
+                                 mission.constraints.goal_tolerance_m)
+                             if navigating_to_target else self._config.local_goal_tolerance_m)
+        if distance <= arrival_tolerance:
             return None
         v_cap = min(mission.constraints.max_v_mps,
                     mission.constraints.max_v_mps if max_v_mps is None else max_v_mps)
@@ -2431,9 +2449,12 @@ class TrajectoryNavigator:
                 [candidate], estimate, world, scene, self._config, v_cap, clearance)[0]
         if not candidate.progress_viable:
             return None
-        # Leave braking room before the committed local goal. A global mission
-        # with a lost map fix must never roll beyond this bounded segment.
-        if mission.mode is not CommandMode.EXPLORE and candidate.v_mps * candidate.horizon_ns / 1e9 > distance:
+        # The full rollout remains a collision forecast, not a minimum travel
+        # distance. A known terminal target may lie inside that horizon; its
+        # per-tick arrival check and the normal execution proof still apply.
+        # An unresolved global target must stay within its committed segment.
+        if (not navigating_to_target and mission.mode is not CommandMode.EXPLORE
+                and candidate.v_mps * candidate.horizon_ns / 1e9 > distance):
             return None
         validity = self._guidance_validity(mission, world)
         until = min(validity.valid_until_ns,

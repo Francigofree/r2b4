@@ -115,7 +115,8 @@ class DifferentialDriveExperiment:
 
     dt_ns = 20_000_000
 
-    def __init__(self, scenario, config, composition, writer, directory, start_ns, observe, event):
+    def __init__(self, scenario, config, composition, writer, directory, start_ns, observe, event,
+                 *, lidar_config=None, lidar_pose_r_scale=1.):
         from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig
         self.scenario, self.config, self.composition, self.writer = scenario, config, composition, writer
         self.now_ns, self.start_ns, self.tick = start_ns, start_ns, 0
@@ -132,6 +133,12 @@ class DifferentialDriveExperiment:
         self.scan_pose = (0., 0., 0.)
         self.scan_time_ns = start_ns
         self.scan_samples = ()
+        self.lidar_estimator = None
+        self.lidar_pose_r_scale = lidar_pose_r_scale
+        if lidar_config is not None:
+            from v3.lidar_estimator import LidarEstimator
+            self.lidar_estimator = LidarEstimator(lidar_config.danger_zone_m,
+                scan_match_cfg=lidar_config.matcher)
         self.commands = []
         self.status = {}
         self.first_boundary = None
@@ -204,6 +211,30 @@ class DifferentialDriveExperiment:
                   for key, number in (("clearance_m", max(0., min(rows)-self.radius)), ("observation_count", len(rows)))}
         samples = [sample("lidar_health", age_ns=0, point_count=len(ranges)),
                    sample("lidar_local_points", **fields), sample("lidar_safety_clearance", age_ns=0, **safety)]
+        summary = {"source": "simulation"}
+        if self.lidar_estimator is not None:
+            # Matching sees measured rays and the previous native estimate,
+            # advanced by wheel motion. Independent plant truth is never a fix.
+            estimate = self.status.get("estimate") or {}
+            reference = estimate.get("global_pose") or {"x_m": 0., "y_m": 0., "yaw_rad": 0.}
+            yaw = reference["yaw_rad"]
+            dt = self.dt_ns/1e9 if self.tick else 0.
+            wheel_v = (self.left+self.right)/2
+            pose_reference = (reference["x_m"]+wheel_v*dt*math.cos(yaw),
+                              reference["y_m"]+wheel_v*dt*math.sin(yaw), yaw)
+            self.lidar_estimator.set_pose_provider(lambda: pose_reference)
+            summary = self.lidar_estimator.process_scan(
+                [{"angle_rad": -bearing, "dist": distance*1000.} for bearing, distance in ranges],
+                raw_meta={"scan_seq": self.tick//5+1, "measurement_monotonic_ns": self.now_ns,
+                          "scan_start_monotonic_ns": self.now_ns, "scan_end_monotonic_ns": self.now_ns,
+                          "pose_reference_monotonic_ns": self.now_ns})
+            # The same producer tracking flag owns publication in NativeLidarSource.
+            if summary.get("tracking_ready") is True:
+                from v3.contracts import GLOBAL_FRAME_ID
+                samples.append(sample("lidar_pose", frame_id=GLOBAL_FRAME_ID,
+                    x_m=summary["lidar_pose_x"], y_m=summary["lidar_pose_y"],
+                    yaw_rad=summary["lidar_pose_theta"], confidence=summary["lidar_pose_confidence"],
+                    r_scale=self.lidar_pose_r_scale))
         if self.tick:
             x, y, yaw = self.scan_pose
             dx, dy = self.x-x, self.y-y
@@ -215,7 +246,7 @@ class DifferentialDriveExperiment:
         raw = tuple(LidarPointReading((-math.degrees(bearing)) % 360., distance, 20) for bearing, distance in ranges)
         return tuple(samples), SimpleNamespace(raw_scan_id=self.tick//5+1, raw_scan_timestamp=self.now_ns/1e9,
             scan_start_monotonic_ns=self.now_ns, scan_end_monotonic_ns=self.now_ns,
-            measurement_monotonic_ns=self.now_ns, health="OK", raw_scan=raw, summary={"source": "simulation"})
+            measurement_monotonic_ns=self.now_ns, health="OK", raw_scan=raw, summary=summary)
 
     def step(self, active=False):
         from v3.contracts import DataField, DeviceHealth, DeviceHealthState, DeviceSample, LifecycleState, RawDeviceBatch, TickContext
@@ -283,7 +314,8 @@ class DifferentialDriveExperiment:
 
     def execute(self, action, parameters):
         from v3.action_catalog import ACTION_CATALOG
-        from v3.finite_navigation import _RELATIVE_COMPLETION_ERROR_FRACTION, _pose_distance, _pose_angle
+        from v3.finite_navigation import (_RELATIVE_COMPLETION_ERROR_FRACTION,
+            _RELATIVE_TRANSLATION_TOLERANCE_M, _pose_distance, _pose_angle)
         params = dict(parameters)
         for field in ("session_owner_pid", "capture", "capture_mode", "capture_hz", "session_watchdog_s"):
             params.pop(field, None)
@@ -301,7 +333,18 @@ class DifferentialDriveExperiment:
             raise RuntimeError("SIMULATION_COMMAND_LIMIT")
         if self.fault_layer:
             raise RuntimeError("SIMULATION_FAULT_REQUIRES_NEW_TRIAL")
-        pose = self.status["estimate"]["local_pose"]
+        global_anchor = (action == "v3.command.move_relative"
+                         and (params.get("forward_m", 0.) != 0. or params.get("left_m", 0.) != 0.))
+        estimate = self.status["estimate"]
+        if global_anchor:
+            quality = estimate["localization_quality"]
+            if (quality["global_position"] != "GOOD"
+                    or quality["heading"] != "GOOD"
+                    or type(quality["global_fix_last_accepted_ns"]) is not int
+                    or not 0 <= quality["global_fix_last_accepted_ns"] <= self.now_ns
+                    or not 0 <= quality["global_fix_age_ns"] <= self.config.estimation.quality.global_fix_max_age_ns):
+                raise RuntimeError("SIMULATION_GLOBAL_ANCHOR_UNAVAILABLE")
+        pose = estimate["global_pose" if global_anchor else "local_pose"]
         start_pose = {key: pose[key] for key in ("frame_id", "x_m", "y_m", "yaw_rad")}
         yaw = start_pose["yaw_rad"]
         if action == "v3.command.navigate":
@@ -328,6 +371,8 @@ class DifferentialDriveExperiment:
             distance, angle = _pose_distance(start_pose, target), _pose_angle(start_pose, target)
             if distance is not None and distance > 0:
                 goal_tolerance = min(goal_tolerance, distance*_RELATIVE_COMPLETION_ERROR_FRACTION)
+                if global_anchor:
+                    goal_tolerance = min(goal_tolerance, _RELATIVE_TRANSLATION_TOLERANCE_M)
             if angle is not None and abs(angle) > 0:
                 yaw_tolerance = min(yaw_tolerance, abs(angle)*_RELATIVE_COMPLETION_ERROR_FRACTION)
         command_id = f"simulation.motion.{len(self.commands)+1}"
@@ -357,7 +402,7 @@ class DifferentialDriveExperiment:
         if self._cancelled.is_set():
             reason = "CANCELLED"
         self.stop()
-        final = self.status["estimate"]["local_pose"]
+        final = self.status["estimate"]["global_pose" if global_anchor else "local_pose"]
         result = {"status": "COMPLETED" if reason == "GOAL_REACHED" else "FAILED", "reason": reason,
             "command_id": command_id, "mission_id": "mission-"+command_id, "source": "simulation",
             "physical_output": False, "elapsed_s": (self.now_ns-started)/1e9,

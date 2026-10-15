@@ -1562,15 +1562,14 @@ class NativeStateEstimator:
         relative_age = source_age_ns(now, self._last_relative_ns)
         disagreement = math.hypot(self._consistency_x_m, self._consistency_y_m)
         # A 30-second accumulated position bias is not uncertainty of the
-        # current scan interval. Keep it diagnostic/degrading; local loss needs
-        # missing evidence, unverified displacement or a bad local interval.
+        # current scan interval. Keep it as a passive warning; current quality
+        # still follows interval error, missing evidence and unverified motion.
         sigma = max(self._unverified_sigma_m, self._relative_translation_error_m,
                     self._relative_rmse_m or 0.0)
         local_state = QualityState.GOOD if sigma <= cfg.local_good_sigma_m else QualityState.DEGRADED
         if sigma >= cfg.local_lost_sigma_m or self._slip_suspected:
             local_state = QualityState.LOST
-        elif (disagreement >= cfg.consistency_good_m
-              or (abs(local.v_mps) > .001 and source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns))
+        elif ((abs(local.v_mps) > .001 and source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns))
               or (self._last_relative_ns is not None and self._observability < cfg.minimum_observability)):
             local_state = QualityState.DEGRADED
         if not continuous or not self._wheel_trusted or source_is_stale(now, self._local._last_wheel_ns, self._config.max_measurement_age_ns):
@@ -1586,9 +1585,8 @@ class NativeStateEstimator:
                         or source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns)
                         or sigma >= cfg.local_good_sigma_m):
                     local_state = QualityState.LOST
-            elif self._local_translation_state is QualityState.DEGRADED and (
-                sigma > .8 * cfg.local_good_sigma_m or disagreement > .8 * cfg.consistency_good_m
-            ):
+            elif (self._local_translation_state is QualityState.DEGRADED
+                  and sigma > .8 * cfg.local_good_sigma_m):
                 local_state = QualityState.DEGRADED
         if local_state is QualityState.LOST and self._local_translation_state is not QualityState.LOST:
             failures = tuple(f for f in (self._wheel_failure, self._relative_failure) if f is not None)
@@ -1654,7 +1652,9 @@ class NativeStateEstimator:
                 received_lidar.captured_monotonic_ns if received_lidar is not None else None),
             global_fix_source_sequence=(
                 received_lidar.source_sequence if received_lidar is not None else None),
-            global_fix_last_accepted_ns=self._last_fix_ns)
+            global_fix_last_accepted_ns=self._last_fix_ns,
+            accumulated_translation_bias_warning=(
+                self._last_relative_ns is not None and disagreement >= cfg.consistency_good_m))
         return replace(global_estimate, local_pose=pose, global_pose=global_pose,
                        map_to_odom=transform, localization_quality=quality,
                        transform_revision=self._transform_revision,

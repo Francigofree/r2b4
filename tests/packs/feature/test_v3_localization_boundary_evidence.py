@@ -52,7 +52,8 @@ def test_interval_error_is_distinct_from_accumulated_bias_and_keeps_accepted_lin
     assert quality.encoder_lidar_consistency_m > 50 * quality.relative_interval_translation_error_m
     assert quality.relative_interval_yaw_error_rad == pytest.approx(.001)
     assert quality.accumulated_yaw_error_rad > 50 * quality.relative_interval_yaw_error_rad
-    assert quality.local_translation is QualityState.DEGRADED
+    assert quality.accumulated_translation_bias_warning
+    assert quality.local_translation is QualityState.GOOD
     assert not quality.slip_suspected
     assert quality.relative_interval_start_ns == ns-100_000_000
     assert quality.relative_interval_end_ns == ns
@@ -76,6 +77,51 @@ def test_interval_error_is_distinct_from_accumulated_bias_and_keeps_accepted_lin
     assert rejected_quality.relative_interval_source_sequence == 150
     assert rejected_quality.relative_interval_end_ns == ns
     assert rejected_quality.relative_interval_translation_error_m == quality.relative_interval_translation_error_m
+    assert rejected_quality.accumulated_translation_bias_warning
+    assert rejected_quality.local_translation is QualityState.DEGRADED
+
+
+@pytest.mark.parametrize("failure", ("relative_interval", "encoder_stale"))
+def test_historical_translation_warning_preserves_current_failure_gates(failure):
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    estimator = NativeStateEstimator(config)
+    for tick in range(152):
+        frame = _frame(tick, speed=.204, step_ns=100_000_000)
+        ns = frame.context.monotonic_ns
+        if tick:
+            frame = replace(frame, accepted=frame.accepted + (_observation(
+                "lidar_relative_motion", tick, ns, start_ns=ns-100_000_000,
+                dx_m=.020, dy_m=0.0, dyaw_rad=0.0, rmse_m=.001, observability=.9),))
+        if tick == 151:
+            # A retained DEGRADED state from the previous policy must not keep
+            # healthy current motion degraded because of historical bias.
+            estimator.restore(replace(
+                estimator.checkpoint(), local_translation_state=QualityState.DEGRADED))
+        estimate = estimator(frame)
+    quality = estimate.localization_quality
+    assert quality.encoder_lidar_consistency_m > config.quality.consistency_good_m
+    assert quality.accumulated_translation_bias_warning
+    assert quality.local_translation is QualityState.GOOD
+    assert quality.heading is QualityState.GOOD
+
+    if failure == "relative_interval":
+        frame = _frame(152, speed=.204, step_ns=100_000_000)
+        ns = frame.context.monotonic_ns
+        frame = replace(frame, accepted=frame.accepted + (_observation(
+            "lidar_relative_motion", 152, ns, start_ns=ns-100_000_000,
+            dx_m=-.20, dy_m=0.0, dyaw_rad=0.0, rmse_m=.001, observability=.9),))
+        estimate = estimator(frame)
+        assert estimate.localization_quality.slip_suspected
+    else:
+        ticks_to_stale = config.max_measurement_age_ns // 100_000_000 + 1
+        for tick in range(152, 152 + ticks_to_stale):
+            frame = _frame(tick, speed=.204, step_ns=100_000_000)
+            frame = replace(frame, accepted=tuple(
+                item for item in frame.accepted if item.kind != "wheel_velocity"))
+            estimate = estimator(frame)
+        assert estimate.localization_quality.encoder_age_ns > config.max_measurement_age_ns
+    assert estimate.localization_quality.accumulated_translation_bias_warning
+    assert estimate.localization_quality.local_translation is QualityState.LOST
 
 
 def test_global_fix_diagnostics_identify_the_l3_boundary_without_refreshing_accepted_fix():
@@ -116,6 +162,7 @@ def test_global_fix_diagnostics_identify_the_l3_boundary_without_refreshing_acce
         "accumulated_yaw_error_rad", "relative_interval_start_ns", "relative_interval_end_ns",
         "relative_interval_source_sequence", "relative_interval_source_id", "global_fix_status",
         "global_fix_measurement_ns", "global_fix_source_sequence", "global_fix_last_accepted_ns",
+        "accumulated_translation_bias_warning",
     ):
         del old[name]
     assert _decode_production_value(old, LocalizationQuality, "old_quality") == initial

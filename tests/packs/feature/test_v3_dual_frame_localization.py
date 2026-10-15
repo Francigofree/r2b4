@@ -224,7 +224,8 @@ def test_localization_accumulated_drift_keeps_local_motion_and_bad_interval_hold
             residuals.append(estimate.localization_quality.encoder_lidar_consistency_m)
     assert residuals[0] < residuals[1] < residuals[2]
     assert residuals[-1] > config.estimation.quality.consistency_good_m
-    assert estimate.localization_quality.local_translation is QualityState.DEGRADED
+    assert estimate.localization_quality.accumulated_translation_bias_warning
+    assert estimate.localization_quality.local_translation is QualityState.GOOD
     assert estimate.localization_quality.heading is QualityState.DEGRADED
     assert estimate.local_pose.yaw_rad == 0.0
 

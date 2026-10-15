@@ -199,12 +199,23 @@ Időzített Room Cruise/Follow csak a kért időtartam bizonyított eléréséve
 complete; általános hard deadline exhaustion failure marad.
 
 A relatív finite motion alap completion-toleranciája a futó navigációs
-config és a nem nulla kért távolság/szög 10%-a közül a szigorúbb. Az effektív
+config és a nem nulla kért távolság/szög 10%-a közül a szigorúbb; relatív
+transzlációnál további 2 cm-es felső korlát érvényes. A transzlációs
+`move_relative` az induló friss `GOOD` globális és heading minőségű pose-hoz rögzített map-frame
+NAVIGATE célt képez, és ugyanabban a korrigált frame-ben ellenőrzi az érkezést.
+Globális fix nélkül vár vagy megszakad, nem vált encoder-alapú lokális célra.
+A `turn_by` és a nulla transzlációs relatív yaw cél lokális marad. Az effektív
 `goal_tolerance_m` és `yaw_tolerance_rad` a canonical NAVIGATE mission
 constraintjeibe kerül, és a finite result megőrzi őket. A host a friss,
 azonos mission/frame/runtime provenance-ű final pose residualját is ellenőrzi:
-a `COMPLETE` jelzés tolerancián kívül nem siker. Az abszolút navigáció
-megtartja a futó config alap policyját.
+a `COMPLETE` jelzés tolerancián kívül nem siker. Transzlációs relatív kérésnél
+az indulási fix ismétlése nem érkezési evidence; új elfogadott globális mérés
+kell. A végső STOP után bounded, csak olvasó ellenőrzés vár egy completion
+tick utáni elfogadott fixet és az estimator policy szerinti álló állapotot.
+A STOP utáni végpont tolerancián kívül vagy bizonyíték nélkül `INTERRUPTED`,
+automatikus korrekciós mozgás nélkül. Az abszolút navigáció
+megtartja a futó config alap policyját. A 2 cm a becsült pose residualjának
+korlátja, fizikai pontosságát független méréssel kell igazolni.
 
 Az initial dispatch, a Behavior léptetése, a bounded retry és minden következő
 részfeladat ugyanazon egyetlen host Brain dispatcher szálon fut. A runtime poll

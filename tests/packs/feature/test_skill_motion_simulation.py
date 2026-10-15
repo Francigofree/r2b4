@@ -25,37 +25,161 @@ MOVE = '''async def run(robot):
 '''
 
 
-def test_relative_sdk_motion_keeps_frame_and_canonical_completion_tolerances(tmp_path):
+@pytest.mark.parametrize("traction,hazard", [(1., None), (.95, None), (1., "obstacle"), (1., "stale_scan")])
+def test_one_meter_global_goal_closes_through_async_planner_and_plant(tmp_path, traction, hazard):
+    from v3.composition.native_control import NativeControlComposition
+    from v3.composition.full_fake import OfflineMotorSink
+    from v3.contracts import GLOBAL_FRAME_ID, NavigationStatus, QualityState
+    from v3.layers.l6_navigation import InlineTrajectoryRolloutBackend
+    from r2b4_orchestration.motion_simulation import DifferentialDriveExperiment
+    from rig import resolved_config
+
+    class DelayedRollout(InlineTrajectoryRolloutBackend):
+        """Delay visibility; compute the production result without a fake plan."""
+        def __init__(self, config):
+            super().__init__(config)
+            self.polls = {}
+
+        def take(self, request_id):
+            self.polls[request_id] = self.polls.get(request_id, 0) + 1
+            return None if self.polls[request_id] <= 3 else super().take(request_id)
+
+    class MeasuredDrive(DifferentialDriveExperiment):
+        def _scan(self, sample):
+            if hazard == "stale_scan" and self.tick > 50:
+                return self.last_scan
+            samples, raw_scan = super()._scan(sample)
+            # Independent simulated LiDAR fixes observe traction, while wheel
+            # counters continue reporting shaft displacement. L3 owns fusion.
+            absolute = sample("lidar_pose", frame_id=GLOBAL_FRAME_ID,
+                x_m=self.x, y_m=self.y, yaw_rad=self.yaw, confidence=1., r_scale=.05)
+            self.last_scan = ((*samples, absolute), raw_scan)
+            return self.last_scan
+
+    config = resolved_config().runtime.composition.live_control.control
+    assert config.async_l6.enabled and config.async_l6.completion_inputs
+    scenario = motion_scenario({**SCENARIO, "goal": {"x_m": 1., "y_m": 0., "yaw_rad": 0.},
+        "duration_s": 20., "position_tolerance_m": .02, "plant": {"traction": traction},
+        "obstacles": [{"x_m": .8, "y_m": 0., "radius_m": .12}] if hazard == "obstacle" else []})
+    writer = OfflineMotorSink()
+    records = []
+    composition = NativeControlComposition(writer, config,
+        trajectory_rollout_backend=DelayedRollout(config.navigation))
+    plant = MeasuredDrive(scenario, config, composition, writer, tmp_path, 1_000_000_000,
+        lambda record, scan: records.append(record), lambda *args: None)
+    completed = False
+    try:
+        plant.step()
+        assert plant.status["estimate"]["localization_quality"]["global_position"] == "GOOD"
+        started = plant.now_ns
+        for _ in range(1000):
+            # The finite action's resolved target enters the canonical gateway.
+            plant.client.publish_navigate("one-meter", x_m=1., y_m=0., yaw_rad=0.,
+                frame_id=GLOBAL_FRAME_ID, max_v_mps=.2, max_omega_rad_s=.6,
+                goal_tolerance_m=.02, yaw_tolerance_rad=config.mission.default_constraints.yaw_tolerance_rad,
+                ttl_ns=200_000_000)
+            result = plant.step(active=True)
+            assert result.trace.fault_layer is None, composition.tick_evidence
+            if plant.status["navigation"]["status"] == "COMPLETE":
+                completed = True
+                break
+            if hazard == "obstacle" and (
+                    plant.status["navigation"].get("reason") == "PLANNER_GEOMETRY_HOLD"
+                    or result.final_actuation.reason == "LIDAR_CLEARANCE_LOW"):
+                # A finite command terminates on blocked/safety-stop evidence;
+                # it does not keep retrying obstacle recovery for 20 seconds.
+                break
+        elapsed = (plant.now_ns-started)/1e9
+        plant.settle()
+    finally:
+        composition.close()
+    assert plant.collision_count == 0
+    layers = [{row.layer: row.output for row in record.result.trace.layers} for record in records]
+    active = [row for row in layers if row["L5"].mode.value == "NAVIGATE"]
+    assert active
+    for row in active:
+        for owner, linear, angular in (("L8", "requested_v_mps", "requested_omega_rad_s"),
+                                       ("L9", "allowed_v_mps", "allowed_omega_rad_s")):
+            assert abs(getattr(row[owner], linear)) <= .2 + 1e-9
+            assert abs(getattr(row[owner], angular)) <= .6 + 1e-9
+    assert layers[-1]["L12"].left_output == layers[-1]["L12"].right_output == 0.
+    if hazard is None:
+        assert completed, (plant.x, plant.y, plant.status["navigation"])
+        assert elapsed < 20.
+        assert math.hypot(1.-plant.x, plant.y) <= .02
+        terminal = [row for row in active if row["L6"].reason == "LOCAL_GUIDANCE_REVALIDATED"
+                    and math.hypot(1.-row["L3"].global_pose.x_m,
+                                   row["L3"].global_pose.y_m) < config.navigation.local_goal_tolerance_m]
+        assert terminal, "scenario must exercise fresh async continuation near the final goal"
+        assert all(row["L4"].freshness_ns <= config.navigation.max_world_freshness_ns for row in terminal)
+        if traction < 1.:
+            warned = [row for row in active if row["L3"].localization_quality.accumulated_translation_bias_warning]
+            assert warned, "wheel bias must remain observable despite successful global correction"
+            assert any(row["L3"].localization_quality.local_translation is QualityState.GOOD
+                       and row["L9"].allowed_v_mps > 0 for row in warned)
+    else:
+        assert not completed
+        assert all(row["L6"].status is not NavigationStatus.COMPLETE for row in active)
+        if hazard == "stale_scan":
+            stale = [row for row in active if row["L4"].freshness_ns > config.navigation.max_world_freshness_ns]
+            assert stale, "frozen source scans must become stale rather than gaining new acquisition times"
+            assert all(row["L8"].requested_v_mps == row["L8"].requested_omega_rad_s == 0. for row in stale)
+        else:
+            assert any(row["L6"].reason in {"PLANNER_GEOMETRY_HOLD", "NO_PATH"}
+                       or row["L12"].safety_decision.value == "STOP" for row in active)
+
+
+@pytest.mark.parametrize("traction", [1., .95])
+def test_relative_sdk_motion_keeps_frame_and_canonical_completion_tolerances(tmp_path, traction):
     from v3.config import ConfigResolver
-    from v3.finite_navigation import _RELATIVE_COMPLETION_ERROR_FRACTION
+    from v3.finite_navigation import _RELATIVE_COMPLETION_ERROR_FRACTION, _RELATIVE_TRANSLATION_TOLERANCE_M
     library = SkillLibrary(tmp_path / "skills")
     library.create("relative_probe", '''async def run(robot):
-    moved = await robot.call("v3.command.move_relative", forward_m=.1, max_v_mps=.2)
+    scenario = await robot.read("simulation.scenario")
+    moved = await robot.call("v3.command.move_relative", forward_m=1., left_m=0., final_yaw_rad=0.,
+                            max_v_mps=.2, max_omega_rad_s=.6, finite_timeout_s=20.)
+    if scenario["plant"]["traction"] < 1.:
+        return moved
     turned = await robot.call("v3.command.turn_by", angle_deg=15)
     return {"moved": moved, "turned": turned}
 ''')
-    scenario = {**SCENARIO, "goal": {"x_m": .1, "y_m": 0., "yaw_rad": math.radians(15)}}
+    scenario = {**SCENARIO, "goal": {"x_m": 1., "y_m": 0., "yaw_rad": math.radians(15) if traction == 1. else 0.},
+                "duration_s": 20., "position_tolerance_m": .02, "plant": {"traction": traction}}
     with MotorlessSkillSimulator(ROOT, library) as simulator:
         trial = simulator.trial("relative_probe", {}, scenario, timeout_s=30)
     assert trial["runtime"]["state"] == "SUCCEEDED", trial["runtime"]
     assert trial["assessment"]["status"] == "PASSED", trial["assessment"]
     commands = trial["performance"]["commands"]
-    assert len(commands) == 2 and all(row["status"] == "COMPLETED" for row in commands)
-    for command in commands:
-        assert {command[key]["frame_id"] for key in ("start_pose", "target_pose", "final_pose")} == {"R2B4_ODOM_LOCAL"}
+    assert len(commands) == (2 if traction == 1. else 1) and all(row["status"] == "COMPLETED" for row in commands)
     moved = commands[0]
+    for index, command in enumerate(commands):
+        frame = "R2B4_BOOT_ROBOT_MAP" if index == 0 else "R2B4_ODOM_LOCAL"
+        assert {command[key]["frame_id"] for key in ("start_pose", "target_pose", "final_pose")} == {frame}
+    assert moved["elapsed_s"] < 20.
     assert math.hypot(moved["final_pose"]["x_m"]-moved["target_pose"]["x_m"],
-                      moved["final_pose"]["y_m"]-moved["target_pose"]["y_m"]) <= .1*_RELATIVE_COMPLETION_ERROR_FRACTION
+                      moved["final_pose"]["y_m"]-moved["target_pose"]["y_m"]) <= _RELATIVE_TRANSLATION_TOLERANCE_M
+    from v3.replay import replay_capture
+    replay = replay_capture(trial["capture"], project_root=ROOT)
+    assert replay["status"] == "MATCH", replay["diagnostics"]
+    assert replay["determinism"]["repeated_trace_match"] is True
     constraints = {}
+    warned_motion = False
     for message in McapReader(trial["capture"]).iter_messages(topics=(TICK_TOPIC,)):
-        mission = message.json()["expected"]["layers"]["L5"]
+        layers = message.json()["expected"]["layers"]
+        mission = layers["L5"]
         if mission["mode"] == "NAVIGATE":
             constraints.setdefault(mission["mission_id"], mission["constraints"])
-    assert constraints[moved["mission_id"]]["goal_tolerance_m"] == pytest.approx(.1*_RELATIVE_COMPLETION_ERROR_FRACTION)
-    turned = commands[1]
-    assert constraints[turned["mission_id"]]["yaw_tolerance_rad"] == pytest.approx(math.radians(15)*_RELATIVE_COMPLETION_ERROR_FRACTION)
-    control = ConfigResolver.for_project(ROOT).resolve().runtime.composition.live_control.control
-    assert constraints[turned["mission_id"]]["max_omega_rad_s"] >= control.navigation.wheel_limits.target_center_spin_rad_s
+            quality = layers["L3"]["localization_quality"]
+            warned_motion |= (quality["accumulated_translation_bias_warning"]
+                              and quality["local_translation"] == "GOOD" and layers["L9"]["allowed_v_mps"] > 0.)
+    assert constraints[moved["mission_id"]]["goal_tolerance_m"] == pytest.approx(_RELATIVE_TRANSLATION_TOLERANCE_M)
+    if traction == 1.:
+        turned = commands[1]
+        assert constraints[turned["mission_id"]]["yaw_tolerance_rad"] == pytest.approx(math.radians(15)*_RELATIVE_COMPLETION_ERROR_FRACTION)
+        control = ConfigResolver.for_project(ROOT).resolve().runtime.composition.live_control.control
+        assert constraints[turned["mission_id"]]["max_omega_rad_s"] >= control.navigation.wheel_limits.target_center_spin_rad_s
+    else:
+        assert warned_motion, "the measured wheel bias stays visible while global navigation remains available"
 
 
 def test_saved_motion_skill_has_independent_truth_native_replay_and_complete_learning_events(tmp_path):

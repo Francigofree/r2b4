@@ -38,7 +38,7 @@ _FINITE_RESULT_MAP_FIELDS = {
 }
 _FINITE_RESULT_FIELDS = (
     "status", "reason", "command_id", "mission_id", "runtime_pid", "elapsed_s", "progress",
-    "navigation_reason", "safety_reason", "completion_status_monotonic_ns",
+    "navigation_reason", "safety_reason", "completion_status_monotonic_ns", "final_pose_status_monotonic_ns",
     "distance_requested_m", "distance_executed_m", "distance_remaining_m",
     "angle_requested_rad", "angle_executed_rad", "angle_remaining_rad",
     "goal_tolerance_m", "yaw_tolerance_rad",
@@ -119,6 +119,7 @@ class RobotInterfaceEvent:
     target_pose: tuple[tuple[str, object], ...] | None = None
     final_pose: tuple[tuple[str, object], ...] | None = None
     frame_provenance: tuple[tuple[str, object], ...] | None = None
+    final_pose_status_monotonic_ns: int | None = None
 
     def to_jsonable(self) -> dict[str, object]:
         value = asdict(self)
@@ -381,6 +382,10 @@ class RobotInterface:
             completion_stamp = field("completion_status_monotonic_ns")
             if type(completion_stamp) is not int or completion_stamp < 0:
                 completion_stamp = None
+            final_pose_stamp = field("final_pose_status_monotonic_ns")
+            if type(final_pose_stamp) is not int or final_pose_stamp < 0:
+                final_pose_stamp = None
+            result_stamp = final_pose_stamp if final_pose_stamp is not None else completion_stamp
             maps = {name: compact.get(name) for name in _FINITE_RESULT_MAP_FIELDS}
             if maps["requested"] is None:
                 maps["requested"] = _compact_finite_fields(parameters, _FINITE_RESULT_MAP_FIELDS["requested"])
@@ -388,7 +393,7 @@ class RobotInterface:
             sink(RobotInterfaceEvent(
                 kind=kind, request_id=request[0], action=_observation_text(action) or "",
                 resolved_action=_observation_text(resolved_action) or "",
-                measurement_time_ns=completion_stamp if kind == "ACTION_RESULT" and completion_stamp is not None else request[1],
+                measurement_time_ns=result_stamp if kind == "ACTION_RESULT" and result_stamp is not None else request[1],
                 observation_time_ns=self._clock_ns(), request_time_ns=request[1],
                 **identities,
                 runtime_pid=runtime_pid if type(runtime_pid) is int and runtime_pid > 0 else None,
@@ -396,7 +401,8 @@ class RobotInterface:
                 error_type=_observation_text(error_type),
                 error_message=_observation_text(error_message),
                 error_cause_type=_observation_text(error_cause_type),
-                completion_status_monotonic_ns=completion_stamp, **metrics, **maps,
+                completion_status_monotonic_ns=completion_stamp,
+                final_pose_status_monotonic_ns=final_pose_stamp, **metrics, **maps,
             ))
         except Exception:
             # No serialization, filesystem I/O or action-result rewriting here.

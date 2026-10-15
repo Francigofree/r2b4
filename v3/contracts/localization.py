@@ -90,6 +90,9 @@ class LocalizationQuality:
     global_fix_measurement_ns: int | None = None
     global_fix_source_sequence: int | None = None
     global_fix_last_accepted_ns: int | None = None
+    # Historical wheel/LiDAR bias is passive evidence, separate from current
+    # local translation capability and its interval/freshness gates.
+    accumulated_translation_bias_warning: bool = False
 
     def __post_init__(self) -> None:
         for name in ("local_translation", "heading", "global_position"):
@@ -107,7 +110,8 @@ class LocalizationQuality:
                      "relative_age_ns", "generation"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 0:
                 raise ContractValidationError(f"invalid {name}")
-        for name in ("local_pose_continuous", "pose_discontinuity", "slip_suspected"):
+        for name in ("local_pose_continuous", "pose_discontinuity", "slip_suspected",
+                     "accumulated_translation_bias_warning"):
             if type(getattr(self, name)) is not bool:
                 raise ContractValidationError(f"invalid {name}")
         if self.observability > 1.0:
