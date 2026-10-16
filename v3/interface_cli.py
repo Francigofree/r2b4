@@ -411,6 +411,11 @@ def _run_timed_motion(
     )
     try:
         handle = interface.execute(action, **parameters)
+        # Behavior start returns its terminal state when the underlying action
+        # fails. A successful RPC alone is not a successful motion admission.
+        lifecycle = handle.get("lifecycle") if isinstance(handle, Mapping) else None
+        if lifecycle in {"FAILED", "CANCELLED"}:
+            raise RobotInterfaceError(f"{command} start {lifecycle}: {handle.get('reason') or lifecycle}")
     except BaseException:
         # If this CLI created a resident runtime during setup, clean up only that
         # owned runtime. A pre-existing runtime belongs to the wider robot session.
@@ -422,8 +427,9 @@ def _run_timed_motion(
         raise
 
     if seconds == 0:
-        print("command ACTIVE; runtime remains running.  STOP: ./r x   shutdown: ./r sd")
-        return {"status": "ACTIVE", "command": command, "handle": str(handle)}
+        status = lifecycle if lifecycle in {"STARTING", "ACTIVE", "COMPLETED"} else "ACTIVE"
+        print(f"command {status}; runtime remains running.  STOP: ./r x   shutdown: ./r sd")
+        return {"status": status, "command": command, "handle": str(handle)}
 
     deadline = time.monotonic() + seconds
     last_bucket: int | None = None

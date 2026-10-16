@@ -187,6 +187,43 @@ def test_cli_reads_and_executes_the_public_robot_surface(monkeypatch, composed, 
     assert composed.controller.calls == []
 
 
+@pytest.mark.parametrize("command", ["roomcruise", "followperson"])
+@pytest.mark.parametrize("seconds", ["0", "1"])
+def test_motion_cli_reports_failed_behavior_start_without_false_active_or_wait(
+    monkeypatch, composed, capsys, command, seconds,
+):
+    from v3 import interface_cli
+
+    failure = "ACTION_START_FAILED:ValueError:behavior: missing=[], unknown=['followperson']"
+    original = PublicRobotClient.request
+
+    def request(client, operation, **arguments):
+        if operation == "execute":
+            return {"lifecycle": "FAILED", "command_id": None, "reason": failure}
+        return original(client, operation, **arguments)
+
+    monkeypatch.setattr(PublicRobotClient, "request", request)
+    monkeypatch.setattr(interface_cli, "RobotInterface", lambda **_kwargs: composed.interface)
+    monkeypatch.setattr(interface_cli.time, "sleep", lambda _: pytest.fail("failed admission must not wait"))
+    assert interface_cli.main([command, seconds], project_root=composed.controller.root) == 1
+    output = capsys.readouterr()
+    assert failure in output.err
+    assert "command ACTIVE" not in output.out
+    # The failed host owns its canonical STOP; this CLI must keep the user's
+    # pre-existing resident runtime and finalized-capture ownership intact.
+    assert composed.controller.calls == []
+
+
+def test_continuous_cli_preserves_starting_behavior_acknowledgement(monkeypatch, composed, capsys):
+    from v3 import interface_cli
+
+    monkeypatch.setattr(interface_cli, "RobotInterface", lambda **_kwargs: composed.interface)
+    assert interface_cli.main(["roomcruise"], project_root=composed.controller.root) == 0
+    output = capsys.readouterr()
+    assert "command STARTING" in output.out
+    assert "command ACTIVE" not in output.out
+
+
 def test_legacy_operator_stop_revokes_upper_intent_without_observation(monkeypatch, composed):
     from v3 import operator_cli
 
