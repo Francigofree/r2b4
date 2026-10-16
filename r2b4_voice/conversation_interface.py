@@ -245,7 +245,7 @@ def build_voice_interface(
         root, interface=core_interface, developer_mode=developer_mode,
         event_sink=lambda event, fields: observation.offer_learning(event, fields),
     ))
-    agent = AgentCore(llm, broker, max_tool_rounds=4)
+    agent = AgentCore(llm, broker, max_tool_rounds=8)
     prompt = PromptAssembler(
         root / "conf" / "r2b4_agent_system.md",
         max_history_turns=service_config.max_history_turns,
