@@ -1,0 +1,3511 @@
+{
+  "schema": "R2B4_MOTION_EXPERIMENT_V1",
+  "physical_output": false,
+  "results": [
+    {
+      "name": "baseline",
+      "override": {},
+      "trials": [
+        {
+          "scenario": "cruise_open",
+          "scenario_input": {
+            "kind": "differential_drive",
+            "seed": 7,
+            "duration_s": 20.0,
+            "goal": {
+              "x_m": 1.5,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "room": {
+              "x_min_m": -2.5,
+              "x_max_m": 4.0,
+              "y_min_m": -2.0,
+              "y_max_m": 2.0
+            },
+            "behavior": "roomcruise"
+          },
+          "scenario_sha256": "9a798d40a1ae091416b9aa9324b50eadd25b2e9ad1433f34cc73cb83877af466",
+          "config_snapshot_id": "a0ce1ea2dcbe25263ed188501d5f7dd9ce634d0f24487e9aaec9527d2d733486",
+          "control_config_sha256": "97e528fffbd616abeafbcb44e06c569d569ee1a7e92f56b934e0754855e21e1a",
+          "metrics": {
+            "active_duration_s": 20.0,
+            "path_length_m": 8.449915268551837,
+            "unique_coverage_cells": 40,
+            "stopped_duration_s": 0.1,
+            "coverage_cell_size_m": 0.25,
+            "longest_stop_s": 0.1,
+            "no_translation_progress_2s_duration_s": 0.0,
+            "moving_ratio": 0.995,
+            "active_mission_sample_count": 1000,
+            "angular_sign_reversals": 0,
+            "angular_sign_reversals_per_m": 0.0,
+            "navigation_reason_duration_s": {
+              "LOCAL_GUIDANCE_REVALIDATED": 20.0
+            },
+            "follow_state_duration_s": {},
+            "minimum_footprint_clearance_m": 0.5492801049831515,
+            "max_abs_jerk_mps3": 10.551117700820651,
+            "collision_count": 0,
+            "safety_stop_count": 0,
+            "tracking_error_rms_mps": 0.008765432082342605
+          },
+          "resolved_config": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_open/resolved_config.json",
+          "fault_layer": null,
+          "first_boundary": null,
+          "termination_reason": "DURATION_REACHED",
+          "requested_duration_s": 20.0,
+          "observed_runtime_active_s": 20.0,
+          "early_terminal": false,
+          "final_stop": true,
+          "physical_output": false,
+          "capture": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_open/capture.mcap",
+          "timeline": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_open/timeline.ndjson",
+          "replay": {
+            "schema": "R2B4_REPLAYER_V3_RESULT_V3",
+            "status": "MATCH",
+            "generated_at_utc": "2026-10-16T20:05:55Z",
+            "capture": {
+              "path": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_open/capture.mcap",
+              "capture_id": "motion-cruise_open",
+              "sha256": "c1263a96b6e5aff87dd452cfd94c301501703ef3f479d371f9cd1bb08bc6496c",
+              "payload_sha256": "d117f04c42201ed73fe05a9f9b264792f3e7c55e3b93d67afb8a97084dda8545",
+              "schema": "R2B4_MCAP_CAPTURE_V1",
+              "tick_count": 1026,
+              "status": "PASS"
+            },
+            "scope": {
+              "requested": {
+                "start_tick_id": null,
+                "end_tick_id": null,
+                "start_monotonic_ns": null,
+                "end_monotonic_ns": null,
+                "start_layer": "L1",
+                "end_layer": "L12"
+              },
+              "resolved": {
+                "first_tick_id": 0,
+                "last_tick_id": 1025,
+                "first_monotonic_ns": 1000000000,
+                "last_monotonic_ns": 21500000000,
+                "tick_count": 1026,
+                "layers": [
+                  "L1",
+                  "L2",
+                  "L3",
+                  "L4",
+                  "L5",
+                  "L6",
+                  "L7",
+                  "L8",
+                  "L9",
+                  "L10",
+                  "L11",
+                  "L12"
+                ]
+              },
+              "state_warmup": {
+                "strategy": "CAPTURE_PREFIX",
+                "tick_count": 0,
+                "first_tick_id": null,
+                "last_tick_id": null
+              }
+            },
+            "execution": {
+              "capture_status": "PASS",
+              "capture_passed": true,
+              "decision_counts": {
+                "ALLOW": 1000,
+                "STOP": 26,
+                "FAULT": 0
+              },
+              "writer_failure_count": 0,
+              "terminal_tick_id": 1025,
+              "terminal_safety_decision": "STOP",
+              "terminal_reason": "NOT_ACTIVE",
+              "terminal_fault_layer": null
+            },
+            "reconstruction_contract": {
+              "inputs": "CURRENT_SOURCE_TYPED_TICK_INPUTS",
+              "configuration": "CURRENT_SOURCE_TYPED_CONFIG",
+              "checkpoint": "CURRENT_SOURCE_TYPED_CHECKPOINT",
+              "production": "NATIVE_V3_L1_L12",
+              "external_io": "NONE"
+            },
+            "determinism": {
+              "production_layers": "L1-L12",
+              "executed_tick_count": 1026,
+              "selected_tick_count": 1026,
+              "repeated_trace_match": true,
+              "offline_write_count_first": 1026,
+              "offline_write_count_second": 1026
+            },
+            "diagnostics": {
+              "layers": {
+                "L1": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L2": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L3": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L4": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L5": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L6": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L7": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L8": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L9": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L10": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L11": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L12": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                }
+              },
+              "first_divergence": null,
+              "first_live_observation": null,
+              "physical_evidence": {
+                "claim_class": "FACT",
+                "causal_claim": false,
+                "evidence_strength": "NONE",
+                "observation": null,
+                "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+                "evidence": null
+              }
+            },
+            "source_first": {
+              "source_order": [
+                "SOURCE",
+                "ACTIVE_CONFIG",
+                "CAPTURE"
+              ],
+              "source_discovery": "CURRENT_LOCAL_IMPORT_CLOSURE",
+              "capture_source_manifest_path": null,
+              "all_capture_baseline_hashes_match": false,
+              "files": {
+                "STRUKTURALIS_RETEGEK_V3.md": {
+                  "sha256": "546f92a35d82da377568da60f11854248794fdc7acabd985ae63c70128cfa75c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/fizika.json": {
+                  "sha256": "8ed43fc7df46d43b1172b2a0fe8e9cf620236d48710f424107a76de3a93f90e7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/hardver.json": {
+                  "sha256": "afc44ffd5fd15f9f140caffeca43797af45fc3dacbc5fe3a0bfc2a54ea6b7106",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/speed_map.json": {
+                  "sha256": "4cbd02b2885b0a4d41a24140d9a1b37ddbc76083297c68f87f1b7acb1e2e518a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/vezerles.json": {
+                  "sha256": "93df2a2bd923ac25253dba22286eed008046992ca9c1c39803e006301078bd3b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/async_person_photo_evidence.py": {
+                  "sha256": "edd23a91474dc7188804ef62e0022cc451ece009646d145e6d3de0b5cec91009",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_device.py": {
+                  "sha256": "0ab52ba7431a6982c2be93a80d24414e4af686f37b02a095c9c86982d760a7cc",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_imu.py": {
+                  "sha256": "b2ad3b73c3af22d1bc6d5ed3680e47d0dfe8c1cf46d65f728556e1f372d234ac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bounded_command.py": {
+                  "sha256": "5b45043b6b97a78a2f56cb5d003ed9197809c9ca63c24cf4397b7ba3e5aa5161",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_geometry.py": {
+                  "sha256": "b638baab9d066ebd0b796b7a91e4e3959059ffc19c31e52d1574420f8967b9fa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_media.py": {
+                  "sha256": "088176456458af938136692537bde5e18c2e441ff56aa36e3ccf422797e6e4a9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_ownership.py": {
+                  "sha256": "e060688cb0d380e191b536a91b522246a71c6f3585b91003074b6e7e21471df6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_rectification.py": {
+                  "sha256": "126f984f9054aef3d219217499e7c7831ed9b9854e5e0ff9dc86521c7cffc665",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/counter_encoder.py": {
+                  "sha256": "b8800f07762d663bd5ae1dff2059a22585824543e53895ce37df872df32e7c0c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_counter.py": {
+                  "sha256": "2e8ac36f5ffb06604461570ade5ed429917b59fe445a3dc408ae201245177e08",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_encoder.py": {
+                  "sha256": "0c357445fe85ad15e87e55ad4f3b8db47ec3dc542f8101af4f079dfb0c6d1624",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_motor.py": {
+                  "sha256": "9570781637ff3028d49f943434e083766d45351a0e60ea29cb1321361e198911",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/l6_planner_process.py": {
+                  "sha256": "96ea7aebe7977a988d6768aa544eb7c256ba6f9503c24003886ef1992db51844",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/latest_lidar.py": {
+                  "sha256": "29ad9a2beb11176a9bbc4dcde61fda027fe916335ffbbd83348c0e617567274b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/litert_person_detector.py": {
+                  "sha256": "766ba7660dbc0daf10ec9b39ed06bdc6f43101718be1fdcb115e825da86f719b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_camera.py": {
+                  "sha256": "4883011b5fde56af4c398932be1be95e33f2a92b9a04e60f331cb8d147656b0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_encoder.py": {
+                  "sha256": "f76767cbb3ffc38023ed314dd6386a303e02a09517f79cc985625e071a2f42a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_imu.py": {
+                  "sha256": "14219ac579408f96a747c0f421cbf0be503a5605e19cee8a8ea480c96e1de751",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_inputs.py": {
+                  "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_lidar.py": {
+                  "sha256": "93584f5b71845477da721622006d6bdc27e330317d9bd25192dbac4a7511864e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_person_detection.py": {
+                  "sha256": "919da7ff24a1c8feba22b181ccd4e7b012207dd2c36d6ba9538284dcba3d3f06",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_pwm.py": {
+                  "sha256": "14ad291ec98bd718c93ec6d9873d45fc6408e4f3b7b2250daa3b4c0a057efbac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_writer.py": {
+                  "sha256": "0937c460733dc4e32ac39cf46fcf96d22107d481c678254fac108f136a31742e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/multirate_inputs.py": {
+                  "sha256": "b28a292237d4bf5ffb80d16286dd4455970d130e7bbd927a8f2b376d99f2dd6a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/native_lidar_port.py": {
+                  "sha256": "54a2ea79e9508e5182c80d73633862881485ee405fbf499fd60086d0492b2a5e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_detection.py": {
+                  "sha256": "79643e585848e535e199e2e8510d8dc7b03530e8d2fd2e3c77d555d3b23b5a54",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_photo_evidence.py": {
+                  "sha256": "45d6776e430804ce80efddc9936b0f6f55de4e43f8c5ab7ae3ce23b99105d5c9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/picamera2_camera.py": {
+                  "sha256": "08039eef695c5be83915b3135924f591bca2a26076514d32bce3dda2fa9bbebe",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_encoder_backend.py": {
+                  "sha256": "f6ea5eb890748a542b8fb4cff89d6ead56dbba4f01539834e91d6b77fdfac9d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_imu_device.py": {
+                  "sha256": "d394cf96934f01ba66ffe068fbc82e746bfa882cc2f5ae3c0bc7800f60a475a6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_lidar_port.py": {
+                  "sha256": "08c322f6d9243e266d6d6b534ef0d1ed90c8eb8905d3872d64e116eb37d1f68a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_vision_port.py": {
+                  "sha256": "8d5898932c876e0500f26e18a61fe597b82ccb75109c5fab15cdb108cd49ba93",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/recovering_l6_planner.py": {
+                  "sha256": "157f4c3d40993f05f30487419e6d01c75c8f4f6973ccadea41fd6c41bd639693",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/resident_command.py": {
+                  "sha256": "e6f68ab95fdf3acdba9796ca09b81f601a4906078dd18521801dcbeb980af0ad",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/rplidar_c1.py": {
+                  "sha256": "9260420e1e1d21659fac340add9a99f9f1e6c17fcbfb85a41bf74057d4c02e35",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/skill_observation.py": {
+                  "sha256": "18d5e04e9082e720f8646de48fce2d04771eca7849f45f830c18c14c5dd243df",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_contracts.py": {
+                  "sha256": "6b6157456c453fdd6d6438db42edde9a3096ab1bba6bfad1b65be589d048d826",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_socket.py": {
+                  "sha256": "730d2ddc2e0f7329bfe450216244404fbcaf53d2e604db2be4c70b6e1e282718",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/async_capability.py": {
+                  "sha256": "9f22e4bac8dfb52aa46220ec5764047698243ecfdee47ebaf4e6bed5dd222a09",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture.py": {
+                  "sha256": "71d0d041e9e98f117798b28ca3f5cf8fe5ae56cb8f0fa7f7cffbac4f9ed15789",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_behavior.py": {
+                  "sha256": "bb155916b2402405bb3556da664b73cbf7ac5bfae981a0dc1d6f14a5a2f64382",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_compaction.py": {
+                  "sha256": "df22a14a023578072548e4380f0f43013fb6f5de4ae10e631ff65a305487d7af",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_encoding.py": {
+                  "sha256": "8481a8face3251cf3839ac8da29336a39395ed7236b5853b3a299f104676dd2a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_ipc.py": {
+                  "sha256": "ac520159d38d3c73ca30603ad7533e0558c31b9266a5ce66725ba63631171962",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_rate.py": {
+                  "sha256": "2c87a28f32f39063bb9bedf73fd3a43450e4abdf2f6956db67050fd024d5744d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_live_control.py": {
+                  "sha256": "f59799b76212dbc82c618514279ce14b6c4e9394f56ad5bfc5da8eb744ea0957",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_physical_control.py": {
+                  "sha256": "a730e9a9dc4253925f23dbeacbf21bd3fc78de4b6edd698acd113049ba6c16f6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/input_shadow.py": {
+                  "sha256": "bddd066f884430e69928388559011fe83703e419d213d415e764709eb17cb8aa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/live_inputs.py": {
+                  "sha256": "ce9bead45b2459aa8260b6dae328e56250784f64321b266c69a95abb324ac033",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/motor_output.py": {
+                  "sha256": "0d8e1113d3d65b7c01f42ba34a8e86df2e31cb152bbcd412d114936df6e8f404",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_control.py": {
+                  "sha256": "dc10a7f001d720ea65d840b53af20bb0ad810adf9cebacf97c05985c0489c3cd",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_sensor_inputs.py": {
+                  "sha256": "4e49c10b5d4a80ddf847ecb53e7341e297fc7710833e2f64099c45504d5a0e22",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_live_control.py": {
+                  "sha256": "9a6c69ebc7ccb803a148fa735d225f193984404690000fdfd777551e71c5a737",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_physical_control.py": {
+                  "sha256": "236beef9262d20cf3d1b0b1e125340f7ac86e6cadec28c50fce4a64820813430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/runtime_config.py": {
+                  "sha256": "382018559c41f11c6559f322d218f96a5f2ef9b0a2d91179604b8746d78a5c8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config.py": {
+                  "sha256": "62f8ada033d0970ae586524eef78de86ef3218e7c15dbe5cd50facb9572a0a2c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_hardware.py": {
+                  "sha256": "62b49741db985d93c23572d445c40451bdd2766696b07a71cd5de7a87c1725a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_types.py": {
+                  "sha256": "29aa59a8b25e5ea5389956bb432e8e8dd438969fff3a75fab743bc3c3818f8d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/__init__.py": {
+                  "sha256": "00d444e7ab7e2678e7a94df3bb6b6675917350648b14007958a3bb294ac16430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/async_runtime.py": {
+                  "sha256": "6c70a470a47b6f2fc884d04a253c9d883dd57dadd40e241d4f7c0a21fcd2e296",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/base.py": {
+                  "sha256": "ab9b8c700851bfc04fc08dc45f4c1e9f72e4f07d6e67a792542c3d19923f2262",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/lidar.py": {
+                  "sha256": "8ffdc013cf201c084ae986db216aa7503a30c2a5ec1fb087eb73f5cc5781a13e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/localization.py": {
+                  "sha256": "f67991007ef0cd53d92f999081085ce79e0e0f9817d8ff207fcdb2ae763f7b12",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/messages.py": {
+                  "sha256": "022caca55a697559c194a643046adfac70925e1ffbc5eba5a2e6a63ea3ff544a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/planner.py": {
+                  "sha256": "3351b4029d8d1da131dd0030ed421e0958e0cedcae6b4db0d7537aea7a9b2331",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/temporal.py": {
+                  "sha256": "b1d4790725b138a40d5af64a5d15a0dfd2d75f8ec64085ebf541a18cae952d38",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/device_health_policy.py": {
+                  "sha256": "7b5b463e6c7219ff5dc025300aa9a8e7461dfad069b3fe83dcbd957262a8f1b7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/engine.py": {
+                  "sha256": "118f550dfe91e87b72a61f05af7b7164ee5f5d200a2ee376bbe550d4f9cdce0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/execution.py": {
+                  "sha256": "f9594172f7b73c27888c2c1ebb075452a79e0546232bc8c301b2df1db9954c75",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/hri_evidence.py": {
+                  "sha256": "da7c2d6989e8ea11a9c513673cd338a4582a6a535e1842b3217b855624dd7d88",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l10_chassis_control.py": {
+                  "sha256": "ff852617113cc5485f729ff0e3bab6c27bc018200e4a2b028bf0c3b2ff6024ce",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l11_actuator_control.py": {
+                  "sha256": "58c735fca3123e8cd1437b0f1a8c6d9b54f50ade39df07eb17a9deb2e921ffbb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l12_safety_final.py": {
+                  "sha256": "223e29568869f5033eac527128a798814aac8c686b2fc4701c925b41fa09f2fb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l1_acquisition.py": {
+                  "sha256": "0555eaddf51ed8fe2c2e182688be2b6bf0819ce52b0c2a2988eb1cb0c17887b5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l2_admission.py": {
+                  "sha256": "8751f610def4b32aa564341873a55fe0fd264efeccc74d83988643686f3fd349",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l3_state_estimation.py": {
+                  "sha256": "009f8ab733dbe13182b8cbc0d5848516788a21283f7e3d397406176d7f67476b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_structural_memory.py": {
+                  "sha256": "d24e5293a30f7f701238a5d4b0b61e839f202769eec8aeced0244041cb42b1e2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_history.py": {
+                  "sha256": "fa1f3d88c26cc5bcb415a1225bb8287c77e2a0d3655af3f0e26e16ca08faa179",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_occupancy.py": {
+                  "sha256": "82556d5550c9c9d6bbb1e374016beca10b34108dc5ad7f6f8389bc11b66ddd71",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_tracking.py": {
+                  "sha256": "f66ff07777edc473340e45a540f0ea6cb1be99c91f8b621d8184a41af28435b4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_world_model.py": {
+                  "sha256": "91e2e290af4fe7df34df4edb9f7425e6c2ea0687e4e453e133644807887b1403",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l5_command_mission.py": {
+                  "sha256": "d3c48b326a12b4e914378a5b9173dbef3e66f3ee9a990ee0486b552f2e44b99d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l6_navigation.py": {
+                  "sha256": "3f51f4cfe1aa1cab07c38e2c8e0638c1037741a865b41f029dd5d0bfb91dcd8b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l7_motion_selection.py": {
+                  "sha256": "5dc0102625ca5ec6e9144d022e965f02aab75a0d292556bbd39ab1ba18a01195",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l8_motion_realization.py": {
+                  "sha256": "e36ef5a599fdcffcd5a19559150e031d1b33d5fd863c081b11b5d2feb8dd5af5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l9_operational_constraints.py": {
+                  "sha256": "a700d9b5923686d7f3762dfd6f2f79bd810ab5a6e3343318aaaf8891b678bfee",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_config.py": {
+                  "sha256": "2617058b41119c57cfcb65ae7f00911cf0d14018e6971c587997635eb882fc99",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_estimator.py": {
+                  "sha256": "cc476ad739f668708b0992ac63574e9cf4108a97ebb7dedb1be8593119200663",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_matcher_process.py": {
+                  "sha256": "abd864cb97123e02187fa3d798042fbc3d12e9310e796cf430f7d3fd0c5e8f39",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_relative_odometry.py": {
+                  "sha256": "52c5d5f7844ce33bcb4463b9cc66de266eef4076ae09e2405300793d506c2cd2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_capture.py": {
+                  "sha256": "857af89a3f5111121decfb2936fe824a11ea1439204e778e20e3ac9dd9ccf5ed",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_inspect.py": {
+                  "sha256": "2443a3717d0b67d2c3cb9869c555c91f02bf72d2bcbb30a8af1b7f6b5d080083",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_reader.py": {
+                  "sha256": "b694fd6e2c86b11a824213ca20661828d018d297db7c19ff51ac6e4b44a6f77d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_replay_bridge.py": {
+                  "sha256": "ef677383425e449d2bd90464433bc99a15eb0d8aa86fdb2f7efb7c37e8ebf24c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_writer.py": {
+                  "sha256": "f629f808c643834f467e2d3e8ff8bcb4e1f76fbcbf372007cdac651378e1b3ab",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/observation.py": {
+                  "sha256": "bbad62e69f41c6d3d80d59191f94095ffb945ea17d764afc4e3e0c0e72a5ac48",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/ports.py": {
+                  "sha256": "871a29dd95c5c21140487f3f6fe250d434465dfcc8f281730dada1e720827845",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/process_sidecars.py": {
+                  "sha256": "c70f55d08f920732beee767d7f6d8b2611994d6c0516f99a6f5737bd6f68505c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/public_runtime_evidence.py": {
+                  "sha256": "34cf2c902a22bc0635b575b6c3fda54d703cf5d6b819294e7dcd15f734d769d8",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/replay.py": {
+                  "sha256": "d46f5dbd86491a29ac9d54efdcd1848195c33516fdfe898d5fea5fdc2964aa27",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/resident_status.py": {
+                  "sha256": "aa6d5d281da9c6ea3608ea0743965aa9f3aaa63b372323ce44f8d13a9ced44ba",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/runtime_performance.py": {
+                  "sha256": "370919c52fd8cfeb02881a11807234a1e1bbdcce0b5c00847cee40cdd4a5e120",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/scan_matching.py": {
+                  "sha256": "f653debb63f3177fb3173d4c0afc76f12d1874d2dbb3c97ea029f947d8d39941",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/wheel_motion.py": {
+                  "sha256": "82d8e109ddccafa2ba3e3fdfaca2ea2fad48817a3e0db374b524dd3325e5be69",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_config.py": {
+                  "sha256": "9288b60a198c6e235be2bea99ef225f7b6562433baa61f8fca29100910f03b85",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_runtime.py": {
+                  "sha256": "e3c345567b7a171e7edc289b7257bc35879bb06502bd5d6c177a4fac650933bb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_hardware_runtime.py": {
+                  "sha256": "8b34336c50d0c35755d76540d251358801b087247c03585624473309cc125406",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_process_runtime.py": {
+                  "sha256": "d5c39a8552e28a7679c3f69d328c98ee83ca3de2bdac9b281e73f5f1ab986767",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_runtime.py": {
+                  "sha256": "947932e3d1491c265f78cd2f5b17cb18560bc453dab049da575763eb7355cd8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                }
+              }
+            },
+            "first_divergence": null,
+            "first_live_observation": null,
+            "physical_evidence": {
+              "claim_class": "FACT",
+              "causal_claim": false,
+              "evidence_strength": "NONE",
+              "observation": null,
+              "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+              "evidence": null
+            },
+            "analysis_handoff": {
+              "root_cause_inferred": false,
+              "causal_analysis_owner": "ANALYZER_LLM",
+              "replay_role": "DETERMINISM_AND_DIRECT_EVIDENCE_ONLY"
+            },
+            "mcap_bridge": {
+              "authority_capture": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_open/capture.mcap",
+              "authority_sha256": "c1263a96b6e5aff87dd452cfd94c301501703ef3f479d371f9cd1bb08bc6496c",
+              "preflight": "PASS",
+              "materialized_bytes": 76305091,
+              "temporary_json_persisted": false,
+              "materialized_tick_count": 1026,
+              "checkpoint_used": false,
+              "replay_eligible": true,
+              "authority_check_delegated": false,
+              "structure_check_delegated": false,
+              "capture_integrity_check_delegated": false
+            },
+            "result_sha256": "f52a1d5bf3db28e9b21d3f4fe5252250f0fb998ec4cde0c058a5dd8955465068"
+          }
+        },
+        {
+          "scenario": "cruise_clutter",
+          "scenario_input": {
+            "kind": "differential_drive",
+            "seed": 7,
+            "duration_s": 20.0,
+            "goal": {
+              "x_m": 1.5,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "room": {
+              "x_min_m": -2.5,
+              "x_max_m": 4.0,
+              "y_min_m": -2.0,
+              "y_max_m": 2.0
+            },
+            "behavior": "roomcruise",
+            "obstacles": [
+              {
+                "x_m": 1.2,
+                "y_m": 0.15,
+                "radius_m": 0.3
+              },
+              {
+                "x_m": 2.6,
+                "y_m": -0.85,
+                "radius_m": 0.3
+              },
+              {
+                "x_m": -0.8,
+                "y_m": 0.9,
+                "radius_m": 0.18
+              }
+            ]
+          },
+          "scenario_sha256": "d43b8e4cd7273ad63bdb500c830f55014d5a42e40d4d71844158d35f5bc03036",
+          "config_snapshot_id": "a0ce1ea2dcbe25263ed188501d5f7dd9ce634d0f24487e9aaec9527d2d733486",
+          "control_config_sha256": "97e528fffbd616abeafbcb44e06c569d569ee1a7e92f56b934e0754855e21e1a",
+          "metrics": {
+            "active_duration_s": 20.0,
+            "path_length_m": 7.5348037702008135,
+            "unique_coverage_cells": 38,
+            "stopped_duration_s": 0.14,
+            "coverage_cell_size_m": 0.25,
+            "longest_stop_s": 0.14,
+            "no_translation_progress_2s_duration_s": 0.0,
+            "moving_ratio": 0.993,
+            "active_mission_sample_count": 1000,
+            "angular_sign_reversals": 3,
+            "angular_sign_reversals_per_m": 0.3981523728414291,
+            "navigation_reason_duration_s": {
+              "LOCAL_GUIDANCE_REVALIDATED": 19.98,
+              "None": 0.02
+            },
+            "follow_state_duration_s": {},
+            "minimum_footprint_clearance_m": 0.3759367813669949,
+            "max_abs_jerk_mps3": 16.0228952817075,
+            "collision_count": 0,
+            "safety_stop_count": 0,
+            "tracking_error_rms_mps": 0.012041938438124
+          },
+          "resolved_config": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_clutter/resolved_config.json",
+          "fault_layer": null,
+          "first_boundary": null,
+          "termination_reason": "DURATION_REACHED",
+          "requested_duration_s": 20.0,
+          "observed_runtime_active_s": 20.0,
+          "early_terminal": false,
+          "final_stop": true,
+          "physical_output": false,
+          "capture": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_clutter/capture.mcap",
+          "timeline": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_clutter/timeline.ndjson",
+          "replay": {
+            "schema": "R2B4_REPLAYER_V3_RESULT_V3",
+            "status": "MATCH",
+            "generated_at_utc": "2026-10-16T20:07:38Z",
+            "capture": {
+              "path": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_clutter/capture.mcap",
+              "capture_id": "motion-cruise_clutter",
+              "sha256": "54ba22c7ae33ff3c67218393d496f8f45888a521aed9ba56d215acde78b536c6",
+              "payload_sha256": "2588bd747a53209619a81c94e9e33496526a9fbd3f8283797d6e692220ac457a",
+              "schema": "R2B4_MCAP_CAPTURE_V1",
+              "tick_count": 1026,
+              "status": "PASS"
+            },
+            "scope": {
+              "requested": {
+                "start_tick_id": null,
+                "end_tick_id": null,
+                "start_monotonic_ns": null,
+                "end_monotonic_ns": null,
+                "start_layer": "L1",
+                "end_layer": "L12"
+              },
+              "resolved": {
+                "first_tick_id": 0,
+                "last_tick_id": 1025,
+                "first_monotonic_ns": 1000000000,
+                "last_monotonic_ns": 21500000000,
+                "tick_count": 1026,
+                "layers": [
+                  "L1",
+                  "L2",
+                  "L3",
+                  "L4",
+                  "L5",
+                  "L6",
+                  "L7",
+                  "L8",
+                  "L9",
+                  "L10",
+                  "L11",
+                  "L12"
+                ]
+              },
+              "state_warmup": {
+                "strategy": "CAPTURE_PREFIX",
+                "tick_count": 0,
+                "first_tick_id": null,
+                "last_tick_id": null
+              }
+            },
+            "execution": {
+              "capture_status": "PASS",
+              "capture_passed": true,
+              "decision_counts": {
+                "ALLOW": 1000,
+                "STOP": 26,
+                "FAULT": 0
+              },
+              "writer_failure_count": 0,
+              "terminal_tick_id": 1025,
+              "terminal_safety_decision": "STOP",
+              "terminal_reason": "NOT_ACTIVE",
+              "terminal_fault_layer": null
+            },
+            "reconstruction_contract": {
+              "inputs": "CURRENT_SOURCE_TYPED_TICK_INPUTS",
+              "configuration": "CURRENT_SOURCE_TYPED_CONFIG",
+              "checkpoint": "CURRENT_SOURCE_TYPED_CHECKPOINT",
+              "production": "NATIVE_V3_L1_L12",
+              "external_io": "NONE"
+            },
+            "determinism": {
+              "production_layers": "L1-L12",
+              "executed_tick_count": 1026,
+              "selected_tick_count": 1026,
+              "repeated_trace_match": true,
+              "offline_write_count_first": 1026,
+              "offline_write_count_second": 1026
+            },
+            "diagnostics": {
+              "layers": {
+                "L1": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L2": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L3": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L4": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L5": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L6": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L7": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L8": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L9": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L10": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L11": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L12": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                }
+              },
+              "first_divergence": null,
+              "first_live_observation": null,
+              "physical_evidence": {
+                "claim_class": "FACT",
+                "causal_claim": false,
+                "evidence_strength": "NONE",
+                "observation": null,
+                "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+                "evidence": null
+              }
+            },
+            "source_first": {
+              "source_order": [
+                "SOURCE",
+                "ACTIVE_CONFIG",
+                "CAPTURE"
+              ],
+              "source_discovery": "CURRENT_LOCAL_IMPORT_CLOSURE",
+              "capture_source_manifest_path": null,
+              "all_capture_baseline_hashes_match": false,
+              "files": {
+                "STRUKTURALIS_RETEGEK_V3.md": {
+                  "sha256": "546f92a35d82da377568da60f11854248794fdc7acabd985ae63c70128cfa75c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/fizika.json": {
+                  "sha256": "8ed43fc7df46d43b1172b2a0fe8e9cf620236d48710f424107a76de3a93f90e7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/hardver.json": {
+                  "sha256": "afc44ffd5fd15f9f140caffeca43797af45fc3dacbc5fe3a0bfc2a54ea6b7106",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/speed_map.json": {
+                  "sha256": "4cbd02b2885b0a4d41a24140d9a1b37ddbc76083297c68f87f1b7acb1e2e518a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/vezerles.json": {
+                  "sha256": "93df2a2bd923ac25253dba22286eed008046992ca9c1c39803e006301078bd3b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/async_person_photo_evidence.py": {
+                  "sha256": "edd23a91474dc7188804ef62e0022cc451ece009646d145e6d3de0b5cec91009",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_device.py": {
+                  "sha256": "0ab52ba7431a6982c2be93a80d24414e4af686f37b02a095c9c86982d760a7cc",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_imu.py": {
+                  "sha256": "b2ad3b73c3af22d1bc6d5ed3680e47d0dfe8c1cf46d65f728556e1f372d234ac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bounded_command.py": {
+                  "sha256": "5b45043b6b97a78a2f56cb5d003ed9197809c9ca63c24cf4397b7ba3e5aa5161",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_geometry.py": {
+                  "sha256": "b638baab9d066ebd0b796b7a91e4e3959059ffc19c31e52d1574420f8967b9fa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_media.py": {
+                  "sha256": "088176456458af938136692537bde5e18c2e441ff56aa36e3ccf422797e6e4a9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_ownership.py": {
+                  "sha256": "e060688cb0d380e191b536a91b522246a71c6f3585b91003074b6e7e21471df6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_rectification.py": {
+                  "sha256": "126f984f9054aef3d219217499e7c7831ed9b9854e5e0ff9dc86521c7cffc665",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/counter_encoder.py": {
+                  "sha256": "b8800f07762d663bd5ae1dff2059a22585824543e53895ce37df872df32e7c0c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_counter.py": {
+                  "sha256": "2e8ac36f5ffb06604461570ade5ed429917b59fe445a3dc408ae201245177e08",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_encoder.py": {
+                  "sha256": "0c357445fe85ad15e87e55ad4f3b8db47ec3dc542f8101af4f079dfb0c6d1624",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_motor.py": {
+                  "sha256": "9570781637ff3028d49f943434e083766d45351a0e60ea29cb1321361e198911",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/l6_planner_process.py": {
+                  "sha256": "96ea7aebe7977a988d6768aa544eb7c256ba6f9503c24003886ef1992db51844",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/latest_lidar.py": {
+                  "sha256": "29ad9a2beb11176a9bbc4dcde61fda027fe916335ffbbd83348c0e617567274b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/litert_person_detector.py": {
+                  "sha256": "766ba7660dbc0daf10ec9b39ed06bdc6f43101718be1fdcb115e825da86f719b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_camera.py": {
+                  "sha256": "4883011b5fde56af4c398932be1be95e33f2a92b9a04e60f331cb8d147656b0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_encoder.py": {
+                  "sha256": "f76767cbb3ffc38023ed314dd6386a303e02a09517f79cc985625e071a2f42a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_imu.py": {
+                  "sha256": "14219ac579408f96a747c0f421cbf0be503a5605e19cee8a8ea480c96e1de751",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_inputs.py": {
+                  "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_lidar.py": {
+                  "sha256": "93584f5b71845477da721622006d6bdc27e330317d9bd25192dbac4a7511864e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_person_detection.py": {
+                  "sha256": "919da7ff24a1c8feba22b181ccd4e7b012207dd2c36d6ba9538284dcba3d3f06",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_pwm.py": {
+                  "sha256": "14ad291ec98bd718c93ec6d9873d45fc6408e4f3b7b2250daa3b4c0a057efbac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_writer.py": {
+                  "sha256": "0937c460733dc4e32ac39cf46fcf96d22107d481c678254fac108f136a31742e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/multirate_inputs.py": {
+                  "sha256": "b28a292237d4bf5ffb80d16286dd4455970d130e7bbd927a8f2b376d99f2dd6a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/native_lidar_port.py": {
+                  "sha256": "54a2ea79e9508e5182c80d73633862881485ee405fbf499fd60086d0492b2a5e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_detection.py": {
+                  "sha256": "79643e585848e535e199e2e8510d8dc7b03530e8d2fd2e3c77d555d3b23b5a54",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_photo_evidence.py": {
+                  "sha256": "45d6776e430804ce80efddc9936b0f6f55de4e43f8c5ab7ae3ce23b99105d5c9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/picamera2_camera.py": {
+                  "sha256": "08039eef695c5be83915b3135924f591bca2a26076514d32bce3dda2fa9bbebe",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_encoder_backend.py": {
+                  "sha256": "f6ea5eb890748a542b8fb4cff89d6ead56dbba4f01539834e91d6b77fdfac9d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_imu_device.py": {
+                  "sha256": "d394cf96934f01ba66ffe068fbc82e746bfa882cc2f5ae3c0bc7800f60a475a6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_lidar_port.py": {
+                  "sha256": "08c322f6d9243e266d6d6b534ef0d1ed90c8eb8905d3872d64e116eb37d1f68a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_vision_port.py": {
+                  "sha256": "8d5898932c876e0500f26e18a61fe597b82ccb75109c5fab15cdb108cd49ba93",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/recovering_l6_planner.py": {
+                  "sha256": "157f4c3d40993f05f30487419e6d01c75c8f4f6973ccadea41fd6c41bd639693",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/resident_command.py": {
+                  "sha256": "e6f68ab95fdf3acdba9796ca09b81f601a4906078dd18521801dcbeb980af0ad",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/rplidar_c1.py": {
+                  "sha256": "9260420e1e1d21659fac340add9a99f9f1e6c17fcbfb85a41bf74057d4c02e35",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/skill_observation.py": {
+                  "sha256": "18d5e04e9082e720f8646de48fce2d04771eca7849f45f830c18c14c5dd243df",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_contracts.py": {
+                  "sha256": "6b6157456c453fdd6d6438db42edde9a3096ab1bba6bfad1b65be589d048d826",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_socket.py": {
+                  "sha256": "730d2ddc2e0f7329bfe450216244404fbcaf53d2e604db2be4c70b6e1e282718",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/async_capability.py": {
+                  "sha256": "9f22e4bac8dfb52aa46220ec5764047698243ecfdee47ebaf4e6bed5dd222a09",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture.py": {
+                  "sha256": "71d0d041e9e98f117798b28ca3f5cf8fe5ae56cb8f0fa7f7cffbac4f9ed15789",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_behavior.py": {
+                  "sha256": "bb155916b2402405bb3556da664b73cbf7ac5bfae981a0dc1d6f14a5a2f64382",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_compaction.py": {
+                  "sha256": "df22a14a023578072548e4380f0f43013fb6f5de4ae10e631ff65a305487d7af",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_encoding.py": {
+                  "sha256": "8481a8face3251cf3839ac8da29336a39395ed7236b5853b3a299f104676dd2a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_ipc.py": {
+                  "sha256": "ac520159d38d3c73ca30603ad7533e0558c31b9266a5ce66725ba63631171962",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_rate.py": {
+                  "sha256": "2c87a28f32f39063bb9bedf73fd3a43450e4abdf2f6956db67050fd024d5744d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_live_control.py": {
+                  "sha256": "f59799b76212dbc82c618514279ce14b6c4e9394f56ad5bfc5da8eb744ea0957",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_physical_control.py": {
+                  "sha256": "a730e9a9dc4253925f23dbeacbf21bd3fc78de4b6edd698acd113049ba6c16f6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/input_shadow.py": {
+                  "sha256": "bddd066f884430e69928388559011fe83703e419d213d415e764709eb17cb8aa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/live_inputs.py": {
+                  "sha256": "ce9bead45b2459aa8260b6dae328e56250784f64321b266c69a95abb324ac033",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/motor_output.py": {
+                  "sha256": "0d8e1113d3d65b7c01f42ba34a8e86df2e31cb152bbcd412d114936df6e8f404",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_control.py": {
+                  "sha256": "dc10a7f001d720ea65d840b53af20bb0ad810adf9cebacf97c05985c0489c3cd",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_sensor_inputs.py": {
+                  "sha256": "4e49c10b5d4a80ddf847ecb53e7341e297fc7710833e2f64099c45504d5a0e22",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_live_control.py": {
+                  "sha256": "9a6c69ebc7ccb803a148fa735d225f193984404690000fdfd777551e71c5a737",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_physical_control.py": {
+                  "sha256": "236beef9262d20cf3d1b0b1e125340f7ac86e6cadec28c50fce4a64820813430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/runtime_config.py": {
+                  "sha256": "382018559c41f11c6559f322d218f96a5f2ef9b0a2d91179604b8746d78a5c8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config.py": {
+                  "sha256": "62f8ada033d0970ae586524eef78de86ef3218e7c15dbe5cd50facb9572a0a2c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_hardware.py": {
+                  "sha256": "62b49741db985d93c23572d445c40451bdd2766696b07a71cd5de7a87c1725a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_types.py": {
+                  "sha256": "29aa59a8b25e5ea5389956bb432e8e8dd438969fff3a75fab743bc3c3818f8d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/__init__.py": {
+                  "sha256": "00d444e7ab7e2678e7a94df3bb6b6675917350648b14007958a3bb294ac16430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/async_runtime.py": {
+                  "sha256": "6c70a470a47b6f2fc884d04a253c9d883dd57dadd40e241d4f7c0a21fcd2e296",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/base.py": {
+                  "sha256": "ab9b8c700851bfc04fc08dc45f4c1e9f72e4f07d6e67a792542c3d19923f2262",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/lidar.py": {
+                  "sha256": "8ffdc013cf201c084ae986db216aa7503a30c2a5ec1fb087eb73f5cc5781a13e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/localization.py": {
+                  "sha256": "f67991007ef0cd53d92f999081085ce79e0e0f9817d8ff207fcdb2ae763f7b12",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/messages.py": {
+                  "sha256": "022caca55a697559c194a643046adfac70925e1ffbc5eba5a2e6a63ea3ff544a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/planner.py": {
+                  "sha256": "3351b4029d8d1da131dd0030ed421e0958e0cedcae6b4db0d7537aea7a9b2331",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/temporal.py": {
+                  "sha256": "b1d4790725b138a40d5af64a5d15a0dfd2d75f8ec64085ebf541a18cae952d38",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/device_health_policy.py": {
+                  "sha256": "7b5b463e6c7219ff5dc025300aa9a8e7461dfad069b3fe83dcbd957262a8f1b7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/engine.py": {
+                  "sha256": "118f550dfe91e87b72a61f05af7b7164ee5f5d200a2ee376bbe550d4f9cdce0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/execution.py": {
+                  "sha256": "f9594172f7b73c27888c2c1ebb075452a79e0546232bc8c301b2df1db9954c75",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/hri_evidence.py": {
+                  "sha256": "da7c2d6989e8ea11a9c513673cd338a4582a6a535e1842b3217b855624dd7d88",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l10_chassis_control.py": {
+                  "sha256": "ff852617113cc5485f729ff0e3bab6c27bc018200e4a2b028bf0c3b2ff6024ce",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l11_actuator_control.py": {
+                  "sha256": "58c735fca3123e8cd1437b0f1a8c6d9b54f50ade39df07eb17a9deb2e921ffbb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l12_safety_final.py": {
+                  "sha256": "223e29568869f5033eac527128a798814aac8c686b2fc4701c925b41fa09f2fb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l1_acquisition.py": {
+                  "sha256": "0555eaddf51ed8fe2c2e182688be2b6bf0819ce52b0c2a2988eb1cb0c17887b5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l2_admission.py": {
+                  "sha256": "8751f610def4b32aa564341873a55fe0fd264efeccc74d83988643686f3fd349",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l3_state_estimation.py": {
+                  "sha256": "009f8ab733dbe13182b8cbc0d5848516788a21283f7e3d397406176d7f67476b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_structural_memory.py": {
+                  "sha256": "d24e5293a30f7f701238a5d4b0b61e839f202769eec8aeced0244041cb42b1e2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_history.py": {
+                  "sha256": "fa1f3d88c26cc5bcb415a1225bb8287c77e2a0d3655af3f0e26e16ca08faa179",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_occupancy.py": {
+                  "sha256": "82556d5550c9c9d6bbb1e374016beca10b34108dc5ad7f6f8389bc11b66ddd71",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_tracking.py": {
+                  "sha256": "f66ff07777edc473340e45a540f0ea6cb1be99c91f8b621d8184a41af28435b4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_world_model.py": {
+                  "sha256": "91e2e290af4fe7df34df4edb9f7425e6c2ea0687e4e453e133644807887b1403",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l5_command_mission.py": {
+                  "sha256": "d3c48b326a12b4e914378a5b9173dbef3e66f3ee9a990ee0486b552f2e44b99d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l6_navigation.py": {
+                  "sha256": "3f51f4cfe1aa1cab07c38e2c8e0638c1037741a865b41f029dd5d0bfb91dcd8b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l7_motion_selection.py": {
+                  "sha256": "5dc0102625ca5ec6e9144d022e965f02aab75a0d292556bbd39ab1ba18a01195",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l8_motion_realization.py": {
+                  "sha256": "e36ef5a599fdcffcd5a19559150e031d1b33d5fd863c081b11b5d2feb8dd5af5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l9_operational_constraints.py": {
+                  "sha256": "a700d9b5923686d7f3762dfd6f2f79bd810ab5a6e3343318aaaf8891b678bfee",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_config.py": {
+                  "sha256": "2617058b41119c57cfcb65ae7f00911cf0d14018e6971c587997635eb882fc99",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_estimator.py": {
+                  "sha256": "cc476ad739f668708b0992ac63574e9cf4108a97ebb7dedb1be8593119200663",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_matcher_process.py": {
+                  "sha256": "abd864cb97123e02187fa3d798042fbc3d12e9310e796cf430f7d3fd0c5e8f39",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_relative_odometry.py": {
+                  "sha256": "52c5d5f7844ce33bcb4463b9cc66de266eef4076ae09e2405300793d506c2cd2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_capture.py": {
+                  "sha256": "857af89a3f5111121decfb2936fe824a11ea1439204e778e20e3ac9dd9ccf5ed",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_inspect.py": {
+                  "sha256": "2443a3717d0b67d2c3cb9869c555c91f02bf72d2bcbb30a8af1b7f6b5d080083",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_reader.py": {
+                  "sha256": "b694fd6e2c86b11a824213ca20661828d018d297db7c19ff51ac6e4b44a6f77d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_replay_bridge.py": {
+                  "sha256": "ef677383425e449d2bd90464433bc99a15eb0d8aa86fdb2f7efb7c37e8ebf24c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_writer.py": {
+                  "sha256": "f629f808c643834f467e2d3e8ff8bcb4e1f76fbcbf372007cdac651378e1b3ab",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/observation.py": {
+                  "sha256": "bbad62e69f41c6d3d80d59191f94095ffb945ea17d764afc4e3e0c0e72a5ac48",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/ports.py": {
+                  "sha256": "871a29dd95c5c21140487f3f6fe250d434465dfcc8f281730dada1e720827845",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/process_sidecars.py": {
+                  "sha256": "c70f55d08f920732beee767d7f6d8b2611994d6c0516f99a6f5737bd6f68505c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/public_runtime_evidence.py": {
+                  "sha256": "34cf2c902a22bc0635b575b6c3fda54d703cf5d6b819294e7dcd15f734d769d8",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/replay.py": {
+                  "sha256": "d46f5dbd86491a29ac9d54efdcd1848195c33516fdfe898d5fea5fdc2964aa27",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/resident_status.py": {
+                  "sha256": "aa6d5d281da9c6ea3608ea0743965aa9f3aaa63b372323ce44f8d13a9ced44ba",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/runtime_performance.py": {
+                  "sha256": "370919c52fd8cfeb02881a11807234a1e1bbdcce0b5c00847cee40cdd4a5e120",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/scan_matching.py": {
+                  "sha256": "f653debb63f3177fb3173d4c0afc76f12d1874d2dbb3c97ea029f947d8d39941",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/wheel_motion.py": {
+                  "sha256": "82d8e109ddccafa2ba3e3fdfaca2ea2fad48817a3e0db374b524dd3325e5be69",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_config.py": {
+                  "sha256": "9288b60a198c6e235be2bea99ef225f7b6562433baa61f8fca29100910f03b85",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_runtime.py": {
+                  "sha256": "e3c345567b7a171e7edc289b7257bc35879bb06502bd5d6c177a4fac650933bb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_hardware_runtime.py": {
+                  "sha256": "8b34336c50d0c35755d76540d251358801b087247c03585624473309cc125406",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_process_runtime.py": {
+                  "sha256": "d5c39a8552e28a7679c3f69d328c98ee83ca3de2bdac9b281e73f5f1ab986767",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_runtime.py": {
+                  "sha256": "947932e3d1491c265f78cd2f5b17cb18560bc453dab049da575763eb7355cd8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                }
+              }
+            },
+            "first_divergence": null,
+            "first_live_observation": null,
+            "physical_evidence": {
+              "claim_class": "FACT",
+              "causal_claim": false,
+              "evidence_strength": "NONE",
+              "observation": null,
+              "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+              "evidence": null
+            },
+            "analysis_handoff": {
+              "root_cause_inferred": false,
+              "causal_analysis_owner": "ANALYZER_LLM",
+              "replay_role": "DETERMINISM_AND_DIRECT_EVIDENCE_ONLY"
+            },
+            "mcap_bridge": {
+              "authority_capture": "/tmp/r2b4-motion-74tktw6d/baseline/cruise_clutter/capture.mcap",
+              "authority_sha256": "54ba22c7ae33ff3c67218393d496f8f45888a521aed9ba56d215acde78b536c6",
+              "preflight": "PASS",
+              "materialized_bytes": 77507235,
+              "temporary_json_persisted": false,
+              "materialized_tick_count": 1026,
+              "checkpoint_used": false,
+              "replay_eligible": true,
+              "authority_check_delegated": false,
+              "structure_check_delegated": false,
+              "capture_integrity_check_delegated": false
+            },
+            "result_sha256": "73d78cb6d751a055d6deceb946868ed3f9755de378ff71c16f39a82b9ecd4588"
+          }
+        }
+      ]
+    },
+    {
+      "name": "variant-1",
+      "override": {
+        "behavior": {
+          "roomcruise": {
+            "preferences": {
+              "local_goal_forward_weight": 0.0
+            }
+          }
+        }
+      },
+      "trials": [
+        {
+          "scenario": "cruise_open",
+          "scenario_input": {
+            "kind": "differential_drive",
+            "seed": 7,
+            "duration_s": 20.0,
+            "goal": {
+              "x_m": 1.5,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "room": {
+              "x_min_m": -2.5,
+              "x_max_m": 4.0,
+              "y_min_m": -2.0,
+              "y_max_m": 2.0
+            },
+            "behavior": "roomcruise"
+          },
+          "scenario_sha256": "9a798d40a1ae091416b9aa9324b50eadd25b2e9ad1433f34cc73cb83877af466",
+          "config_snapshot_id": "031d20532973ab77e6cac481b08438e13f18e05577438e35a0d5dc25d87483ca",
+          "control_config_sha256": "c01715d237687e4965a35639605cbd2a42200fa9fb1d4b28ad6160d2fa837475",
+          "metrics": {
+            "active_duration_s": 20.0,
+            "path_length_m": 8.259435201810078,
+            "unique_coverage_cells": 40,
+            "stopped_duration_s": 0.1,
+            "coverage_cell_size_m": 0.25,
+            "longest_stop_s": 0.1,
+            "no_translation_progress_2s_duration_s": 0.0,
+            "moving_ratio": 0.995,
+            "active_mission_sample_count": 1000,
+            "angular_sign_reversals": 3,
+            "angular_sign_reversals_per_m": 0.36322096205107846,
+            "navigation_reason_duration_s": {
+              "LOCAL_GUIDANCE_REVALIDATED": 20.0
+            },
+            "follow_state_duration_s": {},
+            "minimum_footprint_clearance_m": 0.5761078446055241,
+            "max_abs_jerk_mps3": 16.688145741972082,
+            "collision_count": 0,
+            "safety_stop_count": 0,
+            "tracking_error_rms_mps": 0.01125685210805105
+          },
+          "resolved_config": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_open/resolved_config.json",
+          "fault_layer": null,
+          "first_boundary": null,
+          "termination_reason": "DURATION_REACHED",
+          "requested_duration_s": 20.0,
+          "observed_runtime_active_s": 20.0,
+          "early_terminal": false,
+          "final_stop": true,
+          "physical_output": false,
+          "capture": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_open/capture.mcap",
+          "timeline": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_open/timeline.ndjson",
+          "replay": {
+            "schema": "R2B4_REPLAYER_V3_RESULT_V3",
+            "status": "MATCH",
+            "generated_at_utc": "2026-10-16T20:09:22Z",
+            "capture": {
+              "path": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_open/capture.mcap",
+              "capture_id": "motion-cruise_open",
+              "sha256": "c8fe604ed2ccbe491f2daa5d5cd3ef0499d4ade91c1d19cf8cf1b9ce46f2fbee",
+              "payload_sha256": "7dafca8e8390bdd15fda1b2f448265e5d30083c4c6985acac4a6035b5db747a4",
+              "schema": "R2B4_MCAP_CAPTURE_V1",
+              "tick_count": 1026,
+              "status": "PASS"
+            },
+            "scope": {
+              "requested": {
+                "start_tick_id": null,
+                "end_tick_id": null,
+                "start_monotonic_ns": null,
+                "end_monotonic_ns": null,
+                "start_layer": "L1",
+                "end_layer": "L12"
+              },
+              "resolved": {
+                "first_tick_id": 0,
+                "last_tick_id": 1025,
+                "first_monotonic_ns": 1000000000,
+                "last_monotonic_ns": 21500000000,
+                "tick_count": 1026,
+                "layers": [
+                  "L1",
+                  "L2",
+                  "L3",
+                  "L4",
+                  "L5",
+                  "L6",
+                  "L7",
+                  "L8",
+                  "L9",
+                  "L10",
+                  "L11",
+                  "L12"
+                ]
+              },
+              "state_warmup": {
+                "strategy": "CAPTURE_PREFIX",
+                "tick_count": 0,
+                "first_tick_id": null,
+                "last_tick_id": null
+              }
+            },
+            "execution": {
+              "capture_status": "PASS",
+              "capture_passed": true,
+              "decision_counts": {
+                "ALLOW": 1000,
+                "STOP": 26,
+                "FAULT": 0
+              },
+              "writer_failure_count": 0,
+              "terminal_tick_id": 1025,
+              "terminal_safety_decision": "STOP",
+              "terminal_reason": "NOT_ACTIVE",
+              "terminal_fault_layer": null
+            },
+            "reconstruction_contract": {
+              "inputs": "CURRENT_SOURCE_TYPED_TICK_INPUTS",
+              "configuration": "CURRENT_SOURCE_TYPED_CONFIG",
+              "checkpoint": "CURRENT_SOURCE_TYPED_CHECKPOINT",
+              "production": "NATIVE_V3_L1_L12",
+              "external_io": "NONE"
+            },
+            "determinism": {
+              "production_layers": "L1-L12",
+              "executed_tick_count": 1026,
+              "selected_tick_count": 1026,
+              "repeated_trace_match": true,
+              "offline_write_count_first": 1026,
+              "offline_write_count_second": 1026
+            },
+            "diagnostics": {
+              "layers": {
+                "L1": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L2": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L3": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L4": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L5": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L6": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L7": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L8": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L9": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L10": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L11": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L12": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                }
+              },
+              "first_divergence": null,
+              "first_live_observation": null,
+              "physical_evidence": {
+                "claim_class": "FACT",
+                "causal_claim": false,
+                "evidence_strength": "NONE",
+                "observation": null,
+                "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+                "evidence": null
+              }
+            },
+            "source_first": {
+              "source_order": [
+                "SOURCE",
+                "ACTIVE_CONFIG",
+                "CAPTURE"
+              ],
+              "source_discovery": "CURRENT_LOCAL_IMPORT_CLOSURE",
+              "capture_source_manifest_path": null,
+              "all_capture_baseline_hashes_match": false,
+              "files": {
+                "STRUKTURALIS_RETEGEK_V3.md": {
+                  "sha256": "546f92a35d82da377568da60f11854248794fdc7acabd985ae63c70128cfa75c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/fizika.json": {
+                  "sha256": "8ed43fc7df46d43b1172b2a0fe8e9cf620236d48710f424107a76de3a93f90e7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/hardver.json": {
+                  "sha256": "afc44ffd5fd15f9f140caffeca43797af45fc3dacbc5fe3a0bfc2a54ea6b7106",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/speed_map.json": {
+                  "sha256": "4cbd02b2885b0a4d41a24140d9a1b37ddbc76083297c68f87f1b7acb1e2e518a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/vezerles.json": {
+                  "sha256": "93df2a2bd923ac25253dba22286eed008046992ca9c1c39803e006301078bd3b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/async_person_photo_evidence.py": {
+                  "sha256": "edd23a91474dc7188804ef62e0022cc451ece009646d145e6d3de0b5cec91009",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_device.py": {
+                  "sha256": "0ab52ba7431a6982c2be93a80d24414e4af686f37b02a095c9c86982d760a7cc",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_imu.py": {
+                  "sha256": "b2ad3b73c3af22d1bc6d5ed3680e47d0dfe8c1cf46d65f728556e1f372d234ac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bounded_command.py": {
+                  "sha256": "5b45043b6b97a78a2f56cb5d003ed9197809c9ca63c24cf4397b7ba3e5aa5161",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_geometry.py": {
+                  "sha256": "b638baab9d066ebd0b796b7a91e4e3959059ffc19c31e52d1574420f8967b9fa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_media.py": {
+                  "sha256": "088176456458af938136692537bde5e18c2e441ff56aa36e3ccf422797e6e4a9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_ownership.py": {
+                  "sha256": "e060688cb0d380e191b536a91b522246a71c6f3585b91003074b6e7e21471df6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_rectification.py": {
+                  "sha256": "126f984f9054aef3d219217499e7c7831ed9b9854e5e0ff9dc86521c7cffc665",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/counter_encoder.py": {
+                  "sha256": "b8800f07762d663bd5ae1dff2059a22585824543e53895ce37df872df32e7c0c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_counter.py": {
+                  "sha256": "2e8ac36f5ffb06604461570ade5ed429917b59fe445a3dc408ae201245177e08",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_encoder.py": {
+                  "sha256": "0c357445fe85ad15e87e55ad4f3b8db47ec3dc542f8101af4f079dfb0c6d1624",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_motor.py": {
+                  "sha256": "9570781637ff3028d49f943434e083766d45351a0e60ea29cb1321361e198911",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/l6_planner_process.py": {
+                  "sha256": "96ea7aebe7977a988d6768aa544eb7c256ba6f9503c24003886ef1992db51844",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/latest_lidar.py": {
+                  "sha256": "29ad9a2beb11176a9bbc4dcde61fda027fe916335ffbbd83348c0e617567274b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/litert_person_detector.py": {
+                  "sha256": "766ba7660dbc0daf10ec9b39ed06bdc6f43101718be1fdcb115e825da86f719b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_camera.py": {
+                  "sha256": "4883011b5fde56af4c398932be1be95e33f2a92b9a04e60f331cb8d147656b0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_encoder.py": {
+                  "sha256": "f76767cbb3ffc38023ed314dd6386a303e02a09517f79cc985625e071a2f42a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_imu.py": {
+                  "sha256": "14219ac579408f96a747c0f421cbf0be503a5605e19cee8a8ea480c96e1de751",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_inputs.py": {
+                  "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_lidar.py": {
+                  "sha256": "93584f5b71845477da721622006d6bdc27e330317d9bd25192dbac4a7511864e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_person_detection.py": {
+                  "sha256": "919da7ff24a1c8feba22b181ccd4e7b012207dd2c36d6ba9538284dcba3d3f06",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_pwm.py": {
+                  "sha256": "14ad291ec98bd718c93ec6d9873d45fc6408e4f3b7b2250daa3b4c0a057efbac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_writer.py": {
+                  "sha256": "0937c460733dc4e32ac39cf46fcf96d22107d481c678254fac108f136a31742e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/multirate_inputs.py": {
+                  "sha256": "b28a292237d4bf5ffb80d16286dd4455970d130e7bbd927a8f2b376d99f2dd6a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/native_lidar_port.py": {
+                  "sha256": "54a2ea79e9508e5182c80d73633862881485ee405fbf499fd60086d0492b2a5e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_detection.py": {
+                  "sha256": "79643e585848e535e199e2e8510d8dc7b03530e8d2fd2e3c77d555d3b23b5a54",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_photo_evidence.py": {
+                  "sha256": "45d6776e430804ce80efddc9936b0f6f55de4e43f8c5ab7ae3ce23b99105d5c9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/picamera2_camera.py": {
+                  "sha256": "08039eef695c5be83915b3135924f591bca2a26076514d32bce3dda2fa9bbebe",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_encoder_backend.py": {
+                  "sha256": "f6ea5eb890748a542b8fb4cff89d6ead56dbba4f01539834e91d6b77fdfac9d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_imu_device.py": {
+                  "sha256": "d394cf96934f01ba66ffe068fbc82e746bfa882cc2f5ae3c0bc7800f60a475a6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_lidar_port.py": {
+                  "sha256": "08c322f6d9243e266d6d6b534ef0d1ed90c8eb8905d3872d64e116eb37d1f68a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_vision_port.py": {
+                  "sha256": "8d5898932c876e0500f26e18a61fe597b82ccb75109c5fab15cdb108cd49ba93",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/recovering_l6_planner.py": {
+                  "sha256": "157f4c3d40993f05f30487419e6d01c75c8f4f6973ccadea41fd6c41bd639693",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/resident_command.py": {
+                  "sha256": "e6f68ab95fdf3acdba9796ca09b81f601a4906078dd18521801dcbeb980af0ad",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/rplidar_c1.py": {
+                  "sha256": "9260420e1e1d21659fac340add9a99f9f1e6c17fcbfb85a41bf74057d4c02e35",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/skill_observation.py": {
+                  "sha256": "18d5e04e9082e720f8646de48fce2d04771eca7849f45f830c18c14c5dd243df",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_contracts.py": {
+                  "sha256": "6b6157456c453fdd6d6438db42edde9a3096ab1bba6bfad1b65be589d048d826",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_socket.py": {
+                  "sha256": "730d2ddc2e0f7329bfe450216244404fbcaf53d2e604db2be4c70b6e1e282718",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/async_capability.py": {
+                  "sha256": "9f22e4bac8dfb52aa46220ec5764047698243ecfdee47ebaf4e6bed5dd222a09",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture.py": {
+                  "sha256": "71d0d041e9e98f117798b28ca3f5cf8fe5ae56cb8f0fa7f7cffbac4f9ed15789",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_behavior.py": {
+                  "sha256": "bb155916b2402405bb3556da664b73cbf7ac5bfae981a0dc1d6f14a5a2f64382",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_compaction.py": {
+                  "sha256": "df22a14a023578072548e4380f0f43013fb6f5de4ae10e631ff65a305487d7af",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_encoding.py": {
+                  "sha256": "8481a8face3251cf3839ac8da29336a39395ed7236b5853b3a299f104676dd2a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_ipc.py": {
+                  "sha256": "ac520159d38d3c73ca30603ad7533e0558c31b9266a5ce66725ba63631171962",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_rate.py": {
+                  "sha256": "2c87a28f32f39063bb9bedf73fd3a43450e4abdf2f6956db67050fd024d5744d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_live_control.py": {
+                  "sha256": "f59799b76212dbc82c618514279ce14b6c4e9394f56ad5bfc5da8eb744ea0957",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_physical_control.py": {
+                  "sha256": "a730e9a9dc4253925f23dbeacbf21bd3fc78de4b6edd698acd113049ba6c16f6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/input_shadow.py": {
+                  "sha256": "bddd066f884430e69928388559011fe83703e419d213d415e764709eb17cb8aa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/live_inputs.py": {
+                  "sha256": "ce9bead45b2459aa8260b6dae328e56250784f64321b266c69a95abb324ac033",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/motor_output.py": {
+                  "sha256": "0d8e1113d3d65b7c01f42ba34a8e86df2e31cb152bbcd412d114936df6e8f404",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_control.py": {
+                  "sha256": "dc10a7f001d720ea65d840b53af20bb0ad810adf9cebacf97c05985c0489c3cd",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_sensor_inputs.py": {
+                  "sha256": "4e49c10b5d4a80ddf847ecb53e7341e297fc7710833e2f64099c45504d5a0e22",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_live_control.py": {
+                  "sha256": "9a6c69ebc7ccb803a148fa735d225f193984404690000fdfd777551e71c5a737",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_physical_control.py": {
+                  "sha256": "236beef9262d20cf3d1b0b1e125340f7ac86e6cadec28c50fce4a64820813430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/runtime_config.py": {
+                  "sha256": "382018559c41f11c6559f322d218f96a5f2ef9b0a2d91179604b8746d78a5c8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config.py": {
+                  "sha256": "62f8ada033d0970ae586524eef78de86ef3218e7c15dbe5cd50facb9572a0a2c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_hardware.py": {
+                  "sha256": "62b49741db985d93c23572d445c40451bdd2766696b07a71cd5de7a87c1725a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_types.py": {
+                  "sha256": "29aa59a8b25e5ea5389956bb432e8e8dd438969fff3a75fab743bc3c3818f8d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/__init__.py": {
+                  "sha256": "00d444e7ab7e2678e7a94df3bb6b6675917350648b14007958a3bb294ac16430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/async_runtime.py": {
+                  "sha256": "6c70a470a47b6f2fc884d04a253c9d883dd57dadd40e241d4f7c0a21fcd2e296",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/base.py": {
+                  "sha256": "ab9b8c700851bfc04fc08dc45f4c1e9f72e4f07d6e67a792542c3d19923f2262",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/lidar.py": {
+                  "sha256": "8ffdc013cf201c084ae986db216aa7503a30c2a5ec1fb087eb73f5cc5781a13e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/localization.py": {
+                  "sha256": "f67991007ef0cd53d92f999081085ce79e0e0f9817d8ff207fcdb2ae763f7b12",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/messages.py": {
+                  "sha256": "022caca55a697559c194a643046adfac70925e1ffbc5eba5a2e6a63ea3ff544a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/planner.py": {
+                  "sha256": "3351b4029d8d1da131dd0030ed421e0958e0cedcae6b4db0d7537aea7a9b2331",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/temporal.py": {
+                  "sha256": "b1d4790725b138a40d5af64a5d15a0dfd2d75f8ec64085ebf541a18cae952d38",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/device_health_policy.py": {
+                  "sha256": "7b5b463e6c7219ff5dc025300aa9a8e7461dfad069b3fe83dcbd957262a8f1b7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/engine.py": {
+                  "sha256": "118f550dfe91e87b72a61f05af7b7164ee5f5d200a2ee376bbe550d4f9cdce0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/execution.py": {
+                  "sha256": "f9594172f7b73c27888c2c1ebb075452a79e0546232bc8c301b2df1db9954c75",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/hri_evidence.py": {
+                  "sha256": "da7c2d6989e8ea11a9c513673cd338a4582a6a535e1842b3217b855624dd7d88",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l10_chassis_control.py": {
+                  "sha256": "ff852617113cc5485f729ff0e3bab6c27bc018200e4a2b028bf0c3b2ff6024ce",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l11_actuator_control.py": {
+                  "sha256": "58c735fca3123e8cd1437b0f1a8c6d9b54f50ade39df07eb17a9deb2e921ffbb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l12_safety_final.py": {
+                  "sha256": "223e29568869f5033eac527128a798814aac8c686b2fc4701c925b41fa09f2fb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l1_acquisition.py": {
+                  "sha256": "0555eaddf51ed8fe2c2e182688be2b6bf0819ce52b0c2a2988eb1cb0c17887b5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l2_admission.py": {
+                  "sha256": "8751f610def4b32aa564341873a55fe0fd264efeccc74d83988643686f3fd349",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l3_state_estimation.py": {
+                  "sha256": "009f8ab733dbe13182b8cbc0d5848516788a21283f7e3d397406176d7f67476b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_structural_memory.py": {
+                  "sha256": "d24e5293a30f7f701238a5d4b0b61e839f202769eec8aeced0244041cb42b1e2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_history.py": {
+                  "sha256": "fa1f3d88c26cc5bcb415a1225bb8287c77e2a0d3655af3f0e26e16ca08faa179",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_occupancy.py": {
+                  "sha256": "82556d5550c9c9d6bbb1e374016beca10b34108dc5ad7f6f8389bc11b66ddd71",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_tracking.py": {
+                  "sha256": "f66ff07777edc473340e45a540f0ea6cb1be99c91f8b621d8184a41af28435b4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_world_model.py": {
+                  "sha256": "91e2e290af4fe7df34df4edb9f7425e6c2ea0687e4e453e133644807887b1403",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l5_command_mission.py": {
+                  "sha256": "d3c48b326a12b4e914378a5b9173dbef3e66f3ee9a990ee0486b552f2e44b99d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l6_navigation.py": {
+                  "sha256": "3f51f4cfe1aa1cab07c38e2c8e0638c1037741a865b41f029dd5d0bfb91dcd8b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l7_motion_selection.py": {
+                  "sha256": "5dc0102625ca5ec6e9144d022e965f02aab75a0d292556bbd39ab1ba18a01195",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l8_motion_realization.py": {
+                  "sha256": "e36ef5a599fdcffcd5a19559150e031d1b33d5fd863c081b11b5d2feb8dd5af5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l9_operational_constraints.py": {
+                  "sha256": "a700d9b5923686d7f3762dfd6f2f79bd810ab5a6e3343318aaaf8891b678bfee",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_config.py": {
+                  "sha256": "2617058b41119c57cfcb65ae7f00911cf0d14018e6971c587997635eb882fc99",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_estimator.py": {
+                  "sha256": "cc476ad739f668708b0992ac63574e9cf4108a97ebb7dedb1be8593119200663",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_matcher_process.py": {
+                  "sha256": "abd864cb97123e02187fa3d798042fbc3d12e9310e796cf430f7d3fd0c5e8f39",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_relative_odometry.py": {
+                  "sha256": "52c5d5f7844ce33bcb4463b9cc66de266eef4076ae09e2405300793d506c2cd2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_capture.py": {
+                  "sha256": "857af89a3f5111121decfb2936fe824a11ea1439204e778e20e3ac9dd9ccf5ed",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_inspect.py": {
+                  "sha256": "2443a3717d0b67d2c3cb9869c555c91f02bf72d2bcbb30a8af1b7f6b5d080083",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_reader.py": {
+                  "sha256": "b694fd6e2c86b11a824213ca20661828d018d297db7c19ff51ac6e4b44a6f77d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_replay_bridge.py": {
+                  "sha256": "ef677383425e449d2bd90464433bc99a15eb0d8aa86fdb2f7efb7c37e8ebf24c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_writer.py": {
+                  "sha256": "f629f808c643834f467e2d3e8ff8bcb4e1f76fbcbf372007cdac651378e1b3ab",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/observation.py": {
+                  "sha256": "bbad62e69f41c6d3d80d59191f94095ffb945ea17d764afc4e3e0c0e72a5ac48",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/ports.py": {
+                  "sha256": "871a29dd95c5c21140487f3f6fe250d434465dfcc8f281730dada1e720827845",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/process_sidecars.py": {
+                  "sha256": "c70f55d08f920732beee767d7f6d8b2611994d6c0516f99a6f5737bd6f68505c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/public_runtime_evidence.py": {
+                  "sha256": "34cf2c902a22bc0635b575b6c3fda54d703cf5d6b819294e7dcd15f734d769d8",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/replay.py": {
+                  "sha256": "d46f5dbd86491a29ac9d54efdcd1848195c33516fdfe898d5fea5fdc2964aa27",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/resident_status.py": {
+                  "sha256": "aa6d5d281da9c6ea3608ea0743965aa9f3aaa63b372323ce44f8d13a9ced44ba",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/runtime_performance.py": {
+                  "sha256": "370919c52fd8cfeb02881a11807234a1e1bbdcce0b5c00847cee40cdd4a5e120",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/scan_matching.py": {
+                  "sha256": "f653debb63f3177fb3173d4c0afc76f12d1874d2dbb3c97ea029f947d8d39941",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/wheel_motion.py": {
+                  "sha256": "82d8e109ddccafa2ba3e3fdfaca2ea2fad48817a3e0db374b524dd3325e5be69",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_config.py": {
+                  "sha256": "9288b60a198c6e235be2bea99ef225f7b6562433baa61f8fca29100910f03b85",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_runtime.py": {
+                  "sha256": "e3c345567b7a171e7edc289b7257bc35879bb06502bd5d6c177a4fac650933bb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_hardware_runtime.py": {
+                  "sha256": "8b34336c50d0c35755d76540d251358801b087247c03585624473309cc125406",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_process_runtime.py": {
+                  "sha256": "d5c39a8552e28a7679c3f69d328c98ee83ca3de2bdac9b281e73f5f1ab986767",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_runtime.py": {
+                  "sha256": "947932e3d1491c265f78cd2f5b17cb18560bc453dab049da575763eb7355cd8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                }
+              }
+            },
+            "first_divergence": null,
+            "first_live_observation": null,
+            "physical_evidence": {
+              "claim_class": "FACT",
+              "causal_claim": false,
+              "evidence_strength": "NONE",
+              "observation": null,
+              "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+              "evidence": null
+            },
+            "analysis_handoff": {
+              "root_cause_inferred": false,
+              "causal_analysis_owner": "ANALYZER_LLM",
+              "replay_role": "DETERMINISM_AND_DIRECT_EVIDENCE_ONLY"
+            },
+            "mcap_bridge": {
+              "authority_capture": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_open/capture.mcap",
+              "authority_sha256": "c8fe604ed2ccbe491f2daa5d5cd3ef0499d4ade91c1d19cf8cf1b9ce46f2fbee",
+              "preflight": "PASS",
+              "materialized_bytes": 76538210,
+              "temporary_json_persisted": false,
+              "materialized_tick_count": 1026,
+              "checkpoint_used": false,
+              "replay_eligible": true,
+              "authority_check_delegated": false,
+              "structure_check_delegated": false,
+              "capture_integrity_check_delegated": false
+            },
+            "result_sha256": "1c172695ba660d9683d3b1e620a4c050f3eae591d56be5cb89e4e2b8be1cdc32"
+          }
+        },
+        {
+          "scenario": "cruise_clutter",
+          "scenario_input": {
+            "kind": "differential_drive",
+            "seed": 7,
+            "duration_s": 20.0,
+            "goal": {
+              "x_m": 1.5,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "room": {
+              "x_min_m": -2.5,
+              "x_max_m": 4.0,
+              "y_min_m": -2.0,
+              "y_max_m": 2.0
+            },
+            "behavior": "roomcruise",
+            "obstacles": [
+              {
+                "x_m": 1.2,
+                "y_m": 0.15,
+                "radius_m": 0.3
+              },
+              {
+                "x_m": 2.6,
+                "y_m": -0.85,
+                "radius_m": 0.3
+              },
+              {
+                "x_m": -0.8,
+                "y_m": 0.9,
+                "radius_m": 0.18
+              }
+            ]
+          },
+          "scenario_sha256": "d43b8e4cd7273ad63bdb500c830f55014d5a42e40d4d71844158d35f5bc03036",
+          "config_snapshot_id": "031d20532973ab77e6cac481b08438e13f18e05577438e35a0d5dc25d87483ca",
+          "control_config_sha256": "c01715d237687e4965a35639605cbd2a42200fa9fb1d4b28ad6160d2fa837475",
+          "metrics": {
+            "active_duration_s": 20.0,
+            "path_length_m": 7.356638270389684,
+            "unique_coverage_cells": 34,
+            "stopped_duration_s": 0.14,
+            "coverage_cell_size_m": 0.25,
+            "longest_stop_s": 0.14,
+            "no_translation_progress_2s_duration_s": 0.0,
+            "moving_ratio": 0.993,
+            "active_mission_sample_count": 1000,
+            "angular_sign_reversals": 2,
+            "angular_sign_reversals_per_m": 0.2718633058322248,
+            "navigation_reason_duration_s": {
+              "LOCAL_GUIDANCE_REVALIDATED": 19.98,
+              "None": 0.02
+            },
+            "follow_state_duration_s": {},
+            "minimum_footprint_clearance_m": 0.4798004752798228,
+            "max_abs_jerk_mps3": 16.03215022299653,
+            "collision_count": 0,
+            "safety_stop_count": 0,
+            "tracking_error_rms_mps": 0.011737074089203398
+          },
+          "resolved_config": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_clutter/resolved_config.json",
+          "fault_layer": null,
+          "first_boundary": null,
+          "termination_reason": "DURATION_REACHED",
+          "requested_duration_s": 20.0,
+          "observed_runtime_active_s": 20.0,
+          "early_terminal": false,
+          "final_stop": true,
+          "physical_output": false,
+          "capture": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_clutter/capture.mcap",
+          "timeline": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_clutter/timeline.ndjson",
+          "replay": {
+            "schema": "R2B4_REPLAYER_V3_RESULT_V3",
+            "status": "MATCH",
+            "generated_at_utc": "2026-10-16T20:11:04Z",
+            "capture": {
+              "path": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_clutter/capture.mcap",
+              "capture_id": "motion-cruise_clutter",
+              "sha256": "5aaaaa51a3d5d9cf7f1ca3b0d6380bbe1dde6bf2d9e3fc45910e3a809d51cd91",
+              "payload_sha256": "0fe1ffaccef72a331b3771eccd42e167c7c4c6f77a796d6660cc0ffd078d2006",
+              "schema": "R2B4_MCAP_CAPTURE_V1",
+              "tick_count": 1026,
+              "status": "PASS"
+            },
+            "scope": {
+              "requested": {
+                "start_tick_id": null,
+                "end_tick_id": null,
+                "start_monotonic_ns": null,
+                "end_monotonic_ns": null,
+                "start_layer": "L1",
+                "end_layer": "L12"
+              },
+              "resolved": {
+                "first_tick_id": 0,
+                "last_tick_id": 1025,
+                "first_monotonic_ns": 1000000000,
+                "last_monotonic_ns": 21500000000,
+                "tick_count": 1026,
+                "layers": [
+                  "L1",
+                  "L2",
+                  "L3",
+                  "L4",
+                  "L5",
+                  "L6",
+                  "L7",
+                  "L8",
+                  "L9",
+                  "L10",
+                  "L11",
+                  "L12"
+                ]
+              },
+              "state_warmup": {
+                "strategy": "CAPTURE_PREFIX",
+                "tick_count": 0,
+                "first_tick_id": null,
+                "last_tick_id": null
+              }
+            },
+            "execution": {
+              "capture_status": "PASS",
+              "capture_passed": true,
+              "decision_counts": {
+                "ALLOW": 1000,
+                "STOP": 26,
+                "FAULT": 0
+              },
+              "writer_failure_count": 0,
+              "terminal_tick_id": 1025,
+              "terminal_safety_decision": "STOP",
+              "terminal_reason": "NOT_ACTIVE",
+              "terminal_fault_layer": null
+            },
+            "reconstruction_contract": {
+              "inputs": "CURRENT_SOURCE_TYPED_TICK_INPUTS",
+              "configuration": "CURRENT_SOURCE_TYPED_CONFIG",
+              "checkpoint": "CURRENT_SOURCE_TYPED_CHECKPOINT",
+              "production": "NATIVE_V3_L1_L12",
+              "external_io": "NONE"
+            },
+            "determinism": {
+              "production_layers": "L1-L12",
+              "executed_tick_count": 1026,
+              "selected_tick_count": 1026,
+              "repeated_trace_match": true,
+              "offline_write_count_first": 1026,
+              "offline_write_count_second": 1026
+            },
+            "diagnostics": {
+              "layers": {
+                "L1": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L2": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L3": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L4": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L5": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L6": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L7": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L8": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L9": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L10": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L11": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                },
+                "L12": {
+                  "compared_tick_count": 1026,
+                  "not_executed_tick_count": 0,
+                  "expected_present_count": 1026,
+                  "actual_present_count": 1026,
+                  "mismatch_count": 0
+                }
+              },
+              "first_divergence": null,
+              "first_live_observation": null,
+              "physical_evidence": {
+                "claim_class": "FACT",
+                "causal_claim": false,
+                "evidence_strength": "NONE",
+                "observation": null,
+                "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+                "evidence": null
+              }
+            },
+            "source_first": {
+              "source_order": [
+                "SOURCE",
+                "ACTIVE_CONFIG",
+                "CAPTURE"
+              ],
+              "source_discovery": "CURRENT_LOCAL_IMPORT_CLOSURE",
+              "capture_source_manifest_path": null,
+              "all_capture_baseline_hashes_match": false,
+              "files": {
+                "STRUKTURALIS_RETEGEK_V3.md": {
+                  "sha256": "546f92a35d82da377568da60f11854248794fdc7acabd985ae63c70128cfa75c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/fizika.json": {
+                  "sha256": "8ed43fc7df46d43b1172b2a0fe8e9cf620236d48710f424107a76de3a93f90e7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/hardver.json": {
+                  "sha256": "afc44ffd5fd15f9f140caffeca43797af45fc3dacbc5fe3a0bfc2a54ea6b7106",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/speed_map.json": {
+                  "sha256": "4cbd02b2885b0a4d41a24140d9a1b37ddbc76083297c68f87f1b7acb1e2e518a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "conf/vezerles.json": {
+                  "sha256": "93df2a2bd923ac25253dba22286eed008046992ca9c1c39803e006301078bd3b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/async_person_photo_evidence.py": {
+                  "sha256": "edd23a91474dc7188804ef62e0022cc451ece009646d145e6d3de0b5cec91009",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_device.py": {
+                  "sha256": "0ab52ba7431a6982c2be93a80d24414e4af686f37b02a095c9c86982d760a7cc",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bno055_imu.py": {
+                  "sha256": "b2ad3b73c3af22d1bc6d5ed3680e47d0dfe8c1cf46d65f728556e1f372d234ac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/bounded_command.py": {
+                  "sha256": "5b45043b6b97a78a2f56cb5d003ed9197809c9ca63c24cf4397b7ba3e5aa5161",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_geometry.py": {
+                  "sha256": "b638baab9d066ebd0b796b7a91e4e3959059ffc19c31e52d1574420f8967b9fa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_media.py": {
+                  "sha256": "088176456458af938136692537bde5e18c2e441ff56aa36e3ccf422797e6e4a9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_ownership.py": {
+                  "sha256": "e060688cb0d380e191b536a91b522246a71c6f3585b91003074b6e7e21471df6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/camera_rectification.py": {
+                  "sha256": "126f984f9054aef3d219217499e7c7831ed9b9854e5e0ff9dc86521c7cffc665",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/counter_encoder.py": {
+                  "sha256": "b8800f07762d663bd5ae1dff2059a22585824543e53895ce37df872df32e7c0c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_counter.py": {
+                  "sha256": "2e8ac36f5ffb06604461570ade5ed429917b59fe445a3dc408ae201245177e08",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_encoder.py": {
+                  "sha256": "0c357445fe85ad15e87e55ad4f3b8db47ec3dc542f8101af4f079dfb0c6d1624",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/gpio_motor.py": {
+                  "sha256": "9570781637ff3028d49f943434e083766d45351a0e60ea29cb1321361e198911",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/l6_planner_process.py": {
+                  "sha256": "96ea7aebe7977a988d6768aa544eb7c256ba6f9503c24003886ef1992db51844",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/latest_lidar.py": {
+                  "sha256": "29ad9a2beb11176a9bbc4dcde61fda027fe916335ffbbd83348c0e617567274b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/litert_person_detector.py": {
+                  "sha256": "766ba7660dbc0daf10ec9b39ed06bdc6f43101718be1fdcb115e825da86f719b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_camera.py": {
+                  "sha256": "4883011b5fde56af4c398932be1be95e33f2a92b9a04e60f331cb8d147656b0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_encoder.py": {
+                  "sha256": "f76767cbb3ffc38023ed314dd6386a303e02a09517f79cc985625e071a2f42a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_imu.py": {
+                  "sha256": "14219ac579408f96a747c0f421cbf0be503a5605e19cee8a8ea480c96e1de751",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_inputs.py": {
+                  "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_lidar.py": {
+                  "sha256": "93584f5b71845477da721622006d6bdc27e330317d9bd25192dbac4a7511864e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/live_person_detection.py": {
+                  "sha256": "919da7ff24a1c8feba22b181ccd4e7b012207dd2c36d6ba9538284dcba3d3f06",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_pwm.py": {
+                  "sha256": "14ad291ec98bd718c93ec6d9873d45fc6408e4f3b7b2250daa3b4c0a057efbac",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/motor_writer.py": {
+                  "sha256": "0937c460733dc4e32ac39cf46fcf96d22107d481c678254fac108f136a31742e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/multirate_inputs.py": {
+                  "sha256": "b28a292237d4bf5ffb80d16286dd4455970d130e7bbd927a8f2b376d99f2dd6a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/native_lidar_port.py": {
+                  "sha256": "54a2ea79e9508e5182c80d73633862881485ee405fbf499fd60086d0492b2a5e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_detection.py": {
+                  "sha256": "79643e585848e535e199e2e8510d8dc7b03530e8d2fd2e3c77d555d3b23b5a54",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/person_photo_evidence.py": {
+                  "sha256": "45d6776e430804ce80efddc9936b0f6f55de4e43f8c5ab7ae3ce23b99105d5c9",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/picamera2_camera.py": {
+                  "sha256": "08039eef695c5be83915b3135924f591bca2a26076514d32bce3dda2fa9bbebe",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_encoder_backend.py": {
+                  "sha256": "f6ea5eb890748a542b8fb4cff89d6ead56dbba4f01539834e91d6b77fdfac9d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_imu_device.py": {
+                  "sha256": "d394cf96934f01ba66ffe068fbc82e746bfa882cc2f5ae3c0bc7800f60a475a6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_lidar_port.py": {
+                  "sha256": "08c322f6d9243e266d6d6b534ef0d1ed90c8eb8905d3872d64e116eb37d1f68a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/process_vision_port.py": {
+                  "sha256": "8d5898932c876e0500f26e18a61fe597b82ccb75109c5fab15cdb108cd49ba93",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/recovering_l6_planner.py": {
+                  "sha256": "157f4c3d40993f05f30487419e6d01c75c8f4f6973ccadea41fd6c41bd639693",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/resident_command.py": {
+                  "sha256": "e6f68ab95fdf3acdba9796ca09b81f601a4906078dd18521801dcbeb980af0ad",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/rplidar_c1.py": {
+                  "sha256": "9260420e1e1d21659fac340add9a99f9f1e6c17fcbfb85a41bf74057d4c02e35",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/skill_observation.py": {
+                  "sha256": "18d5e04e9082e720f8646de48fce2d04771eca7849f45f830c18c14c5dd243df",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_contracts.py": {
+                  "sha256": "6b6157456c453fdd6d6438db42edde9a3096ab1bba6bfad1b65be589d048d826",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/adapters/vision_media_socket.py": {
+                  "sha256": "730d2ddc2e0f7329bfe450216244404fbcaf53d2e604db2be4c70b6e1e282718",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/async_capability.py": {
+                  "sha256": "9f22e4bac8dfb52aa46220ec5764047698243ecfdee47ebaf4e6bed5dd222a09",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture.py": {
+                  "sha256": "71d0d041e9e98f117798b28ca3f5cf8fe5ae56cb8f0fa7f7cffbac4f9ed15789",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_behavior.py": {
+                  "sha256": "bb155916b2402405bb3556da664b73cbf7ac5bfae981a0dc1d6f14a5a2f64382",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_compaction.py": {
+                  "sha256": "df22a14a023578072548e4380f0f43013fb6f5de4ae10e631ff65a305487d7af",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_encoding.py": {
+                  "sha256": "8481a8face3251cf3839ac8da29336a39395ed7236b5853b3a299f104676dd2a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_ipc.py": {
+                  "sha256": "ac520159d38d3c73ca30603ad7533e0558c31b9266a5ce66725ba63631171962",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/capture_rate.py": {
+                  "sha256": "2c87a28f32f39063bb9bedf73fd3a43450e4abdf2f6956db67050fd024d5744d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_live_control.py": {
+                  "sha256": "f59799b76212dbc82c618514279ce14b6c4e9394f56ad5bfc5da8eb744ea0957",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/bounded_physical_control.py": {
+                  "sha256": "a730e9a9dc4253925f23dbeacbf21bd3fc78de4b6edd698acd113049ba6c16f6",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/input_shadow.py": {
+                  "sha256": "bddd066f884430e69928388559011fe83703e419d213d415e764709eb17cb8aa",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/live_inputs.py": {
+                  "sha256": "ce9bead45b2459aa8260b6dae328e56250784f64321b266c69a95abb324ac033",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/motor_output.py": {
+                  "sha256": "0d8e1113d3d65b7c01f42ba34a8e86df2e31cb152bbcd412d114936df6e8f404",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_control.py": {
+                  "sha256": "dc10a7f001d720ea65d840b53af20bb0ad810adf9cebacf97c05985c0489c3cd",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/native_sensor_inputs.py": {
+                  "sha256": "4e49c10b5d4a80ddf847ecb53e7341e297fc7710833e2f64099c45504d5a0e22",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_live_control.py": {
+                  "sha256": "9a6c69ebc7ccb803a148fa735d225f193984404690000fdfd777551e71c5a737",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/resident_physical_control.py": {
+                  "sha256": "236beef9262d20cf3d1b0b1e125340f7ac86e6cadec28c50fce4a64820813430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/composition/runtime_config.py": {
+                  "sha256": "382018559c41f11c6559f322d218f96a5f2ef9b0a2d91179604b8746d78a5c8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config.py": {
+                  "sha256": "62f8ada033d0970ae586524eef78de86ef3218e7c15dbe5cd50facb9572a0a2c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_hardware.py": {
+                  "sha256": "62b49741db985d93c23572d445c40451bdd2766696b07a71cd5de7a87c1725a4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/config_types.py": {
+                  "sha256": "29aa59a8b25e5ea5389956bb432e8e8dd438969fff3a75fab743bc3c3818f8d5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/__init__.py": {
+                  "sha256": "00d444e7ab7e2678e7a94df3bb6b6675917350648b14007958a3bb294ac16430",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/async_runtime.py": {
+                  "sha256": "6c70a470a47b6f2fc884d04a253c9d883dd57dadd40e241d4f7c0a21fcd2e296",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/base.py": {
+                  "sha256": "ab9b8c700851bfc04fc08dc45f4c1e9f72e4f07d6e67a792542c3d19923f2262",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/lidar.py": {
+                  "sha256": "8ffdc013cf201c084ae986db216aa7503a30c2a5ec1fb087eb73f5cc5781a13e",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/localization.py": {
+                  "sha256": "f67991007ef0cd53d92f999081085ce79e0e0f9817d8ff207fcdb2ae763f7b12",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/messages.py": {
+                  "sha256": "022caca55a697559c194a643046adfac70925e1ffbc5eba5a2e6a63ea3ff544a",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/planner.py": {
+                  "sha256": "3351b4029d8d1da131dd0030ed421e0958e0cedcae6b4db0d7537aea7a9b2331",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/contracts/temporal.py": {
+                  "sha256": "b1d4790725b138a40d5af64a5d15a0dfd2d75f8ec64085ebf541a18cae952d38",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/device_health_policy.py": {
+                  "sha256": "7b5b463e6c7219ff5dc025300aa9a8e7461dfad069b3fe83dcbd957262a8f1b7",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/engine.py": {
+                  "sha256": "118f550dfe91e87b72a61f05af7b7164ee5f5d200a2ee376bbe550d4f9cdce0f",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/execution.py": {
+                  "sha256": "f9594172f7b73c27888c2c1ebb075452a79e0546232bc8c301b2df1db9954c75",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/hri_evidence.py": {
+                  "sha256": "da7c2d6989e8ea11a9c513673cd338a4582a6a535e1842b3217b855624dd7d88",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l10_chassis_control.py": {
+                  "sha256": "ff852617113cc5485f729ff0e3bab6c27bc018200e4a2b028bf0c3b2ff6024ce",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l11_actuator_control.py": {
+                  "sha256": "58c735fca3123e8cd1437b0f1a8c6d9b54f50ade39df07eb17a9deb2e921ffbb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l12_safety_final.py": {
+                  "sha256": "223e29568869f5033eac527128a798814aac8c686b2fc4701c925b41fa09f2fb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l1_acquisition.py": {
+                  "sha256": "0555eaddf51ed8fe2c2e182688be2b6bf0819ce52b0c2a2988eb1cb0c17887b5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l2_admission.py": {
+                  "sha256": "8751f610def4b32aa564341873a55fe0fd264efeccc74d83988643686f3fd349",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l3_state_estimation.py": {
+                  "sha256": "009f8ab733dbe13182b8cbc0d5848516788a21283f7e3d397406176d7f67476b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_structural_memory.py": {
+                  "sha256": "d24e5293a30f7f701238a5d4b0b61e839f202769eec8aeced0244041cb42b1e2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_history.py": {
+                  "sha256": "fa1f3d88c26cc5bcb415a1225bb8287c77e2a0d3655af3f0e26e16ca08faa179",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_occupancy.py": {
+                  "sha256": "82556d5550c9c9d6bbb1e374016beca10b34108dc5ad7f6f8389bc11b66ddd71",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_temporal_tracking.py": {
+                  "sha256": "f66ff07777edc473340e45a540f0ea6cb1be99c91f8b621d8184a41af28435b4",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l4_world_model.py": {
+                  "sha256": "91e2e290af4fe7df34df4edb9f7425e6c2ea0687e4e453e133644807887b1403",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l5_command_mission.py": {
+                  "sha256": "d3c48b326a12b4e914378a5b9173dbef3e66f3ee9a990ee0486b552f2e44b99d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l6_navigation.py": {
+                  "sha256": "3f51f4cfe1aa1cab07c38e2c8e0638c1037741a865b41f029dd5d0bfb91dcd8b",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l7_motion_selection.py": {
+                  "sha256": "5dc0102625ca5ec6e9144d022e965f02aab75a0d292556bbd39ab1ba18a01195",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l8_motion_realization.py": {
+                  "sha256": "e36ef5a599fdcffcd5a19559150e031d1b33d5fd863c081b11b5d2feb8dd5af5",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/layers/l9_operational_constraints.py": {
+                  "sha256": "a700d9b5923686d7f3762dfd6f2f79bd810ab5a6e3343318aaaf8891b678bfee",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_config.py": {
+                  "sha256": "2617058b41119c57cfcb65ae7f00911cf0d14018e6971c587997635eb882fc99",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_estimator.py": {
+                  "sha256": "cc476ad739f668708b0992ac63574e9cf4108a97ebb7dedb1be8593119200663",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_matcher_process.py": {
+                  "sha256": "abd864cb97123e02187fa3d798042fbc3d12e9310e796cf430f7d3fd0c5e8f39",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/lidar_relative_odometry.py": {
+                  "sha256": "52c5d5f7844ce33bcb4463b9cc66de266eef4076ae09e2405300793d506c2cd2",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_capture.py": {
+                  "sha256": "857af89a3f5111121decfb2936fe824a11ea1439204e778e20e3ac9dd9ccf5ed",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_inspect.py": {
+                  "sha256": "2443a3717d0b67d2c3cb9869c555c91f02bf72d2bcbb30a8af1b7f6b5d080083",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_reader.py": {
+                  "sha256": "b694fd6e2c86b11a824213ca20661828d018d297db7c19ff51ac6e4b44a6f77d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_replay_bridge.py": {
+                  "sha256": "ef677383425e449d2bd90464433bc99a15eb0d8aa86fdb2f7efb7c37e8ebf24c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/mcap_writer.py": {
+                  "sha256": "f629f808c643834f467e2d3e8ff8bcb4e1f76fbcbf372007cdac651378e1b3ab",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/observation.py": {
+                  "sha256": "bbad62e69f41c6d3d80d59191f94095ffb945ea17d764afc4e3e0c0e72a5ac48",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/ports.py": {
+                  "sha256": "871a29dd95c5c21140487f3f6fe250d434465dfcc8f281730dada1e720827845",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/process_sidecars.py": {
+                  "sha256": "c70f55d08f920732beee767d7f6d8b2611994d6c0516f99a6f5737bd6f68505c",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/public_runtime_evidence.py": {
+                  "sha256": "34cf2c902a22bc0635b575b6c3fda54d703cf5d6b819294e7dcd15f734d769d8",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/replay.py": {
+                  "sha256": "d46f5dbd86491a29ac9d54efdcd1848195c33516fdfe898d5fea5fdc2964aa27",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/resident_status.py": {
+                  "sha256": "aa6d5d281da9c6ea3608ea0743965aa9f3aaa63b372323ce44f8d13a9ced44ba",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/runtime_performance.py": {
+                  "sha256": "370919c52fd8cfeb02881a11807234a1e1bbdcce0b5c00847cee40cdd4a5e120",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/scan_matching.py": {
+                  "sha256": "f653debb63f3177fb3173d4c0afc76f12d1874d2dbb3c97ea029f947d8d39941",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3/wheel_motion.py": {
+                  "sha256": "82d8e109ddccafa2ba3e3fdfaca2ea2fad48817a3e0db374b524dd3325e5be69",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_config.py": {
+                  "sha256": "9288b60a198c6e235be2bea99ef225f7b6562433baa61f8fca29100910f03b85",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_bounded_runtime.py": {
+                  "sha256": "e3c345567b7a171e7edc289b7257bc35879bb06502bd5d6c177a4fac650933bb",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_hardware_runtime.py": {
+                  "sha256": "8b34336c50d0c35755d76540d251358801b087247c03585624473309cc125406",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_process_runtime.py": {
+                  "sha256": "d5c39a8552e28a7679c3f69d328c98ee83ca3de2bdac9b281e73f5f1ab986767",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                },
+                "v3_runtime.py": {
+                  "sha256": "947932e3d1491c265f78cd2f5b17cb18560bc453dab049da575763eb7355cd8d",
+                  "capture_baseline_sha256": null,
+                  "capture_baseline_match": null
+                }
+              }
+            },
+            "first_divergence": null,
+            "first_live_observation": null,
+            "physical_evidence": {
+              "claim_class": "FACT",
+              "causal_claim": false,
+              "evidence_strength": "NONE",
+              "observation": null,
+              "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+              "evidence": null
+            },
+            "analysis_handoff": {
+              "root_cause_inferred": false,
+              "causal_analysis_owner": "ANALYZER_LLM",
+              "replay_role": "DETERMINISM_AND_DIRECT_EVIDENCE_ONLY"
+            },
+            "mcap_bridge": {
+              "authority_capture": "/tmp/r2b4-motion-74tktw6d/variant-1/cruise_clutter/capture.mcap",
+              "authority_sha256": "5aaaaa51a3d5d9cf7f1ca3b0d6380bbe1dde6bf2d9e3fc45910e3a809d51cd91",
+              "preflight": "PASS",
+              "materialized_bytes": 77713649,
+              "temporary_json_persisted": false,
+              "materialized_tick_count": 1026,
+              "checkpoint_used": false,
+              "replay_eligible": true,
+              "authority_check_delegated": false,
+              "structure_check_delegated": false,
+              "capture_integrity_check_delegated": false
+            },
+            "result_sha256": "ed13483491e0d1470ec9abe03d2de7bd9346a2c15d9b278ee5466b8ba21ff766"
+          }
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "variant": "variant-1",
+      "scenario": "cruise_open",
+      "metric_deltas_variant_minus_baseline": {
+        "active_duration_s": 0.0,
+        "path_length_m": -0.19048006674175966,
+        "unique_coverage_cells": 0,
+        "stopped_duration_s": 0.0,
+        "coverage_cell_size_m": 0.0,
+        "longest_stop_s": 0.0,
+        "no_translation_progress_2s_duration_s": 0.0,
+        "moving_ratio": 0.0,
+        "active_mission_sample_count": 0,
+        "angular_sign_reversals": 3,
+        "angular_sign_reversals_per_m": 0.36322096205107846,
+        "minimum_footprint_clearance_m": 0.026827739622372615,
+        "max_abs_jerk_mps3": 6.1370280411514315,
+        "collision_count": 0,
+        "safety_stop_count": 0,
+        "tracking_error_rms_mps": 0.002491420025708445
+      },
+      "paired_quality_comparable": true,
+      "quality_comparison_blockers": [],
+      "completion_time_comparable": false,
+      "baseline_fault": null,
+      "variant_fault": null,
+      "baseline_termination": "DURATION_REACHED",
+      "variant_termination": "DURATION_REACHED",
+      "automatic_recommendation": false
+    },
+    {
+      "variant": "variant-1",
+      "scenario": "cruise_clutter",
+      "metric_deltas_variant_minus_baseline": {
+        "active_duration_s": 0.0,
+        "path_length_m": -0.17816549981112928,
+        "unique_coverage_cells": -4,
+        "stopped_duration_s": 0.0,
+        "coverage_cell_size_m": 0.0,
+        "longest_stop_s": 0.0,
+        "no_translation_progress_2s_duration_s": 0.0,
+        "moving_ratio": 0.0,
+        "active_mission_sample_count": 0,
+        "angular_sign_reversals": -1,
+        "angular_sign_reversals_per_m": -0.12628906700920434,
+        "minimum_footprint_clearance_m": 0.1038636939128279,
+        "max_abs_jerk_mps3": 0.009254941289032814,
+        "collision_count": 0,
+        "safety_stop_count": 0,
+        "tracking_error_rms_mps": -0.0003048643489206009
+      },
+      "paired_quality_comparable": true,
+      "quality_comparison_blockers": [],
+      "completion_time_comparable": false,
+      "baseline_fault": null,
+      "variant_fault": null,
+      "baseline_termination": "DURATION_REACHED",
+      "variant_termination": "DURATION_REACHED",
+      "automatic_recommendation": false
+    }
+  ],
+  "limitations": [
+    "Synthetic wheel/PWM/traction and ideal IMU/relative-LiDAR evidence; no physical calibration or live acceptance.",
+    "Native asynchronous input closure uses deterministic inline rollout, not process/GIL/IPC/scheduler timing.",
+    "Room Cruise coverage and continuity are proxies, not proof of globally optimal route choice.",
+    "No-progress includes pivots and intentional Follow Person stand-off/occlusion holds; inspect reasons/states.",
+    "Synthetic camera boxes and LiDAR person geometry do not validate detector accuracy or camera calibration."
+  ]
+}
