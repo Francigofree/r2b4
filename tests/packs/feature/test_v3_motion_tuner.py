@@ -39,6 +39,7 @@ def test_native_experiment_moves_stops_and_replays_without_hardware(tmp_path, na
     assert result["final_stop"] is True
     assert result["replay"]["status"] == "MATCH"
     assert result["replay"]["determinism"]["repeated_trace_match"] is True
+    assert json.loads((tmp_path/name/"resolved_config.json").read_text())["followperson"]
     rows = [json.loads(row) for row in (tmp_path/name/"timeline.ndjson").read_text().splitlines()]
     assert all(row["mission_id"] for row in rows)
     assert rows[-1]["mission_mode"] == "STOP"
@@ -58,3 +59,21 @@ def test_completed_goal_is_not_reported_as_an_active_stall(tmp_path):
     assert result["metrics"]["moving_ratio"] is None
     assert result["metrics"]["longest_stop_s"] == 0.
     assert result["metrics"]["no_translation_progress_2s_duration_s"] == 0.
+    comparison = tuner.compare_results(result, result)
+    assert comparison["paired_quality_comparable"] is False
+    assert "baseline:NO_ACTIVE_MISSION_SAMPLES" in comparison["quality_comparison_blockers"]
+
+
+def test_processing_budget_and_navigation_grid_do_not_change_the_metric_units(tmp_path):
+    resolved = tuner.resolve_config(tuner.PROJECT_ROOT, {
+        "local_perception": {"max_points": 24},
+        "layers": {"navigation": {"coverage_cell_size_m": .5}}})
+    scenario = deepcopy(tuner.scenarios()["straight"])
+    scenario["duration_s"] = .3
+    result = tuner.run_experiment(resolved, "straight", tmp_path/"bounded", scenario=scenario)
+    assert result["fault_layer"] is None, result["first_boundary"]
+    assert result["metrics"]["coverage_cell_size_m"] == .25
+    from v3.mcap_capture import RAW_LIDAR_TOPIC
+    from v3.mcap_reader import McapReader
+    rows = [row.json() for row in McapReader(result["capture"]).iter_messages(topics=(RAW_LIDAR_TOPIC,))]
+    assert rows

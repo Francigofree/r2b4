@@ -102,7 +102,8 @@ A `r tune roomcruise` továbbra is a gyors, ideális L5–L9 kereső; az L8 gain
 
 # Follow Person: mozgó cél és két másodperces kamera-occlusion.
 ./r tune simulate --scenarios follow_moving,follow_occluded \
-  --override docs/examples/motion_tuning_followperson.json --replay
+  --override docs/examples/motion_tuning_followperson.json \
+  --override docs/examples/motion_tuning_followperson_angular_cap.json --replay
 ```
 
 Az override formátuma `{"schema":"R2B4_OFFLINE_CONFIG_OVERRIDE_V1",
@@ -111,6 +112,11 @@ változat; több fájl nem egymásra épülő patch. A teljes négy dokumentumos
 `ConfigResolver` validálja az összeolvasztott konfigurációt. Az ismeretlen
 kulcs hiba. `--config /tmp/masik.vezerles.json` teljes alternatív baseline-t
 választ. Az aktív konfigurációt egyik opció sem írja át.
+A két Follow-példa külön kontraszt: az egyik stand-offot, a másik a
+`behavior.followperson.max_omega_rad_s` command envelope-ot változtatja.
+A jelenlegi 0.30 rad/s profilcap mellett a kalibrált minimális centered
+spin nem realizálható; a pivot/search vizsgálatához a magasabb cap külön
+offline próbálandó. Ez nem módosítja az élő profil értékét.
 Rövid smoke-hoz `--duration-s 1.2` használható; a holtpontok, az útvonal és a
 target-vesztés értékeléséhez a scenario alapértelmezett 12–20 másodperces
 időtartama indokolt. A seed, geometria, plant-feltételezés és az override
@@ -119,7 +125,9 @@ hash-sel együtt megmarad az eredményben.
 Az alapértelmezett artifactkönyvtár egyedi `/tmp/r2b4-motion-*` útvonal.
 A `comparison.json` tartalmazza a baseline-t, a változatokat, az alkalmazott
 config identityt és a `variant − baseline` metrikakülönbségeket. Minden
-scenario saját `capture.mcap`, `timeline.ndjson` és `result.json` fájlt kap.
+scenario saját `capture.mcap`, `timeline.ndjson`, `resolved_config.json` és
+`result.json` fájlt kap. A teljes resolved snapshot a host profilok és az
+edge/runtime konfiguráció utólagos azonosítását is lehetővé teszi.
 A timeline szintetikus measurement time-ot, mission identityt/lifecycle-t,
 valódi plant-pózt, L9 parancsot, L12 safety-t és első native hibaevidence-et
 tartalmaz. A `--replay` explicit canonical Replayer-futtatás; csak `MATCH`
@@ -140,6 +148,16 @@ vagy faultoló próbát. A forgás és a Follow Person szándékos tartása is
 elmozduláshiány lehet: a reason/state időtartamokkal együtt értelmezendő.
 A `COMPLETED` a kísérlet lezárását jelöli, nem a robotikai cél elfogadását;
 a tool nem ajánl automatikusan új konfigurációt.
+A `paired_quality_comparable` hamis, ha fault/collision, aktív evidence-hiány,
+bizonyítatlan STOP vagy eltérő futási exposure miatt a nyers különbségek
+félrevezetők lehetnek. A `quality_comparison_blockers` megnevezi az okot;
+korábban faultoló próba kisebb jerk/RMS/útja nem minőségi javulás.
+Két normál goal completion időtartama külön összevethető, míg eltérő
+exposure-jükhöz a quality-flag továbbra is figyelmeztetést ad.
+A coverage egysége rögzített, független 0.25 m-es grid; a navigation saját
+coverage-gridjének változtatása nem módosítja a metrika egységét. A raw
+LiDAR-szimuláció rögzített 96 sugarat használ, a hangolható local-perception
+budgetet a meglévő production adapter pontszűrése alkalmazza.
 
 A modell ideális IMU-t és relatív LiDAR-mozgást ad, egyszerű elsőrendű
 kerékválaszt/tapadást és szintetikus kameradobozt feltételez. Nem bizonyít

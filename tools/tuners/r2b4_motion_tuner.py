@@ -153,7 +153,9 @@ def _metrics(rows, config, scenario):
             previous = active[index-window]
             if math.hypot(row["x_m"]-previous["x_m"], row["y_m"]-previous["y_m"]) < .05:
                 progress_hold += dt
-        size = config.runtime.composition.live_control.control.navigation.coverage_cell_size_m
+        # Independent metric unit; tuning navigation's own grid cannot improve
+        # this score merely by changing the denominator.
+        size = .25
         coverage.add((math.floor(row["x_m"]/size), math.floor(row["y_m"]/size)))
         reasons[str(row["navigation_reason"])] += 1
         if row["follow_state"]:
@@ -161,6 +163,7 @@ def _metrics(rows, config, scenario):
     count = len(active)
     result = {"active_duration_s": count*dt, "path_length_m": path,
               "unique_coverage_cells": len(coverage), "stopped_duration_s": stopped*dt,
+              "coverage_cell_size_m": .25,
               "longest_stop_s": longest*dt, "no_translation_progress_2s_duration_s": progress_hold,
               "moving_ratio": 1.-stopped/count if count else None,
               "active_mission_sample_count": count,
@@ -196,6 +199,7 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
                                      if key not in {"behavior", "occlusion_s"}})
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
+    (directory/"resolved_config.json").write_text(json.dumps(resolved.as_dict(), indent=2, allow_nan=False)+"\n")
     config = resolved.runtime.composition.live_control.control
     if behavior == "followperson" and not config.world_model.person_tracking_enabled:
         raise ValueError("Follow Person experiment requires production person_tracking_enabled")
@@ -245,7 +249,7 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
         tick_period_ns=resolved.runtime.tick_period_ns,
         maximum_linear_speed_mps=ingress.maximum_linear_speed_mps,
         maximum_angular_speed_rad_s=ingress.maximum_angular_speed_rad_s,
-        lidar_ray_count=min(96, config.world_model.local_costmap_max_points_per_scan))
+        lidar_ray_count=96, local_perception_config=resolved.runtime.sensor_inputs.inputs.lidar_source)
     error = None
     termination = "DURATION_REACHED"
     session.start()
@@ -296,6 +300,7 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
     result = {"scenario": scenario_name, "scenario_input": scenario, "scenario_sha256": _digest(scenario),
               "config_snapshot_id": resolved.snapshot_id,
               "control_config_sha256": _digest(encode_value(config)), "metrics": metrics,
+              "resolved_config": str(directory/"resolved_config.json"),
               "fault_layer": plant.fault_layer, "first_boundary": plant.first_boundary,
               "termination_reason": termination, "requested_duration_s": plant_scenario["duration_s"],
               "observed_runtime_active_s": sum(row["active"] for row in rows)*plant.dt_ns/1e9,
@@ -312,7 +317,25 @@ def compare_results(baseline, variant):
         raise ValueError("paired scenarios differ")
     deltas = {key: value-baseline["metrics"][key] for key, value in variant["metrics"].items()
               if type(value) in {float, int} and type(baseline["metrics"].get(key)) in {float, int}}
+    reasons = []
+    for name, trial in (("baseline", baseline), ("variant", variant)):
+        if trial["fault_layer"]:
+            reasons.append(name+":NATIVE_FAULT")
+        if trial["metrics"]["collision_count"]:
+            reasons.append(name+":FOOTPRINT_COLLISION")
+        if not trial["metrics"]["active_mission_sample_count"]:
+            reasons.append(name+":NO_ACTIVE_MISSION_SAMPLES")
+        if not trial["final_stop"]:
+            reasons.append(name+":FINAL_STOP_UNPROVEN")
+    if baseline["requested_duration_s"] != variant["requested_duration_s"]:
+        reasons.append("REQUESTED_HORIZON_MISMATCH")
+    elapsed_difference = abs(baseline["observed_runtime_active_s"]-variant["observed_runtime_active_s"])
+    if elapsed_difference > 1e-9:
+        reasons.append("DIFFERENT_OBSERVED_EXPOSURE")
     return {"scenario": baseline["scenario"], "metric_deltas_variant_minus_baseline": deltas,
+            "paired_quality_comparable": not reasons, "quality_comparison_blockers": reasons,
+            "completion_time_comparable": (baseline["termination_reason"] == variant["termination_reason"] == "GOAL_COMPLETE"
+                                           and not any(reason != "DIFFERENT_OBSERVED_EXPOSURE" for reason in reasons)),
             "baseline_fault": baseline["fault_layer"], "variant_fault": variant["fault_layer"],
             "baseline_termination": baseline["termination_reason"],
             "variant_termination": variant["termination_reason"],

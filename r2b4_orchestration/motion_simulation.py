@@ -118,7 +118,7 @@ class DifferentialDriveExperiment:
     def __init__(self, scenario, config, composition, writer, directory, start_ns, observe, event,
                  *, lidar_config=None, lidar_pose_r_scale=1., tick_period_ns=20_000_000,
                  maximum_linear_speed_mps=.5, maximum_angular_speed_rad_s=1.2,
-                 lidar_ray_count=48):
+                 lidar_ray_count=48, local_perception_config=None):
         from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig
         self.scenario, self.config, self.composition, self.writer = scenario, config, composition, writer
         if type(tick_period_ns) is not int or tick_period_ns <= 0:
@@ -126,6 +126,7 @@ class DifferentialDriveExperiment:
         if type(lidar_ray_count) is not int or not 48 <= lidar_ray_count <= 720:
             raise ValueError("lidar_ray_count must be an integer in [48, 720]")
         self.dt_ns, self.lidar_ray_count = tick_period_ns, lidar_ray_count
+        self.local_perception_config = local_perception_config
         self.now_ns, self.start_ns, self.tick = start_ns, start_ns, 0
         self.observe, self.event = observe, event
         policy = ResidentCommandMailboxConfig(directory / "command.json", maximum_linear_speed_mps=maximum_linear_speed_mps,
@@ -216,11 +217,19 @@ class DifferentialDriveExperiment:
                     if distance >= 0:
                         distances.append(distance)
             ranges.append((bearing, max(0., min(distances))))
-        fields = {"frame_id": "ROBOT_BASE", "point_count": len(ranges)}
+        from v3.adapters.live_lidar import LidarPointReading, _bounded_local_points
+        raw = tuple(LidarPointReading((-math.degrees(bearing)) % 360., distance, 20) for bearing, distance in ranges)
+        local = (tuple((bearing, distance, 20) for bearing, distance in ranges)
+                 if self.local_perception_config is None else
+                 tuple((-math.radians(point.angle_deg), point.distance_m, point.quality)
+                       for point in _bounded_local_points(raw, self.local_perception_config)))
+        fields = {"frame_id": "ROBOT_BASE", "point_count": len(local)}
+        for index, (angle, distance, quality) in enumerate(local):
+            fields.update({f"point_{index:03d}_x_m": distance*math.cos(angle),
+                           f"point_{index:03d}_y_m": distance*math.sin(angle),
+                           f"point_{index:03d}_quality": quality})
         sectors = {name: [] for name in ("front", "left", "rear", "right")}
-        for index, (bearing, distance) in enumerate(ranges):
-            fields.update({f"point_{index:03d}_x_m": distance*math.cos(bearing),
-                           f"point_{index:03d}_y_m": distance*math.sin(bearing), f"point_{index:03d}_quality": 20})
+        for bearing, distance in ranges:
             sectors[("front", "left", "rear", "right")[int((bearing+math.pi/4) % math.tau / (math.pi/2))]].append(distance)
         safety = {f"{name}_{key}": number for name, rows in sectors.items()
                   for key, number in (("clearance_m", max(0., min(rows)-self.radius)), ("observation_count", len(rows)))}
@@ -257,8 +266,6 @@ class DifferentialDriveExperiment:
                 dx_m=dx*math.cos(yaw)+dy*math.sin(yaw), dy_m=-dx*math.sin(yaw)+dy*math.cos(yaw),
                 dyaw_rad=_wrap(self.yaw-yaw), rmse_m=.001, observability=1.))
         self.scan_pose, self.scan_time_ns = (self.x, self.y, self.yaw), self.now_ns
-        from v3.adapters.live_lidar import LidarPointReading
-        raw = tuple(LidarPointReading((-math.degrees(bearing)) % 360., distance, 20) for bearing, distance in ranges)
         return tuple(samples), SimpleNamespace(raw_scan_id=self.tick//5+1, raw_scan_timestamp=self.now_ns/1e9,
             scan_start_monotonic_ns=self.now_ns, scan_end_monotonic_ns=self.now_ns,
             measurement_monotonic_ns=self.now_ns, health="OK", raw_scan=raw, summary=summary)

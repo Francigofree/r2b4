@@ -76,13 +76,13 @@ A source-javítás kizárólag a **WORLD_STALE / LOCAL_COSTMAP_STALE** recoverab
 | L0 snapshot wall maximum | 0.153 ms | 1.269 ms |
 | Command snapshot wall maximum | 2.039 ms | 3.604 ms |
 | CPU2 main-task runqueue wait | 2.389 s / 22.05% | 10.765 s / 37.32% |
-| CPU2 process CPU átlaga, egy maghoz mérve | 43.45% | 49.52% |
+| CPU2 által mért runtime process CPU átlaga, egy maghoz mérve | 43.45% | 49.52% |
 | CPU2 magok átlagos busy tartománya | 36.0–41.9% | 56.4–60.1% |
 | Maximum hőmérséklet / throttle flags | 52.9°C / none | 56.75°C / none |
 
 Mindkét configban `affinity.enabled=false`, a control és diagnosztika az összes magon futhatott. Az 50 Hz capture saját process CPU-ja **55.338 s / 89.045 s elapsed** (kb. 62% egy mag), 235 MB outputtal. Nincs capture-loss: required subscription high-water 194/4096, lost 0, raw loss 0.
 
-A nagyobb megfigyelési terhelés mellett lényegesen több wall-time/scheduler késés látható, miközben a pipeline thread-CPU p99 nem nőtt. Ez összhangban van observer contentionnel; **nem izolált A/B teszt**, mert mindkét futás CPU2-vel ment, a pálya és a missionidőtartam is eltér. A wall-minus-thread-CPU nem GIL-specifikus mérés. L0 nem végez több másodperces blokkoló sensor I/O-t ebben az evidence-ben; a motor-write 50 Hz wall maximum 10.905 ms, thread-CPU maximum 0.229 ms. A jelentés nem tulajdonítja ezt automatikusan GPIO/IPC/GIL oknak.
+A nagyobb megfigyelési terhelés mellett lényegesen több wall-time/scheduler késés látható, miközben a pipeline thread-CPU p99 nem nőtt. Ez összhangban van observer contentionnel; **nem izolált A/B teszt**, mert mindkét futás CPU2-vel ment, a pálya és a missionidőtartam is eltér. A CPU2 monitor saját CPU-/I/O-költségét ezek a runtime-process mutatók nem mérik külön; a monitor nélküli kontroll hiányzik. A wall-minus-thread-CPU nem GIL-specifikus mérés. L0 nem végez több másodperces blokkoló sensor I/O-t ebben az evidence-ben; a motor-write 50 Hz wall maximum 10.905 ms, thread-CPU maximum 0.229 ms. A jelentés nem tulajdonítja ezt automatikusan GPIO/IPC/GIL oknak.
 
 Az EVI/DIAG fordítási riportok **a futások lezárása után** keletkeztek (19:27, illetve 19:38–19:42 körül), ezért nem magyarázzák a 19:24 közbeni megállást. A futás alatti capture és CPU2 költsége ettől külön kérdés.
 
@@ -103,7 +103,33 @@ Javasolt, elkülönített offline kísérletek:
 - Natív Replayer: 10 Hz capture **elutasítva**, `CAPTURE_INCOMPLETE: replay core is incomplete`. Szándékos mintavételi hiány és checkpoint nélküli compact input; ezt nem jelöljük MATCH-nek.
 - Natív Replayer: 50 Hz **1270–1280**, L1–L12, warmup 1261–1269: **MATCH**, `first_divergence=null`.
 - Natív Replayer: 50 Hz **2310–2370**, L1–L12, warmup 2275–2309: **MATCH**, `first_divergence=null`. Lefedi a localization/stale holdot, resume-ot és a második ingress-expiry kezdetét. Nem teljes 79.7 s replay.
-- A bővített `motion_performance` DIAG mindkét meglévő bundle teljes ellenőrzésével **PASS**. A forrásidőből integrált 10 Hz stage-idők: final motor-output aktív **28.302 s**, inaktív mission **3.118 s**, nincs kért mozgás **0.099 s**. Az 50 Hz értékek: **47.840 / 31.320 / 0.529 s**, plusz **0.035 s** L9-nullázás. Ez különválasztja az aktív mission rövid holdját a hosszú, command/host eredetű inaktivitástól. A 10 Hz utolsó terminal FAULT mintájának nincs utána captured időintervalluma, ezért annak időtartama nem integrálható. Ephemeral eredmények: `/tmp/r2b4_20261016_192129_motion_diag.json`, `/tmp/r2b4_20261016_192341_motion_diag.json`.
+- A bővített `motion_performance` DIAG mindkét meglévő bundle teljes ellenőrzésével **PASS**. A canonical L5 lifecycle és a tickenként változó expired STOP identity szerinti csoportosítás pontosítása után az unchanged sealed bundle-ökön csak manifest verificationnel ismételtük a számítást. A forrásidőből integrált 10 Hz stage-idők: final motor-output aktív **28.302 s**, inaktív mission **3.118 s**, nincs kért mozgás **0.099 s**. Az 50 Hz értékek: **47.840 / 31.389 / 0.460 s**, plusz **0.035 s** L9-nullázás. A leghosszabb egybefüggő inaktív szakasz **23.241 s**, a leghosszabb aktív mission alatti nulla kérés **0.460 s**; az epizódlista nem csonkolt. A CANCELLED/FAILED/COMPLETED is inaktív lifecycle, nem új navigation hold. A 10 Hz utolsó terminal FAULT mintájának nincs utána captured időintervalluma, ezért annak időtartama nem integrálható. Eredeti teljes ellenőrzések: `/tmp/r2b4_20261016_192129_motion_diag.json`, `/tmp/r2b4_20261016_192341_motion_diag.json`; végső számítás: `/tmp/r2b4-continuity-3wvc6wke/192129.json`, illetve `192341.json`.
 - Javított host-lifecycle: canonical launcherrel `./r test tests/packs/feature/test_behavior_system.py tests/packs/feature/test_v3_geometry_hold_integration.py`: **37 passed**. Bizonyítja a hold→resume-ot, változatlan mission identityt, duration boundot és a terminal hiba kezelését; élő heartbeat-jitter javulást nem bizonyít.
 
 Nyitott: az első 50 Hz renewal/reader ~5 s kiesés syscall/GIL/scheduler/file-I/O szétválasztása; a 10 Hz fizikai edge-megszűnés oka; külső ground truth szerinti egyenesmeneti és útvonalminőség; a javított host-viselkedés új élő futása; Follow Person valódi szenzoros evidence. Új live mozgás nem történt.
+
+## Elkészült hangolási út és záró validáció
+
+A [paramétertérkép](../MOTION_TUNING.md) megnevezi a konfigurációs ownereket,
+a capeket és az árnyékolt minimumokat. A Follow Person host-envelope közös
+`behavior.followperson` profilból származik; a mai 0.25/0.30 érték változatlan.
+Az L8 heading/cross-track/yaw-rate feedback és correction cap külön-külön
+nullázható offline ablationhöz, a production tuningértékek változtatása nélkül.
+
+A [natív szimulációs út](../ROBOT_MOTION_EXPERIMENTS.md#natív-konfigurációs-kísérletek)
+`./r tune simulate` paranccsal hat rögzített scenario-t, validált baseline/override
+párokat, teljes config snapshotot, MCAP-ot és measurement-time timeline-t ad.
+A meglévő canonical command/V3/PWM plantet használja. A coverage mércéje
+független a hangolt planner-gridtől; a nyers szintetikus szenzor ugyanaz marad,
+miközben a production pontszűrés a konfigurációt fogyasztja. A szimuláció
+nem méri a live GIL/IPC/jittert vagy a fizikai szenzorok modellhibáját.
+
+Záró szoftveres evidence:
+
+- `./r test release`: **23 passed**, a kis gate-et és a canonical scenario-kat együtt futtatva.
+- DIAG motion-performance: **22 passed**; kapcsolódó DIAG evidence/quality: **12 passed**.
+- Host behavior/geometry hold: **37 passed**.
+- Új konfiguráció/follow/gain esetek: **19 passed**; kapcsolódó meglévő config/interface esetek **24 passed**, javított route/follow esetek **6 passed**.
+- Végleges szimulátor/korábbi tuner/plant célzott ellenőrzés: **10 passed**, benne motion és occluded FOLLOW natív replay **MATCH**.
+- Valódi CLI smoke: három terület baseline/0.25 angular-gain változat, **6/6 replay MATCH**, fault/collision nélkül, végső nulla outputtal. Artifact: `/tmp/r2b4-motion-sla_ky_j/comparison.json`. Ez rövid integrációs smoke, nem teljes hosszúságú behavior-hangolási eredmény.
+- `git diff --check`: tiszta. Új fizikai robotmozgás nem történt.

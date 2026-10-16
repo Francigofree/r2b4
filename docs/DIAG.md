@@ -193,6 +193,10 @@ a következő minta idejéig; az utolsó mintához nem feltételez további idő
 Az első 64 összefüggő epizód kezdeti L5/L6/L8/L9/L12 evidence-e és source
 reference-e megmarad. A leghosszabb megfigyelt megállás és a leghosszabb
 aktív mission alatti megállás a csonkolástól függetlenül elérhető.
+Az aktív szakaszt az L5 canonical `lifecycle=ACTIVE` jelöli; a CANCELLED,
+COMPLETED és FAILED is inaktív. A tickenként új ID-t kapó expired STOP nem
+darabolja fel az azonos inaktív lifecycle/mode szakaszt. Aktív missionnél
+az identity változása továbbra is megszakítja az epizódot.
 Hiányzó mező nem jelent nulla kimenetet; nem nulla végső kimenet inaktív
 mission mellett is látható marad. A megállási intervallumokhoz nem kell
 érvényes lokális pose, de ugyanúgy megszakadnak recording-gap vagy hibás
