@@ -147,6 +147,11 @@ def _tick_status(
                         world.context.monotonic_ns - world.local_costmap.freshness_ns
                     ),
                     "occupied_cell_count": len(world.local_costmap.occupied_cells),
+                    # DIAGNOSTIC ONLY: full map geometry in resident status.
+                    "occupied_cells": [
+                        {"grid_x": cell.grid_x, "grid_y": cell.grid_y}
+                        for cell in world.local_costmap.occupied_cells
+                    ],
                     "freshness_ns": world.local_costmap.freshness_ns,
                     "radius_m": world.local_costmap.radius_m,
                     "resolution_m": world.local_costmap.resolution_m,

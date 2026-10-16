@@ -108,6 +108,7 @@ def command_entries() -> list[dict[str, object]]:
                     ("route", [], 'r route "KÉRÉS" [--json]', "Belépési route megtekintése."),
                     ("help", [], "r help [PARANCS]", "Áttekintés vagy a parancs saját részletes súgója."),
                     ("commands", [], "r commands [--json]", "Teljes, source-ból követett parancskatalógus."),
+                    ("maplive", [], "r maplive [--hz 5]", "Passzív V3 L4 ASCII mini térkép."),
                 ))
     return sorted(rows, key=lambda row: row["name"])
 
@@ -327,7 +328,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         root = project_root()
         from v3.runtime_performance import apply_host_affinity
-        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tune", "tool", "cpu", "cpu2", "diag", "evi", "learn"} else "operator"
+        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tune", "tool", "cpu", "cpu2", "diag", "evi", "learn", "maplive"} else "operator"
         apply_host_affinity(root, role)
 
         # Private, read-only shell completion transport. It is intentionally not
@@ -372,6 +373,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = _normalize_er2_args(args)
         if args[0] in {"th", "testhub"}:
             raise LauncherError("A Test Hub megszűnt. Offline evidence: r evi CAPTURE.mcap")
+        if args[0] == "maplive":
+            from tools.r2b4_minimap_live import main as maplive_main
+            return maplive_main(args[1:])
         if args[0] == "evi":
             from tools.mcap_evidence.cli import main as evidence_main
             return evidence_main(args[1:], project_root=root)
