@@ -1,0 +1,65 @@
+{
+  "scenario": "straight_asymmetric",
+  "scenario_input": {
+    "kind": "differential_drive",
+    "seed": 7,
+    "duration_s": 12.0,
+    "goal": {
+      "x_m": 1.5,
+      "y_m": 0.0,
+      "yaw_rad": 0.0
+    },
+    "room": {
+      "x_min_m": -2.5,
+      "x_max_m": 4.0,
+      "y_min_m": -2.0,
+      "y_max_m": 2.0
+    },
+    "behavior": "motion",
+    "plant": {
+      "right_gain": 1.08
+    }
+  },
+  "scenario_sha256": "07d55bcb56a2a29dda2769f4a4c5becc7232c9341a003fe70e3b664dfd99b317",
+  "config_snapshot_id": "a0ce1ea2dcbe25263ed188501d5f7dd9ce634d0f24487e9aaec9527d2d733486",
+  "control_config_sha256": "97e528fffbd616abeafbcb44e06c569d569ee1a7e92f56b934e0754855e21e1a",
+  "metrics": {
+    "active_duration_s": 6.42,
+    "path_length_m": 1.4395755233844438,
+    "unique_coverage_cells": 6,
+    "stopped_duration_s": 0.1,
+    "coverage_cell_size_m": 0.25,
+    "longest_stop_s": 0.1,
+    "no_translation_progress_2s_duration_s": 0.0,
+    "moving_ratio": 0.9844236760124611,
+    "active_mission_sample_count": 321,
+    "angular_sign_reversals": 1,
+    "angular_sign_reversals_per_m": 0.6946492099622524,
+    "navigation_reason_duration_s": {
+      "LOCAL_GUIDANCE_REVALIDATED": 6.16,
+      "None": 0.26
+    },
+    "follow_state_duration_s": {},
+    "minimum_footprint_clearance_m": 1.6698451058847463,
+    "max_abs_jerk_mps3": 122.92394130751727,
+    "straight_cross_track_rms_m": 0.022924522562410732,
+    "straight_max_abs_cross_track_m": 0.031826216311727676,
+    "straight_heading_rms_rad": 0.05486424906708275,
+    "collision_count": 0,
+    "safety_stop_count": 0,
+    "tracking_error_rms_mps": 0.016964530957378474,
+    "goal_position_error_m": 0.06226706871329187
+  },
+  "resolved_config": "/tmp/r2b4-motion-844up1ff/baseline/straight_asymmetric/resolved_config.json",
+  "fault_layer": null,
+  "first_boundary": null,
+  "termination_reason": "GOAL_COMPLETE",
+  "requested_duration_s": 12.0,
+  "observed_runtime_active_s": 6.44,
+  "early_terminal": true,
+  "final_stop": true,
+  "physical_output": false,
+  "capture": "/tmp/r2b4-motion-844up1ff/baseline/straight_asymmetric/capture.mcap",
+  "timeline": "/tmp/r2b4-motion-844up1ff/baseline/straight_asymmetric/timeline.ndjson",
+  "replay": null
+}
