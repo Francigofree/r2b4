@@ -17,10 +17,6 @@ import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from v3.action_catalog import (
-    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
-    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
-)
 from v3.capture_rate import CAPTURE_HZ_VALUES, DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import CAPTURE_MODES, DEFAULT_CAPTURE_MODE, OperatorError, OperatorEvent
 from v3.robot_interface import RobotInterface, RobotInterfaceError
@@ -235,8 +231,8 @@ def _parser() -> argparse.ArgumentParser:
 
     follow = add_command("followperson", help="Személykövetés: r fp [SECONDS]. Példa: r fp 20")
     follow.add_argument("seconds", type=float, nargs="?", default=0.0, help="idő [s]; 0 = folyamatos")
-    follow.add_argument("--max-v", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS, help="sebességkorlát [m/s]")
-    follow.add_argument("--max-omega", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S, help="szögsebességkorlát [rad/s]")
+    follow.add_argument("--max-v", type=float, help="sebességkorlát [m/s]; alap: behavior.followperson.max_v_mps")
+    follow.add_argument("--max-omega", type=float, help="szögsebességkorlát [rad/s]; alap: behavior.followperson.max_omega_rad_s")
 
     camera = add_command("camera", help="Önálló kamera: status / on / off / photo / video OUTPUT [SECONDS].")
     camera.add_argument("operation", choices=("status", "on", "off", "photo", "video"), nargs="?", default="status")
@@ -359,8 +355,8 @@ def _motion_request(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
         return "v3.command.face_person", {"max_omega_rad_s": args.max_omega}
     if command == "followperson":
         return "v3.command.follow_person", {
-            "max_v_mps": args.max_v,
-            "max_omega_rad_s": args.max_omega,
+            **({"max_v_mps": args.max_v} if args.max_v is not None else {}),
+            **({"max_omega_rad_s": args.max_omega} if args.max_omega is not None else {}),
         }
     raise ValueError(f"not a motion command: {command}")
 

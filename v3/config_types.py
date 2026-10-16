@@ -92,3 +92,14 @@ class RoomCruiseConfig:
                 raise ValueError(f"RoomCruiseConfig.{name} must be finite and positive")
         if not isinstance(self.preferences, ExplorePreferences):
             raise TypeError("RoomCruiseConfig.preferences must be ExplorePreferences")
+
+
+@dataclass(frozen=True, slots=True)
+class FollowPersonConfig:
+    """Host FOLLOW envelope; navigation tuning remains owned by L6."""
+
+    max_v_mps: float
+    max_omega_rad_s: float
+
+    def __post_init__(self) -> None:
+        _positive_fields(self)

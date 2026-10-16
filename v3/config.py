@@ -25,7 +25,7 @@ from v3.capture_encoding import encode_value
 from v3.composition.native_control import NativeControlCompositionConfig, V3NavigationConfig
 from v3.composition.resident_live_control import ResidentLiveControlConfig
 from v3.composition.resident_physical_control import ResidentPhysicalControlConfig
-from v3.config_types import CommandIngressPolicy, EncoderProcessConfig, ImuProcessConfig, LidarProcessConfig, PlannerProcessConfig, RoomCruiseConfig
+from v3.config_types import CommandIngressPolicy, EncoderProcessConfig, FollowPersonConfig, ImuProcessConfig, LidarProcessConfig, PlannerProcessConfig, RoomCruiseConfig
 from v3.contracts import ExplorePreferences
 from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.layers.l10_chassis_control import ChassisControlConfig
@@ -164,6 +164,7 @@ class ResolvedRobotConfig:
     # None is reserved for historical typed snapshots. Live resolution requires
     # the host behavior profile explicitly, never constructor defaults.
     roomcruise: RoomCruiseConfig | None = None
+    followperson: FollowPersonConfig | None = None
 
     def __post_init__(self) -> None:
         control = self.runtime.composition.live_control.control
@@ -174,6 +175,11 @@ class ResolvedRobotConfig:
             if (self.roomcruise.max_v_mps > self.edges.command_ingress.maximum_linear_speed_mps
                     or self.roomcruise.max_omega_rad_s > self.edges.command_ingress.maximum_angular_speed_rad_s):
                 raise ValueError("RoomCruise envelope exceeds command ingress acceptance limits")
+        if self.followperson is not None and (
+            self.followperson.max_v_mps > self.edges.command_ingress.maximum_linear_speed_mps
+            or self.followperson.max_omega_rad_s > self.edges.command_ingress.maximum_angular_speed_rad_s
+        ):
+            raise ValueError("FollowPerson envelope exceeds command ingress acceptance limits")
         if control.lidar_safety is None or control.critical_device_ids != PRODUCTION_CRITICAL_DEVICE_IDS:
             raise ValueError("resolved production config requires canonical safety inputs")
         if control.world_model.local_costmap_max_points_per_scan != sensors.inputs.lidar_source.local_perception_max_points:
@@ -243,9 +249,9 @@ class ResolvedRobotConfig:
         if nav.localization_recovery_omega_rad_s < wheels.minimum_center_spin_rad_s:
             note("P1", "layers.navigation.localization_recovery_omega_rad_s", "UNREALIZABLE",
                  "Captured recovery request is below the wheel floor; it remains HOLD during historical replay.")
-        if nav.minimum_planning_speed_mps < wheels.minimum_mps:
+        if nav.minimum_planning_speed_mps < wheels.target_floor_mps:
             note("P1", "layers.navigation.minimum_planning_speed_mps", "SHADOWED_RANGE",
-                 "Values below the calibrated wheel floor do not lower nonzero rollout samples.")
+                 "Values below the derived target wheel floor do not lower nonzero rollout samples.")
         note("P1", "speed_map.curves.*.startup_pwm", "METADATA_ONLY",
              "Validated calibration metadata; actuator realization uses calibrated speed curves, not startup_pwm.")
         note("P1", "layers.mission.default_constraints.corridor_radius_m", "METADATA_ONLY",
@@ -274,11 +280,34 @@ class ResolvedRobotConfig:
                         requested_max_omega_rad_s=self.roomcruise.max_omega_rad_s,
                         mission_max_v_mps=mission_v, mission_max_omega_rad_s=mission_omega,
                         steady_straight_max_v_mps=straight_cap if straight_cap >= wheels.minimum_mps else 0.0,
-                        centered_spin_available=min(mission_omega, control.operational_constraints.max_omega_rad_s)
+                        centered_spin_available=min(mission_omega, control.operational_constraints.max_omega_rad_s,
+                                                    control.motion_realization.max_requested_omega_rad_s)
                             >= wheels.minimum_center_spin_rad_s)
+        follow = None
+        if self.followperson is not None:
+            mission_v = min(self.followperson.max_v_mps, control.mission.default_constraints.max_v_mps)
+            mission_omega = min(self.followperson.max_omega_rad_s, control.mission.default_constraints.max_omega_rad_s)
+            straight_cap = min(mission_v, control.operational_constraints.max_v_mps, wheels.maximum_mps)
+            spin_cap = min(mission_omega, control.operational_constraints.max_omega_rad_s,
+                           control.motion_realization.max_requested_omega_rad_s)
+            follow = dict(requested_max_v_mps=self.followperson.max_v_mps,
+                          requested_max_omega_rad_s=self.followperson.max_omega_rad_s,
+                          mission_max_v_mps=mission_v, mission_max_omega_rad_s=mission_omega,
+                          steady_straight_max_v_mps=straight_cap if straight_cap >= wheels.minimum_mps else 0.0,
+                          centered_spin_available=spin_cap >= wheels.minimum_center_spin_rad_s)
+            if not follow["centered_spin_available"]:
+                note("P1", "behavior.followperson.max_omega_rad_s", "PARTIAL_CAPABILITY",
+                     "The effective FOLLOW angular cap is below the calibrated centered-spin floor; pivot and search cannot turn in place.")
+        if nav.follow_person_minimum_follow_speed_mps < max(wheels.target_floor_mps, nav.minimum_planning_speed_mps):
+            note("P2", "layers.navigation.follow_person_minimum_follow_speed_mps", "SHADOWED_RANGE",
+                 "The heading slowdown floor does not lower the calibrated/planner nonzero rollout minimum; distance braking can still request a smaller cap and HOLD.")
         return dict(minimum_center_spin_rad_s=wheels.minimum_center_spin_rad_s,
+                    target_center_spin_rad_s=wheels.target_center_spin_rad_s,
+                    minimum_continuous_wheel_speed_mps=wheels.minimum_mps,
+                    minimum_target_wheel_speed_mps=wheels.target_floor_mps,
+                    minimum_planning_speed_mps=nav.minimum_planning_speed_mps,
                     localization_recovery_omega_rad_s=nav.localization_recovery_omega_rad_s,
-                    roomcruise=room, knobs=knobs)
+                    roomcruise=room, followperson=follow, knobs=knobs)
 
     @property
     def snapshot_id(self) -> str:
@@ -331,8 +360,9 @@ class ConfigResolver:
         calibration_names = {"imu_heading_clockwise_positive", "imu_yaw_rate_axis", "imu_yaw_rate_clockwise_positive", "imu_yaw_offset_rad"}
         _keys(p, {"nyomtav_szelesseg_m", "encoder_impulzus_per_fordulat", "lepes_hossz_m", "lepes_hossz_bal_szorzo", "lepes_hossz_jobb_szorzo", "footprint_length_m", "footprint_width_m", "encoder_forward_b_level", "imu_axis_order", "imu_axis_sign"} | calibration_names, "fizika")
         _keys(c, {"behavior", "layers", "local_perception", "sensor_policy", "motor", "encoder", "imu", "lidar_driver", "lidar_pose", "lidar_runtime", "runtime_affinity", "runtime"}, "vezerles")
-        _keys(c["behavior"], {"roomcruise"}, "behavior")
+        _keys(c["behavior"], {"roomcruise", "followperson"}, "behavior")
         roomcruise = _typed(RoomCruiseConfig, c["behavior"]["roomcruise"], "behavior.roomcruise")
+        followperson = _typed(FollowPersonConfig, c["behavior"]["followperson"], "behavior.followperson")
         runtime = c["runtime"]
         edge_names = {f.name for f in fields(RuntimeEdgeConfig)}
         _keys(runtime, edge_names | {"tick_period_ns", "max_preflight_age_ns", "required_lidar_preflight_revisions"}, "runtime")
@@ -470,4 +500,4 @@ class ConfigResolver:
         physical = ResidentPhysicalRuntimeConfig(ResidentPhysicalControlConfig(
             ResidentLiveControlConfig(resolved_control, runtime["max_preflight_age_ns"],runtime["required_lidar_preflight_revisions"]), motor_output),
             sensors,tick_ns)
-        return ResolvedRobotConfig(physical, lidar, _typed(RuntimeAffinityConfig,c["runtime_affinity"],"runtime_affinity"),edges,roomcruise)
+        return ResolvedRobotConfig(physical, lidar, _typed(RuntimeAffinityConfig,c["runtime_affinity"],"runtime_affinity"),edges,roomcruise,followperson)

@@ -17,9 +17,8 @@ from v3.contracts import ExplorePreferences
 ACTION_CATALOG_SCHEMA = "R2B4_ACTION_CATALOG_V1"
 ACTION_DESCRIPTOR_SCHEMA = "R2B4_ACTION_DESCRIPTOR_V1"
 
-# Canonical default FOLLOW envelope. All operator/agent ingress surfaces import
-# these values so a stale UI/adapter default cannot silently reintroduce a
-# lower nominal speed. Dynamic safety/geometry layers may still tighten it.
+# Historical compatibility exports. Production FOLLOW defaults are resolved
+# from behavior.followperson; these values are not runtime configuration.
 FOLLOW_PERSON_DEFAULT_MAX_V_MPS = 0.25
 FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S = 0.30
 
@@ -273,8 +272,8 @@ _DESCRIPTORS = (
         (
             _p("target_track_id", "Optional exact V3 person track; requires its expected_runtime_pid and never selects another person.", value_type="string"),
             _p("expected_runtime_pid", "Runtime identity of the bound person track; a restart rejects the request.", minimum=1),
-            _p("max_v_mps", "Maximum following linear speed.", minimum=0.01, maximum=0.50, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS),
-            _p("max_omega_rad_s", "Maximum following angular speed.", minimum=0.01, maximum=1.20, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S),
+            _p("max_v_mps", "Requested following linear cap; omitted values use behavior.followperson config.", minimum=0.01),
+            _p("max_omega_rad_s", "Requested following angular cap; omitted values use behavior.followperson config.", minimum=0.01),
         ),
         voice_exposed=True,
         session_watchdog=True,

@@ -232,7 +232,12 @@ class _MissionProgram:
             return BehaviorUpdate(BehaviorLifecycle.FAILED, str(status.get("safety_reason") or "SAFETY_STOP"))
         if nav_status == "NO_PATH":
             return BehaviorUpdate(BehaviorLifecycle.FAILED, str(reason or "NO_PATH"))
-        if nav_status == "INVALIDATED" and reason != "PERSON_TARGET_NOT_AVAILABLE":
+        # L6 revokes guidance while waiting for fresh geometry, preserving the
+        # mission identity. Do not turn that recoverable hold into a host STOP
+        # that kills its command heartbeat before L6 can resume.
+        if nav_status == "INVALIDATED" and reason not in {
+            "PERSON_TARGET_NOT_AVAILABLE", "WORLD_STALE", "LOCAL_COSTMAP_STALE",
+        }:
             return BehaviorUpdate(BehaviorLifecycle.FAILED, str(reason or "NAVIGATION_INVALIDATED"))
         return BehaviorUpdate(BehaviorLifecycle.ACTIVE, str(reason or nav_status or "MISSION_ACCEPTED"))
 

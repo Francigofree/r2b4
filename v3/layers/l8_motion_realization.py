@@ -39,18 +39,20 @@ class MotionRealizationConfig:
         positive = (
             self.cruise_v_mps,
             self.distance_gain,
-            self.heading_gain,
             self.max_requested_omega_rad_s,
             self.heading_stop_threshold_rad,
             self.horizon_ns,
-            self.cross_track_gain,
-            self.max_tracking_correction_rad_s,
             self.max_control_gap_ns,
         )
         if any(not math.isfinite(value) or value <= 0 for value in positive):
             raise ValueError("motion realization gains, limits and horizon must be positive")
-        if not math.isfinite(self.angular_velocity_gain) or self.angular_velocity_gain < 0:
-            raise ValueError("angular velocity gain must be finite and non-negative")
+        # Zero is an explicit tuning experiment: disable an individual feedback
+        # term or the tracking correction, while feed-forward and caps remain.
+        for name in ("heading_gain", "cross_track_gain", "angular_velocity_gain",
+                     "max_tracking_correction_rad_s"):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and non-negative")
         if self.max_world_freshness_ns < 0:
             raise ValueError("freshness limit cannot be negative")
 

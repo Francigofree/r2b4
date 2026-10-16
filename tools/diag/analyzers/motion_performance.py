@@ -27,6 +27,7 @@ CONTRACT = AnalyzerContract(
     analyzer_id="motion_performance",
     description="Time-linked sampled AMR response, continuity, motion quality and goal progress measurements.",
     required_views=VIEWS, optional_views=OPTIONAL, required_topics=("/r2b4/tick",),
+    contract_version=2,
 )
 
 
@@ -181,6 +182,119 @@ def _goal_sample(rows, timestamp):
     }
 
 
+class _MotionContinuity:
+    """Bounded source-time stop intervals, independent of pose quality.
+
+    These classify completed output relationships, not physical stalls or their
+    cause. The next source sample bounds the prior sample's held interval.
+    """
+
+    def __init__(self):
+        self.durations = Counter()
+        self.episodes = []
+        self.episode_count = 0
+        self.longest_stop = None
+        self.longest_active_stop = None
+        self.current = None
+        self.key = None
+
+    def close(self):
+        if self.current is not None:
+            self.episode_count += 1
+            if len(self.episodes) < 64:
+                self.episodes.append(self.current)
+            if (self.current["stage"] != "FINAL_OUTPUT_ACTIVE"
+                    and self.current["stage"] != "INSUFFICIENT_FIELDS"
+                    and (self.longest_stop is None
+                         or self.current["duration_s"] > self.longest_stop["duration_s"])):
+                self.longest_stop = self.current
+            if (self.current["stage"] not in ("FINAL_OUTPUT_ACTIVE", "INSUFFICIENT_FIELDS")
+                    and self.current["lifecycle"] == "ACTIVE"
+                    and self.current["mode"] not in (None, "STOP")
+                    and (self.longest_active_stop is None
+                         or self.current["duration_s"] > self.longest_active_stop["duration_s"])):
+                self.longest_active_stop = self.current
+        self.current = self.key = None
+
+    def add(self, rows, start_ns, end_rows, end_ns):
+        mission = _payload(rows.get("layers/L5"))
+        if _time(rows.get("layers/L5")) != start_ns:
+            mission = {}
+        navigation = _payload(rows.get("layers/L6"))
+        if _time(rows.get("layers/L6")) != start_ns:
+            navigation = {}
+        requested = _pair(_payload(rows["layers/L8"]), "requested_v_mps", "requested_omega_rad_s")
+        allowed = _pair(_payload(rows["layers/L9"]), "allowed_v_mps", "allowed_omega_rad_s")
+        final = _payload(rows["layers/L12"])
+        output = _pair(final, "left_output", "right_output")
+        # Upstream zero is reported before a downstream safety consequence.
+        # A nonzero final output always remains visible, even if inconsistent.
+        if output is not None and any(abs(value) > 1e-9 for value in output):
+            stage = "FINAL_OUTPUT_ACTIVE"
+        elif mission.get("lifecycle") in ("IDLE", "COMPLETED", "CANCELLED", "FAILED"):
+            stage = "INACTIVE_MISSION"
+        elif requested is None or allowed is None:
+            stage = "INSUFFICIENT_FIELDS"
+        elif not _moving(requested):
+            stage = "NO_REQUESTED_MOTION"
+        elif not _moving(allowed):
+            stage = "ZERO_ALLOWED_MOTION"
+        elif final.get("safety_decision") in ("STOP", "FAULT"):
+            stage = "L12_SAFETY_BLOCKED"
+        elif output is not None:
+            stage = "ZERO_FINAL_OUTPUT"
+        else:
+            stage = "INSUFFICIENT_FIELDS"
+        state = {
+            "stage": stage, "mission_id": mission.get("mission_id"),
+            "lifecycle": mission.get("lifecycle"), "mode": mission.get("mode"),
+        }
+        # Synthetic expired/missing STOP IDs may change every tick. They do not
+        # break an inactive phase; active mission identity still must match.
+        key = (stage, None if stage == "INACTIVE_MISSION" else state["mission_id"],
+               state["lifecycle"], state["mode"])
+        if self.key != key or (self.current is not None and self.current["end_time_ns"] != start_ns):
+            self.close()
+        dt = (end_ns - start_ns) / 1e9
+        self.durations[stage] += dt
+        ref = evidence_ref(rows["layers/L8"], "/requested_v_mps").as_dict()
+        if self.current is None:
+            self.key = key
+            self.current = {
+                **state, "start_time_ns": start_ns, "end_time_ns": start_ns,
+                "duration_s": 0.0, "interval_count": 0, "start_ref": ref,
+                "start_context_ref": evidence_ref(rows.get("ticks", rows["layers/L8"]),
+                    "/inputs/context" if "ticks" in rows else "/context").as_dict(),
+                "initial_evidence": {
+                    "l8_stop_reason": _payload(rows["layers/L8"]).get("stop_reason"),
+                    "l9_active_constraints": _payload(rows["layers/L9"]).get("active_constraints"),
+                    "l6_status": navigation.get("status"), "l6_reason": navigation.get("reason"),
+                    "l12_decision": final.get("safety_decision"), "l12_reason": final.get("reason"),
+                },
+                "source_refs": [evidence_ref(row).as_dict() for view, row in rows.items()
+                                if view != "ticks" and _time(row) == start_ns],
+            }
+        self.current["end_time_ns"] = end_ns
+        self.current["end_ref"] = evidence_ref(end_rows["layers/L8"], "/context").as_dict()
+        self.current["end_context_ref"] = evidence_ref(end_rows.get("ticks", end_rows["layers/L8"]),
+            "/inputs/context" if "ticks" in end_rows else "/context").as_dict()
+        self.current["duration_s"] += dt
+        self.current["interval_count"] += 1
+        self.current["last_mission_id"] = mission.get("mission_id")
+
+    def metrics(self):
+        self.close()
+        return {
+            "semantics": "SAMPLED_PRIOR_OUTPUT_HELD_TO_NEXT_SOURCE_TIME",
+            "stage_duration_s": dict(self.durations),
+            "episode_count": self.episode_count, "episodes": self.episodes,
+            "episodes_truncated": self.episode_count > len(self.episodes),
+            "longest_observed_stop": self.longest_stop,
+            "longest_active_mission_stop": self.longest_active_stop,
+            "physical_stall_proven": False,
+        }
+
+
 def run(context, registry) -> AnalyzerOutput:
     del registry
     measurement_interval = getattr(context, "measurement_time_interval_ns", None)
@@ -197,6 +311,7 @@ def run(context, registry) -> AnalyzerOutput:
     sample_periods = []
     reversals = starts = 0
     goals, goal_count, previous_goal_key = [], 0, None
+    continuity = _MotionContinuity()
 
     def close_segment():
         nonlocal segment_start, segment_end, net_displacement
@@ -206,6 +321,7 @@ def run(context, registry) -> AnalyzerOutput:
 
     for rows in _aligned(context.bundle):
         if rows is None:
+            continuity.close()
             intervals["unaligned_rows"] += 1
             previous = None
             close_segment()
@@ -214,6 +330,7 @@ def run(context, registry) -> AnalyzerOutput:
         aligned += 1
         rows = _canonical_context_rows(rows)
         if rows is None:
+            continuity.close()
             intervals["invalid_or_inconsistent_source_context"] += 1
             previous = None
             close_segment()
@@ -221,12 +338,14 @@ def run(context, registry) -> AnalyzerOutput:
             continue
         timestamp = _time(rows["layers/L3"])
         if timestamp is None or any(_time(rows[view]) != timestamp for view in VIEWS):
+            continuity.close()
             intervals["invalid_or_inconsistent_source_context"] += 1
             previous = None
             close_segment()
             previous_goal_key = None
             continue
         if measurement_interval is not None and not measurement_interval[0] <= timestamp <= measurement_interval[1]:
+            continuity.close()
             intervals["outside_measurement_time_interval_rows"] += 1
             previous = None
             close_segment()
@@ -260,12 +379,14 @@ def run(context, registry) -> AnalyzerOutput:
         if gap > 0:
             sample_periods.append(gap)
         if gap <= 0 or gap > MAX_GAP_NS:
+            continuity.close()
             intervals["non_increasing_time" if gap <= 0 else "recording_gap"] += 1
             close_segment()
             continue
         dt = gap / 1e9
         intervals["valid_source_intervals"] += 1
         durations["qualified_recording_s"] += dt
+        continuity.add(prior, prior_time, rows, timestamp)
         requested = _pair(_payload(prior["layers/L8"]), "requested_v_mps", "requested_omega_rad_s")
         allowed = _pair(_payload(prior["layers/L9"]), "allowed_v_mps", "allowed_omega_rad_s")
         next_allowed = _pair(_payload(rows["layers/L9"]), "allowed_v_mps", "allowed_omega_rad_s")
@@ -376,7 +497,8 @@ def run(context, registry) -> AnalyzerOutput:
         "segments": [{**item, "error_reduction_m": item["first"]["error_m"] - item["last"]["error_m"]} for item in goals],
     }
     metrics = {"temporal_coverage": temporal, "performance": performance, "tracking": tracking,
-               "motion_quality": quality, "goal_progress": goal_progress}
+               "motion_quality": quality, "goal_progress": goal_progress,
+               "motion_continuity": continuity.metrics()}
     observations = (
         DiagnosticObservation(kind=ObservationKind.DERIVED_MEASUREMENT, code="AMR_TIME_LINKED_MOTION",
             message="Durations use bounded sampled source-time intervals; local-estimate distances and response pairs require unchanged frame/generation and explicit continuity.",
@@ -386,10 +508,16 @@ def run(context, registry) -> AnalyzerOutput:
             message="L3 is an estimate at tick reference time. Sampling cannot prove between-sample motion, physical tracking, stop distance/settling, or the cause of a skill failure.",
             values={"excluded_intervals": dict(intervals), "missing_fields": dict(missing)},
             evidence_basis=(view_scan(*VIEWS),)),
+        DiagnosticObservation(kind=ObservationKind.RELATIONSHIP, code="AMR_MOTION_CONTINUITY",
+            message="Source-time intervals distinguish inactive missions, absent requests, zero allowed motion and final output. Stop episodes remain observable when local pose is unqualified; they do not prove physical stalling or root cause.",
+            values={"stage_duration_s": metrics["motion_continuity"]["stage_duration_s"],
+                    "longest_observed_stop": metrics["motion_continuity"]["longest_observed_stop"]},
+            evidence_basis=(view_scan(*VIEWS, "layers/L5", "layers/L6", "ticks"),)),
     )
     return AnalyzerOutput(metrics=metrics,
         coverage={"response_pairs": "PRESENT" if valid_pairs else "ABSENT", "physical_ground_truth": "NOT_PRESENT"},
         summary={"qualified_recording_s": temporal["qualified_recording_s"], "qualified_estimate_s": path_duration,
                  "tracking_pairs": valid_pairs, "linear_rmse_mps": linear_error.rms(), "angular_rmse_rad_s": angular_error.rms(),
-                 "estimated_path_length_m": performance["estimated_path_length_m"], "first_departure": first_departure},
+                 "estimated_path_length_m": performance["estimated_path_length_m"], "first_departure": first_departure,
+                 "motion_stage_duration_s": metrics["motion_continuity"]["stage_duration_s"]},
         observations=observations)

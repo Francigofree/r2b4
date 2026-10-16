@@ -80,6 +80,75 @@ után a próba megszakad; automatikus újraindítás nincs.
 
 ## Használat
 
+### Natív konfigurációs kísérletek
+
+A `./r tune simulate` közvetlenül a meglévő differenciálhajtású skill-plantet
+használja motor nélküli konfigurációs kísérletekhez. A canonical
+`CommandGateway → L1–L12 → OfflineMotorSink` teljes lánc fut, beleértve a
+kalibrált speed-map inverzéből számított kerékválaszt és a wheel PI-t.
+A `r tune roomcruise` továbbra is a gyors, ideális L5–L9 kereső; az L8 gain
+és az actuator-válasz vizsgálatához a `simulate` út szükséges.
+
+```bash
+./r tune simulate --list-scenarios
+
+# Aktív config mint baseline; kizárólag offline 0.25 angular gain összevetés.
+./r tune simulate --scenarios straight,straight_asymmetric \
+  --override docs/examples/motion_tuning_angular_gain.json --replay
+
+# Room Cruise: előrehaladási preferencia egyetlen tényezőjének kontrasztja.
+./r tune simulate --scenarios cruise_open,cruise_clutter \
+  --override docs/examples/motion_tuning_roomcruise.json --replay
+
+# Follow Person: mozgó cél és két másodperces kamera-occlusion.
+./r tune simulate --scenarios follow_moving,follow_occluded \
+  --override docs/examples/motion_tuning_followperson.json --replay
+```
+
+Az override formátuma `{"schema":"R2B4_OFFLINE_CONFIG_OVERRIDE_V1",
+"vezerles":{...}}`. Minden `--override` külön, ugyanahhoz a baseline-hoz párosított
+változat; több fájl nem egymásra épülő patch. A teljes négy dokumentumos
+`ConfigResolver` validálja az összeolvasztott konfigurációt. Az ismeretlen
+kulcs hiba. `--config /tmp/masik.vezerles.json` teljes alternatív baseline-t
+választ. Az aktív konfigurációt egyik opció sem írja át.
+Rövid smoke-hoz `--duration-s 1.2` használható; a holtpontok, az útvonal és a
+target-vesztés értékeléséhez a scenario alapértelmezett 12–20 másodperces
+időtartama indokolt. A seed, geometria, plant-feltételezés és az override
+hash-sel együtt megmarad az eredményben.
+
+Az alapértelmezett artifactkönyvtár egyedi `/tmp/r2b4-motion-*` útvonal.
+A `comparison.json` tartalmazza a baseline-t, a változatokat, az alkalmazott
+config identityt és a `variant − baseline` metrikakülönbségeket. Minden
+scenario saját `capture.mcap`, `timeline.ndjson` és `result.json` fájlt kap.
+A timeline szintetikus measurement time-ot, mission identityt/lifecycle-t,
+valódi plant-pózt, L9 parancsot, L12 safety-t és első native hibaevidence-et
+tartalmaz. A `--replay` explicit canonical Replayer-futtatás; csak `MATCH`
+jelent replay-egyezést. Replay nélkül az eredmény nem állít exact egyezést.
+Ezek a capture-ök a szokásos explicit `r evi` → `r diag` úton is vizsgálhatók.
+
+| Terület | Elsődleges mutatók |
+| --- | --- |
+| Egyenes mozgás | független cross-track/heading RMS és maximum, angular sign reversals, sebességkövetési RMS, jerk, goal error |
+| Room Cruise | megtett út, coverage cellák, mozgásarány, leghosszabb aktív stop, 2 s alatti elmozduláshiány, clearance és navigation reason időtartam |
+| Follow Person | személy távolsága és stand-off hiba, FOLLOW/HOLD/SEARCH/LOST időtartam, safety és útfolytonosság |
+
+A stop/progress mutatók csak aktív, mozgást kérő mission mintáit használják;
+a kezdeti IDLE, a befejezett cél és a végső STOP nem stall.
+Az `observed_runtime_active_s`, `requested_duration_s` és
+`termination_reason` külön mutatja a teljes horizon helyett korán befejeződő
+vagy faultoló próbát. A forgás és a Follow Person szándékos tartása is
+elmozduláshiány lehet: a reason/state időtartamokkal együtt értelmezendő.
+A `COMPLETED` a kísérlet lezárását jelöli, nem a robotikai cél elfogadását;
+a tool nem ajánl automatikusan új konfigurációt.
+
+A modell ideális IMU-t és relatív LiDAR-mozgást ad, egyszerű elsőrendű
+kerékválaszt/tapadást és szintetikus kameradobozt feltételez. Nem bizonyít
+fizikai stabilitást, szenzorkalibrációt, emberdetektor-minőséget, optimális
+globális útvonalat vagy élő elfogadást. A rollout completion lezárása
+determinista, inline computationt használ; process/GIL/IPC, CPU contention,
+capture-terhelés és élő jitter ebből nem mérhető. A modellben jó eredmény
+után külön, kifejezetten engedélyezett élő próba szükséges.
+
 A [single scenario](examples/skill_learning_motion.json) egy 0,4 m-es,
 független célt ír elő. A [scenario suite](examples/skill_learning_motion_suite.json)
 ugyanezt vizsgálja négy környezetben: névleges hajtás, csökkent tapadás,

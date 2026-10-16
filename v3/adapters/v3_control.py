@@ -7,8 +7,6 @@ from contextlib import nullcontext
 
 from v3.action_catalog import (
     ACTION_CATALOG,
-    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
-    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
     ActionDescriptor,
 )
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
@@ -220,10 +218,7 @@ class V3ControlInterfaceAdapter:
                     max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
                 )
         if action == "v3.command.follow_person":
-            max_v = params.pop("max_v_mps", FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
-            max_omega = params.pop(
-                "max_omega_rad_s", FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S
-            )
+            envelope = {name: params.pop(name) for name in ("max_v_mps", "max_omega_rad_s") if name in params}
             target = params.pop("target_track_id", None)
             expected_pid = params.pop("expected_runtime_pid", None)
             if target is not None and (type(expected_pid) is not int or expected_pid <= 0):
@@ -241,7 +236,7 @@ class V3ControlInterfaceAdapter:
                         raise RuntimeError("bound follow requires the current capture session without re-arm")
                 bound = {"target_track_id": target} if target is not None else {}
                 return self.controller.followperson(
-                    max_v_mps=max_v, max_omega_rad_s=max_omega, **bound,
+                    **envelope, **bound,
                     capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
                 )
         raise KeyError(action)

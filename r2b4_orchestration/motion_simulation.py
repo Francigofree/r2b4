@@ -116,13 +116,20 @@ class DifferentialDriveExperiment:
     dt_ns = 20_000_000
 
     def __init__(self, scenario, config, composition, writer, directory, start_ns, observe, event,
-                 *, lidar_config=None, lidar_pose_r_scale=1.):
+                 *, lidar_config=None, lidar_pose_r_scale=1., tick_period_ns=20_000_000,
+                 maximum_linear_speed_mps=.5, maximum_angular_speed_rad_s=1.2,
+                 lidar_ray_count=48):
         from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig
         self.scenario, self.config, self.composition, self.writer = scenario, config, composition, writer
+        if type(tick_period_ns) is not int or tick_period_ns <= 0:
+            raise ValueError("tick_period_ns must be positive integer")
+        if type(lidar_ray_count) is not int or not 48 <= lidar_ray_count <= 720:
+            raise ValueError("lidar_ray_count must be an integer in [48, 720]")
+        self.dt_ns, self.lidar_ray_count = tick_period_ns, lidar_ray_count
         self.now_ns, self.start_ns, self.tick = start_ns, start_ns, 0
         self.observe, self.event = observe, event
-        policy = ResidentCommandMailboxConfig(directory / "command.json", maximum_linear_speed_mps=.5,
-                                              maximum_angular_speed_rad_s=1.2)
+        policy = ResidentCommandMailboxConfig(directory / "command.json", maximum_linear_speed_mps=maximum_linear_speed_mps,
+                                              maximum_angular_speed_rad_s=maximum_angular_speed_rad_s)
         self.client = ResidentCommandClient(policy, monotonic_ns=lambda: self.now_ns)
         self.gateway = AtomicResidentCommandGateway(policy, monotonic_ns=lambda: self.now_ns)
         self.random = random.Random(scenario["seed"])
@@ -151,12 +158,20 @@ class DifferentialDriveExperiment:
             raise ValueError("scenario initially intersects the robot footprint")
         self.client.publish_stop("simulation.initial", ttl_ns=200_000_000)
 
+    def _obstacles(self):
+        """Synthetic geometry hook; behavior experiments can add a moving person."""
+        return self.scenario["obstacles"]
+
+    def _additional_samples(self, sample):
+        """Optional synthetic acquisition, before canonical L1/L2 admission."""
+        return ()
+
     def _collision(self):
         room, radius = self.scenario["room"], self.radius
         return (not room["x_min_m"]+radius < self.x < room["x_max_m"]-radius
                 or not room["y_min_m"]+radius < self.y < room["y_max_m"]-radius
                 or any(math.hypot(self.x-row["x_m"], self.y-row["y_m"]) <= radius+row["radius_m"]
-                       for row in self.scenario["obstacles"]))
+                       for row in self._obstacles()))
 
     def _advance(self):
         dt, plant = self.dt_ns / 1e9, self.scenario["plant"]
@@ -184,15 +199,15 @@ class DifferentialDriveExperiment:
 
     def _scan(self, sample):
         room, ranges = self.scenario["room"], []
-        for index in range(48):
-            bearing = index*math.tau/48
+        for index in range(self.lidar_ray_count):
+            bearing = index*math.tau/self.lidar_ray_count
             dx, dy = math.cos(bearing+self.yaw), math.sin(bearing+self.yaw)
             distances = []
             if abs(dx) > 1e-12:
                 distances.append(((room["x_max_m"] if dx > 0 else room["x_min_m"])-self.x)/dx)
             if abs(dy) > 1e-12:
                 distances.append(((room["y_max_m"] if dy > 0 else room["y_min_m"])-self.y)/dy)
-            for row in self.scenario["obstacles"]:
+            for row in self._obstacles():
                 cx, cy = self.x-row["x_m"], self.y-row["y_m"]
                 projection = cx*dx+cy*dy
                 discriminant = projection**2 - (cx**2+cy**2-row["radius_m"]**2)
@@ -274,8 +289,9 @@ class DifferentialDriveExperiment:
                 self.scan_samples, scan = self._scan(lambda kind, **values: DeviceSample("RPLIDAR_C1", kind,
                     self.tick//5+1, self.now_ns, tuple(DataField(key, value) for key, value in values.items())))
             samples.extend(self.scan_samples)
+            samples.extend(self._additional_samples(sample))
             health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in
-                           sorted(set(self.config.critical_device_ids or ()) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
+                           sorted(set(self.config.critical_device_ids or ()) | {row.device_id for row in samples}))
             inputs = self.composition.close_inputs(TickInputs(context, RawDeviceBatch(context, tuple(samples), health),
                 self.gateway.snapshot(context), LifecycleState.ACTIVE if active else LifecycleState.IDLE))
             result = self.composition.run_tick(inputs)
@@ -304,7 +320,7 @@ class DifferentialDriveExperiment:
                     self.first_boundary = {"tick_id": self.tick, "monotonic_ns": self.now_ns,
                         "layer": result.trace.fault_layer or "L12", "reason": result.final_actuation.reason,
                         "left_output": self.output[0], "right_output": self.output[1]}
-            self.observe(ExecutionRecord(inputs, result), scan)
+            self.observe(ExecutionRecord(inputs, result, self.composition.tick_evidence), scan)
             self.tick += 1
             if self._collision() and not self.collision_count:
                 self.collision_count = 1

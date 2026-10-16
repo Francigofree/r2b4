@@ -13,10 +13,6 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from v3.action_catalog import (
-    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
-    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
-)
 from v3.adapters.resident_command import (
     ResidentCommandClient,
     ResidentCommandMailboxConfig,
@@ -252,8 +248,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     followperson.add_argument("--command-id")
     followperson.add_argument("--target-track-id")
-    followperson.add_argument("--max-v-mps", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
-    followperson.add_argument("--max-omega-rad-s", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S)
+    followperson.add_argument("--max-v-mps", type=float, help="default: behavior.followperson.max_v_mps")
+    followperson.add_argument("--max-omega-rad-s", type=float, help="default: behavior.followperson.max_omega_rad_s")
     return parser
 
 
@@ -343,10 +339,11 @@ def main(argv: list[str] | None = None) -> int:
                 ttl_ns=ttl_ns,
             )
         else:
+            profile = resolved.followperson
             publish = lambda logical_id: client.publish_follow_person(
                 logical_id,
-                max_v_mps=args.max_v_mps,
-                max_omega_rad_s=args.max_omega_rad_s,
+                max_v_mps=profile.max_v_mps if args.max_v_mps is None else args.max_v_mps,
+                max_omega_rad_s=profile.max_omega_rad_s if args.max_omega_rad_s is None else args.max_omega_rad_s,
                 ttl_ns=ttl_ns,
                 target_track_id=args.target_track_id,
             )

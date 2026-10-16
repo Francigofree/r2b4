@@ -186,6 +186,19 @@ gyorsulás-RMS, irányváltás és stop-start számlálókat tartalmaz. A `goal_
 azonos célú L5 mission endpoint hibáját és az elérhető L6 progress értéket őrzi,
 legfeljebb hat, source-reference-ekkel ellátott szegmensben.
 
+A `motion_continuity` azonos source-idő szerint elkülöníti az inaktív missiont,
+a nulla L8 kérést, a nulla L9 allowed mozgást, az L12 tiltást és a végső
+motor-outputot. Az időtartam az előző mintában látható állapothoz tartozik,
+a következő minta idejéig; az utolsó mintához nem feltételez további időt.
+Az első 64 összefüggő epizód kezdeti L5/L6/L8/L9/L12 evidence-e és source
+reference-e megmarad. A leghosszabb megfigyelt megállás és a leghosszabb
+aktív mission alatti megállás a csonkolástól függetlenül elérhető.
+Hiányzó mező nem jelent nulla kimenetet; nem nulla végső kimenet inaktív
+mission mellett is látható marad. A megállási intervallumokhoz nem kell
+érvényes lokális pose, de ugyanúgy megszakadnak recording-gap vagy hibás
+source-context esetén. Ezek kimeneti kapcsolatok, nem fizikai beragadás
+vagy automatikus okmegállapítás.
+
 250 ms-nál nagyobb gap, hiányzó vagy nem monoton source idő esetén nincs
 intervallum-integráció. Lokális távolság és response-pár csak explicit
 pose-continuity, megfelelő localization quality, azonos frame és generation

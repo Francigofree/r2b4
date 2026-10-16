@@ -44,7 +44,7 @@ COMMAND_HELP = {
     "git": ("[ARGS...]", "Git a projekt könyvtárában; az argumentumok változatlanul továbbmennek."),
     "pytest": ("[ARGS...]", "Nyers pytest; az argumentumok változatlanul továbbmennek."),
     "test": ("[MODE|TEST_NODE] [PYTEST_ARGS...]", "Célzott tesztek; alapértelmezés: kis robot-contract gate. Hosszú próba: endurance. Módok: r test list."),
-    "tune": ("roomcruise [ARGS...]", "Offline, non-actuating RoomCruise hangolás; artifact: runtime/tunes/."),
+    "tune": ("roomcruise|simulate [ARGS...]", "Offline RoomCruise keresés vagy natív V3/PWM konfigurációs kísérlet; nincs fizikai motor-output."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
     "diag": ("[full|ANALYZER] [EVIDENCE|latest] [--json] [--no-save]", "Verified EVI evidence-ből diagnosztikai adatokat szolgáltat; alap: full/latest, artifact: runtime/diag/."),
@@ -128,12 +128,14 @@ def profile_test(root: Path, argv: list[str]) -> int:
 def tune(root: Path, argv: list[str]) -> int:
     """Run offline tuners without granting robot/runtime authority."""
     if not argv:
-        print("Használat: r tune roomcruise [OPCIÓK]\nRészletes opciók: r tune roomcruise --help")
+        print("Használat: r tune roomcruise|simulate [OPCIÓK]\nRészletes opciók: r tune simulate --help")
         return 0
-    if argv[0] != "roomcruise":
-        raise HostCliError("usage: r tune roomcruise [ARGS...]")
+    modules = {"roomcruise": "tools.tuners.r2b4_roomcruise_tuner",
+               "simulate": "tools.tuners.r2b4_motion_tuner"}
+    if argv[0] not in modules:
+        raise HostCliError("usage: r tune roomcruise|simulate [ARGS...]")
     return _run([
-        sys.executable, "-m", "tools.tuners.r2b4_roomcruise_tuner",
+        sys.executable, "-m", modules[argv[0]],
         "--project-root", str(root), *argv[1:],
     ], root=root)
 

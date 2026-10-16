@@ -137,6 +137,77 @@ def test_sampled_derivatives_count_observed_stop_start_and_direction_changes():
     assert "motion_performance" in build_default_registry().ids()
 
 
+def test_continuity_separates_command_hold_constraint_and_safety_without_pose_authority():
+    context = _context(times=(1., 1.1, 1.2, 1.3, 1.4), x=(0.,) * 5,
+        generations=(0,) * 5, allowed=(.2,) * 5, angular=(0.,) * 5, measured=(0.,) * 5)
+    for view in ("layers/L3", "layers/L5", "layers/L12"):
+        for row in context.bundle.rows[view]:
+            if view == "layers/L3":
+                row.payload["localization_quality"]["heading"] = "LOST"
+            elif view == "layers/L5":
+                row.payload.update(lifecycle="ACTIVE")
+            else:
+                row.payload.update(left_output=0., right_output=0., safety_decision="ALLOW")
+    context.bundle.rows["layers/L8"][0].payload.update(requested_v_mps=0., stop_reason="HOLD")
+    context.bundle.rows["layers/L9"][1].payload["allowed_v_mps"] = 0.
+    context.bundle.rows["layers/L12"][2].payload["safety_decision"] = "STOP"
+    context.bundle.rows["layers/L5"][3].payload.update(lifecycle="IDLE")
+    metrics = motion_performance.run(context, None).metrics
+    continuity = metrics["motion_continuity"]
+    assert continuity["stage_duration_s"] == pytest.approx({
+        "NO_REQUESTED_MOTION": .1, "ZERO_ALLOWED_MOTION": .1,
+        "L12_SAFETY_BLOCKED": .1, "INACTIVE_MISSION": .1})
+    assert metrics["tracking"]["valid_pairs"] == 0
+    first = continuity["episodes"][0]
+    assert first["initial_evidence"]["l8_stop_reason"] == "HOLD"
+    assert first["start_time_ns"] == 1_000_000_000
+    assert first["end_time_ns"] == 1_100_000_000
+    assert first["start_ref"]["tick_id"] == 0 and first["end_ref"]["tick_id"] == 1
+    assert continuity["longest_active_mission_stop"] is not None
+    assert continuity["physical_stall_proven"] is False
+
+
+def test_continuity_uses_canonical_mission_lifecycle_and_groups_rotating_expired_stop_ids():
+    context = _context(times=(1., 1.1, 1.2, 1.3, 1.4), x=(0.,) * 5,
+        generations=(0,) * 5, allowed=(0.,) * 5, angular=(0.,) * 5, measured=(0.,) * 5)
+    for tick, row in enumerate(context.bundle.rows["layers/L5"]):
+        row.payload.update(lifecycle="ACTIVE" if tick == 0 else "IDLE",
+                           mode="EXPLORE" if tick == 0 else "STOP",
+                           mission_id="cruise" if tick == 0 else f"resident.mailbox.expired.{tick}")
+    result = motion_performance.run(context, None).metrics["motion_continuity"]
+    assert result["episode_count"] == 2
+    assert result["longest_active_mission_stop"]["duration_s"] == pytest.approx(.1)
+    inactive = result["longest_observed_stop"]
+    assert inactive["duration_s"] == pytest.approx(.3)
+    assert inactive["stage"] == "INACTIVE_MISSION"
+    assert inactive["mission_id"] == "resident.mailbox.expired.1"
+    assert inactive["last_mission_id"] == "resident.mailbox.expired.3"
+
+
+def test_continuity_does_not_join_stops_across_missing_rows_or_recording_gaps():
+    context = _context(times=(1., 1.1, 1.8, 1.9, 2.), x=(0.,) * 5,
+        generations=(0,) * 5, allowed=(0.,) * 5, angular=(0.,) * 5, measured=(0.,) * 5)
+    metrics = motion_performance.run(context, None).metrics["motion_continuity"]
+    assert metrics["episode_count"] == 2
+    assert metrics["stage_duration_s"]["ZERO_ALLOWED_MOTION"] == pytest.approx(.3)
+    assert metrics["longest_observed_stop"]["duration_s"] == pytest.approx(.2)
+    context.bundle.rows["layers/L12"].pop(3)
+    metrics = motion_performance.run(context, None).metrics["motion_continuity"]
+    assert metrics["stage_duration_s"]["ZERO_ALLOWED_MOTION"] == pytest.approx(.1)
+    assert metrics["longest_active_mission_stop"] is None
+
+
+def test_continuity_keeps_nonzero_final_output_visible_with_inactive_mission():
+    context = _context()
+    for row in context.bundle.rows["layers/L5"]:
+        row.payload["lifecycle"] = "IDLE"
+    for row in context.bundle.rows["layers/L12"]:
+        row.payload.update(left_output=.1, right_output=.1)
+    metrics = motion_performance.run(context, None).metrics["motion_continuity"]
+    assert metrics["stage_duration_s"] == pytest.approx({"FINAL_OUTPUT_ACTIVE": .2})
+    assert metrics["longest_observed_stop"] is None
+
+
 @pytest.mark.parametrize("source_change", ["missing", "wrong_tick", "wrong_time", "boolean_tick", "unknown_ref"])
 def test_compact_context_reference_requires_matching_original_tick_evidence(source_change):
     context = _context()

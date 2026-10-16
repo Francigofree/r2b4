@@ -27,10 +27,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from v3.action_catalog import (
-    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
-    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
-)
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.control_cli import RESIDENT_PROCESS_STATUS_SCHEMA, _read_status
 from v3.contracts import ExplorePreferences
@@ -762,8 +758,8 @@ class OperatorController:
     def followperson(
         self,
         *,
-        max_v_mps: float = FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
-        max_omega_rad_s: float = FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
+        max_v_mps: float | None = None,
+        max_omega_rad_s: float | None = None,
         target_track_id: str | None = None,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
@@ -771,12 +767,14 @@ class OperatorController:
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
-        max_v = self._finite(max_v_mps, "max_v_mps")
-        max_omega = self._finite(max_omega_rad_s, "max_omega_rad_s")
-        if max_v <= 0.0 or max_v > 0.50:
-            raise OperatorError("max_v_mps must be >0 and <=0.50")
-        if max_omega <= 0.0 or max_omega > 1.20:
-            raise OperatorError("max_omega_rad_s must be >0 and <=1.20")
+        from v3.config import ConfigResolver
+        resolved = ConfigResolver.for_project(self.root).resolve()
+        profile = resolved.followperson
+        max_v = profile.max_v_mps if max_v_mps is None else self._finite(max_v_mps, "max_v_mps")
+        max_omega = profile.max_omega_rad_s if max_omega_rad_s is None else self._finite(max_omega_rad_s, "max_omega_rad_s")
+        ingress = resolved.edges.command_ingress
+        if not 0 < max_v <= ingress.maximum_linear_speed_mps or not 0 < max_omega <= ingress.maximum_angular_speed_rad_s:
+            raise OperatorError("FollowPerson envelope exceeds configured ingress acceptance limits")
         command_id = f"operator-followperson-{time.time_ns()}-{os.getpid()}"
         args = [
             self.python, "-m", "v3.control_cli", "followperson", "--command-id", command_id,

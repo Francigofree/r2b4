@@ -263,7 +263,12 @@ def _host_completion(command: str, before: Sequence[str], current: str, root: Pa
         return hint, _filter(sorted(names), current)
     if canonical == "tune":
         if not before:
-            return hint, _filter(["roomcruise"], current)
+            return hint, _filter(["roomcruise", "simulate"], current)
+        if before[0] == "simulate":
+            from tools.tuners.r2b4_motion_tuner import parser as simulation_parser
+            return "r tune simulate [OPCIÓK]", _parser_candidates(
+                simulation_parser(), before[1:], current
+            )
         if before[0] == "roomcruise":
             from tools.tuners.r2b4_roomcruise_tuner import parser as tuner_parser
             return "r tune roomcruise [OPCIÓK]", _parser_candidates(

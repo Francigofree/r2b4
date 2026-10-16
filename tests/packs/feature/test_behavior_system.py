@@ -207,6 +207,37 @@ def test_follow_person_observes_hold_and_lost_using_the_same_lifecycle():
     assert robot.stops == 1
 
 
+@pytest.mark.parametrize("name,mode", [("room_cruise", "EXPLORE"), ("follow_person", "FOLLOW_PERSON")])
+@pytest.mark.parametrize("reason", ["WORLD_STALE", "LOCAL_COSTMAP_STALE"])
+def test_geometry_freshness_hold_preserves_host_command_until_resume_or_deadline(name, mode, reason):
+    clock, robot, system = setup_system()
+    state = system.start(name)
+    robot.observe(state, mode=mode)
+    active = system.step()
+    robot.observe(active, mode=mode, navigation="INVALIDATED", reason=reason)
+    held = system.step()
+    assert held.lifecycle is BehaviorLifecycle.ACTIVE and held.reason == reason
+    assert held.mission_id == active.mission_id
+    assert robot.stops == 0 and len(robot.actions) == 1
+    robot.observe(held, mode=mode)
+    assert system.step().lifecycle is BehaviorLifecycle.ACTIVE
+    # The existing host duration bound still stops a hold that never recovers.
+    clock.now = held.deadline_ns
+    robot.observe(held, mode=mode, navigation="INVALIDATED", reason=reason)
+    assert system.step().reason == "DURATION_LIMIT"
+    assert robot.stops == 1
+
+
+@pytest.mark.parametrize("reason", ["CONTEXT_MISMATCH", "FRAME_MISMATCH", "TARGET_MISSING"])
+def test_invalidated_navigation_contract_or_target_failure_remains_terminal(reason):
+    _, robot, system = setup_system()
+    state = system.start("room_cruise")
+    robot.observe(state, navigation="INVALIDATED", reason=reason)
+    failed = system.step()
+    assert failed.lifecycle is BehaviorLifecycle.FAILED and failed.reason == reason
+    assert robot.stops == 1
+
+
 def test_duration_and_command_acknowledgement_are_bounded():
     clock, robot, system = setup_system()
     state = system.start("room_cruise", {"session_watchdog_s": 2.0}, max_duration_s=100)
