@@ -7,6 +7,7 @@ facts only and intentionally emits no root-cause verdict.
 
 from __future__ import annotations
 
+import sys
 import argparse
 import datetime as dt
 import json

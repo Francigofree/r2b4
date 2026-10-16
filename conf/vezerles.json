@@ -7,9 +7,9 @@
         "explore_local_goal_distance_weight": 0.05,
         "explore_local_goal_max_distance_m": 0.55,
         "explore_local_goal_min_distance_m": 0.40,
-        "local_goal_clearance_weight": 0.35,
-        "local_goal_forward_weight": 0.0,
-        "local_goal_novelty_weight": 0.10
+        "local_goal_clearance_weight": 0.25,
+        "local_goal_forward_weight": 0.05,
+        "local_goal_novelty_weight": 0.30
       }
     }
   },
@@ -218,7 +218,7 @@
   },
   "local_perception": {
     "min_range_m": 0.08,
-    "max_range_m": 5.0,
+    "max_range_m": 6.0,
     "max_points": 96
   },
   "layers": {
@@ -285,7 +285,7 @@
     "world_model": {
       "max_track_age_ns": 500000000,
       "local_costmap_resolution_m": 0.1,
-      "local_costmap_radius_m": 2.5,
+      "local_costmap_radius_m": 6.0,
       "local_costmap_max_cell_age_ns": 750000000,
       "local_costmap_max_cells": 1200,
       "person_tracking_enabled": true,
@@ -419,7 +419,7 @@
       "heading_stop_threshold_rad": 0.7,
       "horizon_ns": 100000000,
       "cross_track_gain": 3.0,
-      "angular_velocity_gain": 0.25,
+      "angular_velocity_gain": 0.0,
       "max_tracking_correction_rad_s": 0.6,
       "max_control_gap_ns": 250000000
     },
