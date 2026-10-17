@@ -43,11 +43,10 @@ def _motion_nonzero(payload: dict[str, object], linear: str, angular: str, eps: 
 
 def _cross_layer_flow(context) -> dict[str, object]:
     eps = 1e-9
-    by_view = {
-        view: {row.message_id: (row.payload if isinstance(row.payload, dict) else {}) for row in context.bundle.iter_view(view)}
-        for view in LAYERS
-    }
-    common = set.intersection(*(set(rows) for rows in by_view.values())) if by_view else set()
+    # EVI iterators have the same (source log time, message identity) order.
+    # Keep one cursor per layer instead of the complete multi-hour run.
+    iterators = {view: iter(context.bundle.iter_view(view)) for view in LAYERS[1:]}
+    cursors = {view: next(iterator, None) for view, iterator in iterators.items()}
     zero_stage = Counter({
         "NO_NONZERO_REQUEST": 0,
         "L9_ALLOWED": 0,
@@ -58,17 +57,35 @@ def _cross_layer_flow(context) -> dict[str, object]:
         "UNCLASSIFIED_MISSING_FIELDS": 0,
     })
     state_chains = Counter()
-    for message_id in sorted(common):
-        l5, l6, l7 = by_view["layers/L5"][message_id], by_view["layers/L6"][message_id], by_view["layers/L7"][message_id]
-        state_chains[(
+    common_count = unretained_states = 0
+    for anchor in context.bundle.iter_view(LAYERS[0]):
+        key = (anchor.log_time_ns, anchor.message_id)
+        rows = {LAYERS[0]: anchor}
+        for view, iterator in iterators.items():
+            current = cursors[view]
+            while current is not None and (current.log_time_ns, current.message_id) < key:
+                current = next(iterator, None)
+            cursors[view] = current
+            if current is not None and (current.log_time_ns, current.message_id) == key:
+                rows[view] = current
+        if len(rows) != len(LAYERS):
+            continue
+        common_count += 1
+        payloads = {view: row.payload if isinstance(row.payload, dict) else {} for view, row in rows.items()}
+        l5, l6, l7 = (payloads[view] for view in LAYERS[:3])
+        state = (
             str(l5.get("lifecycle")), str(l5.get("mode")), str(l6.get("status")),
             str(l7.get("kind")), str(l7.get("selected_source")),
-        )] += 1
-        requested = _motion_nonzero(by_view["layers/L8"][message_id], "requested_v_mps", "requested_omega_rad_s", eps)
-        allowed = _motion_nonzero(by_view["layers/L9"][message_id], "allowed_v_mps", "allowed_omega_rad_s", eps)
-        wheel = _pair_nonzero(by_view["layers/L10"][message_id], "left_mps", "right_mps", eps)
-        normalized = _pair_nonzero(by_view["layers/L11"][message_id], "left_normalized", "right_normalized", eps)
-        output = _pair_nonzero(by_view["layers/L12"][message_id], "left_output", "right_output", eps)
+        )
+        if state in state_chains or len(state_chains) < 128:
+            state_chains[state] += 1
+        else:
+            unretained_states += 1
+        requested = _motion_nonzero(payloads["layers/L8"], "requested_v_mps", "requested_omega_rad_s", eps)
+        allowed = _motion_nonzero(payloads["layers/L9"], "allowed_v_mps", "allowed_omega_rad_s", eps)
+        wheel = _pair_nonzero(payloads["layers/L10"], "left_mps", "right_mps", eps)
+        normalized = _pair_nonzero(payloads["layers/L11"], "left_normalized", "right_normalized", eps)
+        output = _pair_nonzero(payloads["layers/L12"], "left_output", "right_output", eps)
         if None in (requested, allowed, wheel, normalized, output):
             zero_stage["UNCLASSIFIED_MISSING_FIELDS"] += 1
         elif not requested:
@@ -92,9 +109,11 @@ def _cross_layer_flow(context) -> dict[str, object]:
     ]
     return {
         "epsilon": eps,
-        "common_messages_evaluated": len(common),
+        "common_messages_evaluated": common_count,
         "first_observed_zero_stage_counts": dict(zero_stage),
         "top_state_chains": top_state_chains,
+        "state_chain_limit": 128,
+        "unretained_state_rows": unretained_states,
     }
 
 

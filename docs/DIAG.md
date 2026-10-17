@@ -144,6 +144,10 @@ L4-L8 goal/route/candidate/selection/progress/velocity mezők. L8 requested v/om
 eloszlás explicit küszöbökkel: stopped/pivot/forward-turning/forward-straight/
 reverse kategóriák. Ezek mérési kategóriák, nem minősítések.
 
+A navigációs Flight Recorder P0 a mintavételtől független döntési eseményeket
+is összegzi a meglévő `events` view-ból. A felvételi scope, kvóták,
+lineage és a hosszú futások mérési korlátai: [FLIGHT_RECORDER_P0.md](FLIGHT_RECORDER_P0.md).
+
 ### localization
 
 L1-L4 és a localization szempontból releváns materializált sensor view-k

@@ -206,6 +206,7 @@ def run_resident_physical_control(
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
     record_observer_hz: int = CONTROL_CAPTURE_HZ,
+    decision_observer: Callable[[CaptureRecord], None] | None = None,
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
 ) -> ResidentRuntimeReport:
@@ -232,6 +233,8 @@ def run_resident_physical_control(
         raise TypeError("readiness_observer must be callable or None")
     if record_observer is not None and not callable(record_observer):
         raise TypeError("record_observer must be callable or None")
+    if decision_observer is not None and not callable(decision_observer):
+        raise TypeError("decision_observer must be callable or None")
     resolved_record_hz = validate_capture_hz(record_observer_hz)
     record_period_ns = 1_000_000_000 // resolved_record_hz
     if type(timing_enabled) is not bool:
@@ -305,9 +308,13 @@ def run_resident_physical_control(
                 except TickExecutionError as exc:
                     if record_observer is not None and exc.capture_record is not None:
                         record_observer(exc.capture_record)
+                    if decision_observer is not None and exc.capture_record is not None:
+                        decision_observer(exc.capture_record)
                     raise
                 if record_observer is not None:
                     record_observer(record)
+                if decision_observer is not None:
+                    decision_observer(record)
                 if tick_observer is not None:
                     tick_observer(last_result)
                 if readiness_observer is not None:
@@ -338,6 +345,8 @@ def run_resident_physical_control(
             except TickExecutionError as exc:
                 if record_observer is not None and exc.capture_record is not None:
                     record_observer(exc.capture_record)
+                if decision_observer is not None and exc.capture_record is not None:
+                    decision_observer(exc.capture_record)
                 raise
             control_completed_ns = time.perf_counter_ns()
             if timing is not None:
@@ -364,6 +373,8 @@ def run_resident_physical_control(
                     )
 
             observer_started_ns = time.perf_counter_ns()
+            if decision_observer is not None:
+                decision_observer(record)
             force_capture_record = bool(
                 last_result.trace.fault_layer is not None
                 or last_result.final_actuation.safety_decision is SafetyDecision.FAULT
@@ -457,6 +468,7 @@ def run_owned_resident_physical_control(
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
     record_observer_hz: int = CONTROL_CAPTURE_HZ,
+    decision_observer: Callable[[CaptureRecord], None] | None = None,
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
     enable_multirate_inputs: bool = True,
@@ -515,6 +527,7 @@ def run_owned_resident_physical_control(
             readiness_observer=readiness_observer,
             record_observer=record_observer,
             record_observer_hz=record_observer_hz,
+            decision_observer=decision_observer,
             timing_enabled=timing_enabled,
             trajectory_rollout_backend=trajectory_rollout_backend,
         )

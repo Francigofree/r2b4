@@ -218,6 +218,8 @@ class McapCaptureSession:
                  project_root: str | Path | None = None) -> None:
         self.hub = ObservationHub()
         self.config = config or McapCaptureConfig()
+        from v3.capture_navigation import NavigationDecisionRecorder
+        self._navigation_recorder = NavigationDecisionRecorder()
         self.subscription = self.hub.subscribe_reliable(
             "capture", capacity=capacity, required=True,
         )
@@ -266,8 +268,18 @@ class McapCaptureSession:
     def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
         self.worker.trigger(reason, monotonic_ns)
 
+    def observe_decision(self, record: CaptureRecord) -> None:
+        from v3.capture_navigation import NAVIGATION_EVENT_TOPIC
+        if self.hub.has_subscribers(NAVIGATION_EVENT_TOPIC):
+            event = self._navigation_recorder.observe(record)
+            if event is not None:
+                self.hub.publish(event, topic=NAVIGATION_EVENT_TOPIC)
+
     def finalize(self, report: ResidentRuntimeReport | None, *, error: BaseException | None = None) -> Path | None:
         # Called after hardware ownership and every producer have returned.
+        timing = getattr(report, "timing", None)
+        if timing is not None:
+            self.hub.publish({"event_type": "runtime_timing", "timing": timing.as_dict()}, topic="v3.runtime_timing")
         self._public_stop.set()
         if self._public_thread is not None:
             self._public_thread.join(timeout=5.0)
@@ -498,6 +510,8 @@ def run_v3_resident_process(
             hardware_kwargs["open_imu_device"] = open_imu_device
         if capture_session is not None:
             hardware_kwargs["record_observer_hz"] = resolved_capture_hz
+        if isinstance(capture_session, (McapCaptureSession, ProcessMcapCaptureSession)):
+            hardware_kwargs["decision_observer"] = capture_session.observe_decision
         if isinstance(capture_session, McapCaptureSession):
             hub = capture_session.hub
             hardware_kwargs["record_observer"] = capture_session.observe
@@ -658,7 +672,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--command-path", default="runtime/v3_command.json")
     parser.add_argument("--status-path", default="runtime/v3_status.json")
     parser.add_argument("--capture-path", help="new .mcap authority capture path")
-    parser.add_argument("--capture-max-session-records", type=int, default=100_000)
+    parser.add_argument("--capture-max-session-records", type=int, default=1_000_000)
+    parser.add_argument("--capture-max-session-bytes", type=int, default=4 * 1024**3)
     parser.add_argument("--capture-pre-event-ns", type=int, default=5_000_000_000)
     parser.add_argument("--capture-post-event-ns", type=int, default=2_000_000_000)
     parser.add_argument("--capture-ingress-capacity", type=int, default=256)
@@ -759,6 +774,7 @@ def main(argv: list[str] | None = None) -> int:
                     max_raw_lidar_scans=args.capture_max_raw_scans,
                     max_raw_lidar_points_per_scan=args.capture_max_raw_points,
                     max_session_records=args.capture_max_session_records,
+                    max_session_bytes=args.capture_max_session_bytes,
                     mode=args.capture_mode,
                     require_raw_lidar_transport_end=args.capture_hz == CONTROL_CAPTURE_HZ,
                     tick_sample_hz=args.capture_hz,

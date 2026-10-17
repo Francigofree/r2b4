@@ -21,6 +21,7 @@ from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
 from v3.capture_ipc import CaptureCoreExpander
 from v3.capture_behavior import project_behavior_record
+from v3.capture_navigation import NAVIGATION_EVENT_TOPIC, NavigationDecisionRecorder
 from v3.hri_evidence import HriEventFollower
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
@@ -235,6 +236,10 @@ def _capture_sidecar_main(
                 hub.publish(expander.expand_transport(payload), topic="v3.capture_record")
             elif kind == "record":
                 hub.publish(payload, topic="v3.capture_record")
+            elif kind == "navigation_decision":
+                hub.publish(payload, topic=NAVIGATION_EVENT_TOPIC)
+            elif kind == "runtime_timing":
+                hub.publish(payload, topic="v3.runtime_timing")
             elif kind == "raw_lidar":
                 if payload is not None:
                     hub.publish(payload, topic="v3.raw_lidar")
@@ -361,6 +366,7 @@ class ProcessMcapCaptureSession:
         "_transport_capacity",
         "_worker_cpus",
         "_expect_raw_lidar_end",
+        "_navigation_recorder",
     )
 
     def __init__(
@@ -400,6 +406,7 @@ class ProcessMcapCaptureSession:
         self._configuration = dict(configuration)
         self._metadata = dict(metadata or {})
         self._config = config or McapCaptureConfig()
+        self._navigation_recorder = NavigationDecisionRecorder()
         self._transport_capacity = max(_CAPTURE_TRANSPORT_MIN_CAPACITY, capacity * 2)
         self._data_queue = context.Queue(maxsize=self._transport_capacity)
         self._raw_lidar_queue = (
@@ -507,6 +514,11 @@ class ProcessMcapCaptureSession:
         if self._config.sensor_debug and snapshot is not None:
             self._enqueue("raw_lidar", snapshot)
 
+    def observe_decision(self, record: CaptureRecord) -> None:
+        event = self._navigation_recorder.observe(record)
+        if event is not None:
+            self._enqueue("navigation_decision", event)
+
     def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
         if not self._started:
             self.start()
@@ -518,6 +530,11 @@ class ProcessMcapCaptureSession:
     def finalize(self, report: object | None, *, error: BaseException | None = None) -> Path | None:
         if not self._started:
             self.start()
+        timing = getattr(report, "timing", None)
+        if timing is not None:
+            # The control loop has stopped. Preserve its bounded aggregate;
+            # formatting and transport here cannot compete with a live tick.
+            self._enqueue("runtime_timing", {"event_type": "runtime_timing", "timing": timing.as_dict()})
         status = "PASS" if error is None and getattr(report, "status", 1) == 0 else "FAULT"
         self._control_queue.put(
             ("finish", status, True, self._enqueued_count, self._drop_count),

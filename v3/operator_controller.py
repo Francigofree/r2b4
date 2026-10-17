@@ -1033,7 +1033,6 @@ class OperatorController:
             command += [
                 "--capture-path", self._display_path(capture),
                 "--capture-mode", "append_only",
-                "--capture-max-session-records", "2147483647",
             ]
 
         proc = subprocess.Popen(command, cwd=self.root)

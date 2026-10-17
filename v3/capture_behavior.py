@@ -47,8 +47,10 @@ def _layer_fields(layer: str, value: object) -> BehaviorFields:
         return _fields(value, omit=("accepted",), extra=(("accepted_count", len(value.accepted)),))
     if layer == "L4":
         costmap = value.local_costmap
-        return _fields(value, omit=("obstacle_tracks", "local_costmap"), extra=(
+        return _fields(value, omit=("obstacle_tracks", "local_costmap", "global_visited_cells"), extra=(
             ("obstacle_track_count", len(value.obstacle_tracks)),
+            ("global_visited_cell_count", len(value.global_visited_cells)),
+            ("latest_global_visit", value.global_visited_cells[-1] if value.global_visited_cells else None),
             ("local_costmap", None if costmap is None else _fields(
                 costmap, omit=("occupied_cells",),
                 extra=(("occupied_cell_count", len(costmap.occupied_cells)),))),
@@ -108,8 +110,15 @@ def project_behavior_record(record: CaptureRecord) -> BehaviorCaptureRecord:
 
 
 def _encode_fields(value: BehaviorFields) -> dict[str, object]:
+    def encode(item: object) -> object:
+        if isinstance(item, BehaviorFields):
+            return _encode_fields(item)
+        if isinstance(item, tuple):
+            return [encode(child) for child in item]
+        return encode_value(item)
+
     return {
-        name: _encode_fields(item) if isinstance(item, BehaviorFields) else encode_value(item)
+        name: encode(item)
         for name, item in value.values
     }
 

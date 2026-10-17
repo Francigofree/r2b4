@@ -30,6 +30,9 @@ from typing import Mapping
 from .capture_compaction import compact_checkpoint_row, compact_tick_row
 from .capture_rate import CONTROL_CAPTURE_HZ, validate_capture_hz
 from .capture_behavior import BehaviorCaptureRecord, encode_behavior_record, project_behavior_record
+from .capture_navigation import (
+    NAVIGATION_EVENT_TOPIC, NavigationDecisionEvent, encode_navigation_event,
+)
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .hri_evidence import HRI_EVENT_TOPIC
 from .public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
@@ -64,6 +67,10 @@ RUNTIME_TOPIC = "/r2b4/runtime"
 # R2B4_HRI_P0_V1
 
 TERMINAL_STATUSES = frozenset(("PASS", "FAIL", "FAULT"))
+_MAX_TICK_GAP_EXAMPLES = 64
+_SESSION_FINALIZATION_RESERVE_BYTES = 64 * 1024
+# Message, per-message index and worst-case one-message chunk/summary framing.
+_SESSION_MESSAGE_OVERHEAD_BYTES = 512
 
 
 class CaptureState(str, Enum):
@@ -87,7 +94,8 @@ class McapCaptureConfig:
     chunk_target_bytes: int = 1 * 1024 * 1024
     checkpoint_context_ns: int = REPLAY_STATE_CHECKPOINT_INTERVAL_NS
     mode: str = "triggered"
-    max_session_records: int = 100_000
+    max_session_records: int = 1_000_000
+    max_session_bytes: int = 4 * 1024 * 1024 * 1024
     max_record_bytes: int = 16 * 1024 * 1024
     max_referenced_revisions_per_tick: int = 16
     max_raw_lidar_missing_fraction: float = 0.05
@@ -117,6 +125,7 @@ class McapCaptureConfig:
             "max_raw_lidar_points_per_scan",
             "chunk_target_bytes",
             "max_session_records",
+            "max_session_bytes",
             "max_record_bytes",
             "max_referenced_revisions_per_tick",
         ):
@@ -182,6 +191,31 @@ class CaptureResult:
     raw_evidence_complete: bool
 
 
+class _BoundedCaptureFile:
+    """Enforce the disk quota even if final metadata outgrows its reserve."""
+
+    def __init__(self, handle, max_bytes: int) -> None:
+        self._handle = handle
+        self._max_bytes = max_bytes
+
+    def write(self, data: bytes) -> int:
+        if self.tell() + len(data) > self._max_bytes:
+            raise CaptureEncodingError("SESSION_BYTE_LIMIT: MCAP disk quota exhausted")
+        return self._handle.write(data)
+
+    def tell(self) -> int:
+        return self._handle.tell()
+
+    def flush(self) -> None:
+        self._handle.flush()
+
+    def fileno(self) -> int:
+        return self._handle.fileno()
+
+    def close(self) -> None:
+        self._handle.close()
+
+
 class McapCaptureConsumer:
     """Bounded, threaded MCAP capture consumer for ObservationHub.
 
@@ -199,6 +233,11 @@ class McapCaptureConsumer:
         "_subscription",
         "_control",
         "_seen_records",
+        "_session_records_dropped",
+        "_last_dropped_hub_sequence",
+        "_first_dropped_ns",
+        "_last_dropped_ns",
+        "_session_bytes_upper_bound",
         "_started_ns",
         "_write_duration_ns",
         "_cpu_started_ns",
@@ -224,6 +263,8 @@ class McapCaptureConsumer:
         "_first_seen_ns",
         "_last_seen_ns",
         "_captured_tick_gaps",
+        "_captured_tick_gap_count",
+        "_sampled_tick_skip_count",
         "_captured_last_tick_id",
         "_trigger_ns",
         "_trigger_reason",
@@ -292,6 +333,11 @@ class McapCaptureConsumer:
         self._subscription = subscription
         self._control = threading.Event()
         self._seen_records = 0
+        self._session_records_dropped = 0
+        self._last_dropped_hub_sequence: int | None = None
+        self._first_dropped_ns: int | None = None
+        self._last_dropped_ns: int | None = None
+        self._session_bytes_upper_bound = 0
         self._started_ns = 0
         self._write_duration_ns = 0
         self._cpu_started_ns = 0
@@ -325,6 +371,8 @@ class McapCaptureConsumer:
         self._first_seen_ns: int | None = None
         self._last_seen_ns: int | None = None
         self._captured_tick_gaps: list[tuple[int, int]] = []
+        self._captured_tick_gap_count = 0
+        self._sampled_tick_skip_count = 0
         self._captured_last_tick_id: int | None = None
 
         self._trigger_ns: int | None = None
@@ -482,10 +530,16 @@ class McapCaptureConsumer:
 
     def _consume_observation(self, item: ObservationFrame) -> None:
         self._seen_records += 1
+        # Transport loss remains authoritative even after the storage quota is
+        # exhausted: final drain must not hide its explicit end/loss markers.
+        self._consume_transport_integrity(item)
         if self._seen_records > self._config.max_session_records:
             self._integrity_reasons.add("SESSION_RECORD_LIMIT")
+            self._record_session_drop(item.sequence, item.published_monotonic_ns)
             return
-        self._consume_transport_integrity(item)
+        if "SESSION_BYTE_LIMIT" in self._integrity_reasons:
+            self._record_session_drop(item.sequence, item.published_monotonic_ns)
+            return
         encoded = self._encode_observation(item)
         for record in encoded:
             if len(record.payload) > self._config.max_record_bytes:
@@ -526,7 +580,23 @@ class McapCaptureConsumer:
 
         if _payload_triggers_capture(item.payload):
             self._fault_observed = True
-            self._activate_trigger(self._last_seen_ns, _payload_trigger_reason(item.payload))
+            trigger_time = (item.payload.context.monotonic_ns
+                            if isinstance(item.payload, NavigationDecisionEvent)
+                            else self._last_seen_ns)
+            self._activate_trigger(
+                trigger_time, _payload_trigger_reason(item.payload),
+                completed_event=isinstance(item.payload, NavigationDecisionEvent),
+            )
+
+    def _record_session_drop(self, hub_sequence: int, monotonic_ns: int) -> None:
+        # A sensor-debug observation may encode both a tick and a checkpoint.
+        # Count that source observation only once if both records are dropped.
+        if hub_sequence != self._last_dropped_hub_sequence:
+            self._session_records_dropped += 1
+            self._last_dropped_hub_sequence = hub_sequence
+        if self._first_dropped_ns is None:
+            self._first_dropped_ns = monotonic_ns
+        self._last_dropped_ns = monotonic_ns
 
     def _consume_transport_integrity(self, item: ObservationFrame) -> None:
         payload = item.payload
@@ -690,10 +760,14 @@ class McapCaptureConsumer:
                 ),
             )
 
-        event = encode_value(payload)
+        event = (encode_navigation_event(payload) if isinstance(payload, NavigationDecisionEvent)
+                 else encode_value(payload))
         event_time = item.published_monotonic_ns
         event_sequence = item.sequence
-        if item.topic == PUBLIC_RUNTIME_EVENT_TOPIC and isinstance(payload, Mapping):
+        if item.topic == NAVIGATION_EVENT_TOPIC and isinstance(payload, NavigationDecisionEvent):
+            event_time = payload.context.monotonic_ns
+            event_sequence = payload.event_sequence
+        elif item.topic == PUBLIC_RUNTIME_EVENT_TOPIC and isinstance(payload, Mapping):
             event_time = _non_negative_int(payload.get("publication_time_ns"), "public event publication_time_ns")
             event_sequence = _non_negative_int(payload.get("event_sequence"), "public event sequence")
         elif item.topic == HRI_EVENT_TOPIC and isinstance(payload, Mapping):
@@ -785,7 +859,7 @@ class McapCaptureConsumer:
                 self._core_capacity_eviction_count += 1
                 self._latest_capacity_eviction_ns = item.monotonic_ns
 
-    def _activate_trigger(self, requested_ns: object, reason: str) -> None:
+    def _activate_trigger(self, requested_ns: object, reason: str, *, completed_event: bool = False) -> None:
         if self._trigger_ns is not None or self._config.mode == "append_only":
             return
         if self._ring_tick_count == 0:
@@ -794,7 +868,8 @@ class McapCaptureConsumer:
             return
         if requested_ns is None:
             requested_ns = self._last_seen_ns
-        if requested_ns is not None and self._last_seen_ns is not None and requested_ns > self._last_seen_ns:
+        if (not completed_event and requested_ns is not None
+                and self._last_seen_ns is not None and requested_ns > self._last_seen_ns):
             with self._lock:
                 self._emergency_trigger = (requested_ns, reason)
             return
@@ -864,7 +939,11 @@ class McapCaptureConsumer:
         self._partial_path = self._output_path.with_name(
             f".{self._output_path.name}.{os.getpid()}.{time.monotonic_ns()}.partial"
         )
-        handle = self._partial_path.open("xb")
+        handle = _BoundedCaptureFile(
+            self._partial_path.open("xb"), self._config.max_session_bytes)
+        # Keep the file available to exception cleanup even if opening metadata
+        # itself cannot fit in a deliberately small quota.
+        self._handle = handle
         os.chmod(self._partial_path, 0o600)
         writer = StdlibMcapWriter(
             handle,
@@ -904,10 +983,12 @@ class McapCaptureConsumer:
                 "tick_sample_hz": str(self._config.tick_sample_hz),
                 "observation_scope": "sensor_debug" if self._config.sensor_debug else "system_behavior",
                 "raw_evidence_requested": str(self._config.sensor_debug).lower(),
+                "navigation_event_schema": "R2B4_NAVIGATION_DECISION_V1",
             },
         )
         self._writer = writer
         self._handle = handle
+        self._session_bytes_upper_bound = writer.tell()
         self._write_message(
             RUNTIME_TOPIC,
             first_time_ns,
@@ -927,16 +1008,31 @@ class McapCaptureConsumer:
         if self._writer is None:
             raise RuntimeError("MCAP writer is not open")
 
+        if (
+            self._session_bytes_upper_bound + len(item.payload) + _SESSION_MESSAGE_OVERHEAD_BYTES
+            > self._config.max_session_bytes - _SESSION_FINALIZATION_RESERVE_BYTES
+        ):
+            self._integrity_reasons.add("SESSION_BYTE_LIMIT")
+            self._record_session_drop(
+                item.hub_sequence,
+                item.monotonic_ns if item.published_monotonic_ns is None
+                else item.published_monotonic_ns)
+            return
+
         if item.mcap_topic == TICK_TOPIC:
             tick_id = int(item.tick_id or 0)
             previous = self._captured_last_tick_id
             if previous is not None and tick_id <= previous:
-                self._captured_tick_gaps.append((previous, tick_id))
+                self._record_tick_gap(previous, tick_id)
                 self._integrity_reasons.add("CAPTURED_TICK_SEQUENCE_NON_MONOTONIC")
             elif previous is not None and tick_id != previous + 1:
-                self._captured_tick_gaps.append((previous, tick_id))
                 if self._config.tick_sample_hz == CONTROL_CAPTURE_HZ:
+                    self._record_tick_gap(previous, tick_id)
                     self._integrity_reasons.add("CAPTURED_TICK_SEQUENCE_GAP")
+                else:
+                    # Sampling is time based and may include forced fault ticks.
+                    # Missing control IDs cannot diagnose delivery loss here.
+                    self._sampled_tick_skip_count += tick_id - previous - 1
             self._captured_last_tick_id = tick_id
             self._captured_tick_count += 1
             self._referenced_raw_revisions.update(item.referenced_lidar_revisions)
@@ -962,6 +1058,11 @@ class McapCaptureConsumer:
             published_monotonic_ns=item.published_monotonic_ns,
         )
 
+    def _record_tick_gap(self, previous: int, current: int) -> None:
+        self._captured_tick_gap_count += 1
+        if len(self._captured_tick_gaps) < _MAX_TICK_GAP_EXAMPLES:
+            self._captured_tick_gaps.append((previous, current))
+
     def _write_message(
         self,
         topic: str,
@@ -984,6 +1085,7 @@ class McapCaptureConsumer:
             sequence=sequence,
             data=payload,
         )
+        self._session_bytes_upper_bound += len(payload) + _SESSION_MESSAGE_OVERHEAD_BYTES
         self._write_duration_ns += time.monotonic_ns() - write_started
         if include_in_digest:
             topic_bytes = topic.encode("utf-8")
@@ -1165,6 +1267,16 @@ class McapCaptureConsumer:
                 {"after": before, "before": after}
                 for before, after in self._captured_tick_gaps
             ],
+            "captured_tick_sequence_gap_count": self._captured_tick_gap_count,
+            "captured_tick_sequence_gap_details_truncated": (
+                self._captured_tick_gap_count > len(self._captured_tick_gaps)),
+            "sampled_tick_skip_count": self._sampled_tick_skip_count,
+            "session_record_limit": self._config.max_session_records,
+            "session_byte_limit": self._config.max_session_bytes,
+            "session_records_seen": self._seen_records,
+            "session_records_dropped": self._session_records_dropped,
+            "first_dropped_monotonic_ns": self._first_dropped_ns,
+            "last_dropped_monotonic_ns": self._last_dropped_ns,
             "capacity_eviction_count": self._capacity_eviction_count,
             "core_capacity_eviction_count": self._core_capacity_eviction_count,
             "raw_capacity_eviction_count": self._raw_capacity_eviction_count,
@@ -1273,7 +1385,7 @@ class McapCaptureConsumer:
             message_stream_sha256=digest,
             ingress_drop_count=ingress_drops,
             hub_sequence_gap_count=0,
-            tick_sequence_gap_count=len(self._captured_tick_gaps),
+            tick_sequence_gap_count=self._captured_tick_gap_count,
             raw_lidar_missing_revisions=missing_raw,
             replay_complete=replay_complete,
             raw_evidence_complete=raw_evidence_complete,
@@ -1289,20 +1401,28 @@ def conservative_ram_budget(config: McapCaptureConfig, *, mailbox_capacity: int,
     graph, including checkpoints. Encoded JSON length is not such a bound.
     These assumptions cannot be enforced by the data-blind producer. This is
     not an RSS guarantee: interpreter, layers, drivers and allocator are extra.
-    Session records bound indexes and diagnostic revision/gap sets in both modes.
+    Session byte and record quotas bound writer indexes. Sampled capture has
+    only bounded gap examples; sensor-debug additionally retains revision sets.
     """
     if min(mailbox_capacity, max_retained_observation_bytes, max_encoding_working_bytes) <= 0:
         raise ValueError("RAM budget assumptions must be positive")
     chunk = max(config.chunk_target_bytes, config.max_record_bytes + 64)
+    # Two adjacent flushed chunks contain at least one chunk target of data;
+    # a large incoming message can leave the preceding chunk almost empty.
+    max_chunks = min(
+        2 * config.max_session_records + 4,
+        2 * (config.max_session_bytes // config.chunk_target_bytes + 2),
+    )
     parts = {
         "mailbox_and_active_payloads": (mailbox_capacity + 1) * (max_retained_observation_bytes + 512),
         "ring_with_entry_overhead": config.max_byte_capacity + 2 * (config.max_record_bytes + 1024),
         "encoder_working_graph_and_json": max_encoding_working_bytes + 8 * config.max_record_bytes,
         "writer_chunk_copies_and_message_indexes": 8 * chunk + (chunk // 31 + 1) * 256,
-        # Worst case every observation yields tick + checkpoint and a separate chunk.
-        # Also charge all bounded referenced revision sets and failure details.
-        "session_indexes_and_diagnostics": config.max_session_records * (
-            8192 + 128 * config.max_referenced_revisions_per_tick),
+        "session_indexes_and_diagnostics": (
+            max_chunks * 8192 + _MAX_TICK_GAP_EXAMPLES * 256
+            + (config.max_session_records * (
+                512 + 128 * config.max_referenced_revisions_per_tick)
+                if config.sensor_debug else 0)),
     }
     parts["total_bytes"] = sum(parts.values())
     return parts
@@ -1396,6 +1516,8 @@ def _looks_like_checkpoint_topic(topic: str) -> bool:
 
 
 def _payload_triggers_capture(payload: object) -> bool:
+    if isinstance(payload, NavigationDecisionEvent):
+        return payload.snapshot.trigger_reason is not None
     if isinstance(payload, BehaviorCaptureRecord):
         return payload.trigger_reason is not None
     if isinstance(payload, Mapping):
@@ -1412,6 +1534,8 @@ def _payload_triggers_capture(payload: object) -> bool:
 
 
 def _payload_trigger_reason(payload: object) -> str:
+    if isinstance(payload, NavigationDecisionEvent):
+        return payload.snapshot.trigger_reason or "CAPTURE_TRIGGER"
     if isinstance(payload, BehaviorCaptureRecord):
         return payload.trigger_reason or "CAPTURE_TRIGGER"
     if isinstance(payload, Mapping):
