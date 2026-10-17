@@ -38,7 +38,9 @@ _POINT_CLEARANCE_EPSILON_M = 1e-9
 # This is footprint-to-obstacle clearance, not LiDAR-origin range. 0.12 m
 # corresponds approximately to the production L12 front envelope after robot
 # half-length/cell radius are accounted for. It gives L6 room to replan before
-# L12 has to reject the same forward command repeatedly.
+# L12 has to reject the same forward approach repeatedly. A nearby side/rear
+# obstacle with unchanged or increasing clearance must not block translation
+# along an otherwise collision-free corridor.
 _MOTION_EPSILON = 1e-9
 _FAILED_LOCAL_GOAL_CAPACITY = 4
 
@@ -3192,6 +3194,7 @@ def _evaluate_rollout_candidate(
     if (
         v_mps > _MOTION_EPSILON
         and min_clearance <= config.local_escape_trigger_clearance_m
+        and min_clearance + _POINT_CLEARANCE_EPSILON_M < start_clearance_m
     ):
         collision = True
 
@@ -3460,6 +3463,7 @@ def _escape_unlock_potential(
             not blocked
             and probe_v_mps > _MOTION_EPSILON
             and min_clearance_m <= config.local_escape_trigger_clearance_m
+            and min_clearance_m + _POINT_CLEARANCE_EPSILON_M < start_clearance_m
         ):
             blocked = True
         if blocked:
