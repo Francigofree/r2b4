@@ -15,6 +15,114 @@ from v3.mcap_reader import McapReadError
 pytestmark = [pytest.mark.contract, pytest.mark.control]
 
 
+@pytest.fixture
+def roomcruise_ack_status(tmp_path, monkeypatch):
+    """A live host snapshot; no command producer or hardware is started."""
+    controller = OperatorController(tmp_path)
+    mission_id = "mission-roomcruise-test"
+    status = {
+        "schema": "R2B4_V3_RESIDENT_PROCESS_STATUS_V1",
+        "state": "RUNNING", "tick_id": 2, "monotonic_ns": time.monotonic_ns(),
+        "fault_layer": None, "safety_decision": "STOP", "safety_reason": "NOT_ACTIVE",
+        "enabled": False, "left_output": 0.0, "right_output": 0.0,
+        "mission": {"mission_id": mission_id, "mode": "EXPLORE", "lifecycle": "ACTIVE"},
+        "navigation": {"mission_id": mission_id, "status": "IDLE", "reason": "NO_PATH_HOLD"},
+    }
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: 123)
+    monkeypatch.setattr(controller, "_pid_matches", lambda *args: True)
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: status)
+    monkeypatch.setattr(controller, "_transition_sleep", lambda seconds: None)
+    return controller, status
+
+
+@pytest.mark.parametrize("safety", ["STOP", "ALLOW"])
+@pytest.mark.parametrize("navigation,reason", [
+    ("PENDING", "PLANNER_PENDING"),
+    ("IDLE", "PLANNER_GEOMETRY_HOLD"),
+    ("IDLE", "NO_PATH_HOLD"),
+])
+def test_roomcruise_acknowledges_active_mission_without_motor_motion(
+    roomcruise_ack_status, safety, navigation, reason,
+):
+    controller, status = roomcruise_ack_status
+    status.update(safety_decision=safety, enabled=safety == "ALLOW")
+    status["navigation"].update(status=navigation, reason=reason)
+
+    assert controller._wait_allow(
+        456, 1, "roomcruise", mission_command_id="roomcruise-test", mission_mode="EXPLORE",
+    )
+    assert status["left_output"] == status["right_output"] == 0.0
+
+
+@pytest.mark.parametrize("boundary,patch", [
+    ("mission", {"mission_id": "mission-another-command"}),
+    ("navigation", {"mission_id": "mission-another-command"}),
+    ("mission", {"mode": "STOP"}),
+    ("mission", {"lifecycle": "IDLE"}),
+    ("mission", {"lifecycle": "CANCELLED"}),
+    ("mission", {"lifecycle": "FAILED"}),
+    ("status", {"fault_layer": "L6"}),
+    ("status", {"safety_decision": "FAULT"}),
+    ("status", {"state": "STOPPED"}),
+    ("status", {"tick_id": 1}),
+    ("status", {"monotonic_ns": 1}),
+])
+def test_roomcruise_ack_rejects_unrelated_inactive_faulted_or_old_status(
+    roomcruise_ack_status, boundary, patch,
+):
+    controller, status = roomcruise_ack_status
+    # Unrelated physical motion must not acknowledge this RoomCruise request.
+    status.update(safety_decision="ALLOW", enabled=True, left_output=0.2, right_output=0.2)
+    (status if boundary == "status" else status[boundary]).update(patch)
+
+    assert not controller._wait_allow(
+        456, 1, "roomcruise", mission_command_id="roomcruise-test", mission_mode="EXPLORE",
+    )
+
+
+def test_roomcruise_start_uses_mission_acknowledgement(roomcruise_ack_status, monkeypatch):
+    from v3.config import ConfigResolver
+    from v3.contracts import ExplorePreferences
+
+    resolved = SimpleNamespace(
+        roomcruise=SimpleNamespace(
+            max_v_mps=0.2, max_omega_rad_s=0.6,
+            preferences=ExplorePreferences(
+                local_goal_novelty_weight=1.0, local_goal_clearance_weight=1.0,
+                local_goal_forward_weight=1.0, explore_local_goal_min_distance_m=0.3,
+                explore_local_goal_max_distance_m=0.6, explore_local_goal_distance_weight=1.0,
+            ),
+        ),
+        edges=SimpleNamespace(command_ingress=SimpleNamespace(
+            maximum_linear_speed_mps=0.5, maximum_angular_speed_rad_s=1.2,
+        )),
+    )
+    monkeypatch.setattr(ConfigResolver, "for_project", lambda root: SimpleNamespace(resolve=lambda: resolved))
+    controller, status = roomcruise_ack_status
+    requests, stops = [], []
+    monkeypatch.setattr(controller, "ensure_runtime", lambda *args: 123)
+    monkeypatch.setattr(controller, "stop", lambda **kwargs: stops.append(kwargs))
+    monkeypatch.setattr(controller, "current_capture_mode", lambda: "nincs")
+
+    def spawn_control(command):
+        requests.append(command)
+        command_id = command[command.index("--command-id") + 1]
+        status.update(tick_id=3, monotonic_ns=time.monotonic_ns())
+        status["mission"]["mission_id"] = f"mission-{command_id}"
+        status["navigation"]["mission_id"] = f"mission-{command_id}"
+        return 456
+
+    monkeypatch.setattr(controller, "_spawn_control_process", spawn_control)
+    handle = controller.roomcruise(capture=False, capture_mode="nincs")
+    command = requests[0]
+    assert command[3] == "explore"
+    assert command[command.index("--command-id") + 1] == handle.command_id
+    assert handle.pid == 456 and handle.label == "roomcruise"
+    assert status["safety_decision"] == "STOP"
+    assert status["left_output"] == status["right_output"] == 0.0
+    assert stops == [{}]  # Initial preemption only; accepted HOLD is not cancelled.
+
+
 def test_stop_cleanup_preserves_concurrent_stop_and_passive_clients(tmp_path, monkeypatch):
     import v3.operator_controller as module
 

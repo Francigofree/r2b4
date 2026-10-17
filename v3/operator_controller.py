@@ -725,6 +725,7 @@ class OperatorController:
             args.extend(["--" + field.key.replace("_", "-"), str(field.value)])
         pid, mode = self._start_motion(
             "roomcruise", capture, capture_mode, args,
+            mission_command_id=command_id, mission_mode="EXPLORE",
             capture_hz=capture_hz, session_owner_pid=session_owner_pid,
             session_watchdog_s=session_watchdog_s,
         )
@@ -1077,6 +1078,8 @@ class OperatorController:
         capture_hz: int = DEFAULT_CAPTURE_HZ,
         require_real_motion: bool = True,
         navigate_command_id: str | None = None,
+        mission_command_id: str | None = None,
+        mission_mode: str | None = None,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
         preparation: MotionPreparation | None = None,
@@ -1131,6 +1134,11 @@ class OperatorController:
                     pid, baseline, label, require_real_motion=False,
                     navigate_command_id=navigate_command_id,
                 )
+            elif mission_command_id is not None:
+                accepted = self._wait_allow(
+                    pid, baseline, label, require_real_motion=False,
+                    mission_command_id=mission_command_id, mission_mode=mission_mode,
+                )
             elif require_real_motion:
                 accepted = self._wait_allow(pid, baseline, label)
             else:
@@ -1144,6 +1152,8 @@ class OperatorController:
         self._emit("info", f"{label}: STARTED")
         if navigate_command_id is not None:
             self._emit("info", "command: NAVIGATE mission acknowledged")
+        elif mission_command_id is not None:
+            self._emit("info", f"command: {mission_mode} mission acknowledged")
         elif require_real_motion:
             self._emit("info", "motor: ALLOW confirmed")
         else:
@@ -1206,6 +1216,8 @@ class OperatorController:
         *,
         require_real_motion: bool = True,
         navigate_command_id: str | None = None,
+        mission_command_id: str | None = None,
+        mission_mode: str | None = None,
     ) -> bool:
         last: Mapping[str, object] | None = None
         for _ in range(50):
@@ -1237,6 +1249,30 @@ class OperatorController:
                         return True
                     self._transition_sleep(0.05)
                     continue
+                if mission_command_id is not None:
+                    # An autonomous mission is accepted before it can produce
+                    # motion: planner/localization/path holds are valid states.
+                    # Bind the acknowledgement to this ACTIVE command rather
+                    # than another mission's ALLOW or nonzero motor output.
+                    mission = last.get("mission")
+                    navigation = last.get("navigation")
+                    if (
+                        isinstance(mission, Mapping)
+                        and isinstance(navigation, Mapping)
+                        and mission.get("mission_id") == f"mission-{mission_command_id}"
+                        and mission.get("mode") == mission_mode
+                        and mission.get("lifecycle") == "ACTIVE"
+                        and navigation.get("mission_id") == mission.get("mission_id")
+                    ):
+                        if not self._status_has_real_allow(last):
+                            self._emit(
+                                "info", f"{label}: mission accepted, awaiting motion; "
+                                f"navigation={navigation.get('status')}/{navigation.get('reason')} "
+                                f"goal={navigation.get('goal_selection_reason')}",
+                            )
+                        return True
+                    self._transition_sleep(0.05)
+                    continue
                 allowed = (
                     self._status_has_real_allow(last)
                     if require_real_motion
@@ -1249,7 +1285,7 @@ class OperatorController:
         return False
 
     def _failure_report(self, label: str, status: Mapping[str, object] | None) -> None:
-        self._emit("error", f"{label} did not reach motor ALLOW")
+        self._emit("error", f"{label}: runtime acknowledgement condition was not met")
         if status is not None:
             self._emit(
                 "error",
@@ -1257,6 +1293,15 @@ class OperatorController:
                 f"fault={status.get('fault_layer')} safety={status.get('safety_decision')}/{status.get('safety_reason')} "
                 f"motors={status.get('left_output')}/{status.get('right_output')}",
             )
+            mission = status.get("mission")
+            navigation = status.get("navigation")
+            if isinstance(mission, Mapping) and isinstance(navigation, Mapping):
+                self._emit(
+                    "error", f"mission={mission.get('mission_id')} "
+                    f"mode={mission.get('mode')} lifecycle={mission.get('lifecycle')} "
+                    f"navigation={navigation.get('status')}/{navigation.get('reason')} "
+                    f"goal={navigation.get('goal_selection_reason')}",
+                )
 
     def _proba_owner(self) -> str | None:
         try:
