@@ -1,0 +1,3400 @@
+{
+  "admission": {
+    "analyzer_id": "motion_performance",
+    "applicable": true,
+    "checked": {
+      "missing_topics": [],
+      "missing_views": [],
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "layers/L5",
+        "layers/L6",
+        "ticks"
+      ],
+      "required_topics": [
+        "/r2b4/tick"
+      ],
+      "required_views": [
+        "layers/L3",
+        "layers/L8",
+        "layers/L9",
+        "layers/L11",
+        "layers/L12"
+      ],
+      "verification_status": "PASS"
+    },
+    "coverage": {
+      "optional": "COMPLETE",
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "layers/L5",
+        "layers/L6",
+        "ticks"
+      ],
+      "required": "COMPLETE"
+    },
+    "reasons": [],
+    "state": "APPLICABLE"
+  },
+  "analyzer_id": "motion_performance",
+  "contract": {
+    "analyzer_id": "motion_performance",
+    "contract_version": 3,
+    "description": "Time-linked sampled AMR response, continuity, motion quality and goal progress measurements.",
+    "optional_views": [
+      "layers/L5",
+      "layers/L6",
+      "ticks"
+    ],
+    "required_topics": [
+      "/r2b4/tick"
+    ],
+    "required_views": [
+      "layers/L3",
+      "layers/L8",
+      "layers/L9",
+      "layers/L11",
+      "layers/L12"
+    ]
+  },
+  "coverage": {
+    "domain": {
+      "physical_ground_truth": "NOT_PRESENT",
+      "response_pairs": "PRESENT"
+    },
+    "optional": "COMPLETE",
+    "optional_views_missing": [],
+    "optional_views_present": [
+      "layers/L5",
+      "layers/L6",
+      "ticks"
+    ],
+    "required": "COMPLETE"
+  },
+  "episodes": [],
+  "evidence": {
+    "compiler_git_commit": "d6c4a06e5325a020f28dd6b9aa0c7980a9084c96",
+    "compiler_git_dirty": true,
+    "compiler_status": "COMPLETE",
+    "field_path_count": 3439,
+    "json_decoded_messages": 7605,
+    "message_count": 7605,
+    "message_end_time_ns": 9533860496292,
+    "message_start_time_ns": 9393422924777,
+    "normalized_views": 15477,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20261018_182003_2795_capture.evidence",
+    "quarantined_messages": 0,
+    "source_integrity": "COMPLETE",
+    "source_path": "/home/alba/project_r2b4/runtime/captures/v3_20261018_182003_2795_capture.mcap",
+    "source_sha256": "52fa17ff9322c7cf7ce48637ba5de97ec56d349ab7d005751c1451e70236deb6",
+    "source_snapshot_size": 54545818,
+    "tick_rate_hz_estimate": 5.006705333462353,
+    "topics": {
+      "/r2b4/event": 6948,
+      "/r2b4/runtime": 1,
+      "/r2b4/tick": 656
+    },
+    "verification_source_checked": false,
+    "verification_status": "PASS",
+    "view_counts": {
+      "events": 6948,
+      "layers/L1": 656,
+      "layers/L10": 656,
+      "layers/L11": 656,
+      "layers/L12": 656,
+      "layers/L2": 656,
+      "layers/L3": 656,
+      "layers/L4": 656,
+      "layers/L5": 656,
+      "layers/L6": 656,
+      "layers/L7": 656,
+      "layers/L8": 656,
+      "layers/L9": 656,
+      "runtime": 1,
+      "ticks": 656
+    }
+  },
+  "metrics": {
+    "goal_progress": {
+      "observed_goal_segment_count": 0,
+      "segments": [],
+      "segments_truncated": false
+    },
+    "motion_continuity": {
+      "episode_count": 21,
+      "episodes": [
+        {
+          "duration_s": 3.4174002920000004,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9400462861512,
+            "message_id": "msg-000000000124",
+            "source_pointer": "",
+            "tick_id": 170,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9400462861512,
+            "message_id": "msg-000000000124",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 170,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9400462861512,
+          "initial_evidence": {
+            "l12_decision": "STOP",
+            "l12_reason": "CRITICAL_DEVICE_DEGRADED",
+            "l6_reason": "COMMAND_STOP",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "COMMAND_STOP",
+            "l9_active_constraints": []
+          },
+          "interval_count": 17,
+          "last_mission_id": "mission-resident.mailbox.expired.2.160",
+          "lifecycle": "IDLE",
+          "mission_id": "mission-resident.mailbox.missing.0",
+          "mode": "STOP",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9397045461220,
+              "message_id": "msg-000000000007",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 0,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9397045461220,
+              "message_id": "msg-000000000007",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 0,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9397045461220,
+              "message_id": "msg-000000000007",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 0,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9397045461220,
+              "message_id": "msg-000000000007",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 0,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9397045461220,
+              "message_id": "msg-000000000007",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 0,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9397045461220,
+              "message_id": "msg-000000000007",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 0,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9397045461220,
+              "message_id": "msg-000000000007",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 0,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "INACTIVE_MISSION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9397045461220,
+            "message_id": "msg-000000000007",
+            "source_pointer": "",
+            "tick_id": 0,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9397045461220,
+            "message_id": "msg-000000000007",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 0,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9397045461220
+        },
+        {
+          "duration_s": 9.200862071,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9409663723583,
+            "message_id": "msg-000000000771",
+            "source_pointer": "",
+            "tick_id": 598,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9409663723583,
+            "message_id": "msg-000000000771",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 598,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9409663723583,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 46,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9400462861512,
+              "message_id": "msg-000000000124",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 170,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9400462861512,
+              "message_id": "msg-000000000124",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 170,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9400462861512,
+              "message_id": "msg-000000000124",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 170,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9400462861512,
+              "message_id": "msg-000000000124",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 170,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9400462861512,
+              "message_id": "msg-000000000124",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 170,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9400462861512,
+              "message_id": "msg-000000000124",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 170,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9400462861512,
+              "message_id": "msg-000000000124",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 170,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9400462861512,
+            "message_id": "msg-000000000124",
+            "source_pointer": "",
+            "tick_id": 170,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9400462861512,
+            "message_id": "msg-000000000124",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 170,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9400462861512
+        },
+        {
+          "duration_s": 0.20027365,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9409863997233,
+            "message_id": "msg-000000000784",
+            "source_pointer": "",
+            "tick_id": 608,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9409863997233,
+            "message_id": "msg-000000000784",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 608,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9409863997233,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "PLANNER_GEOMETRY_HOLD",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "PLANNER_GEOMETRY_HOLD",
+            "l9_active_constraints": []
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9409663723583,
+              "message_id": "msg-000000000771",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 598,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409663723583,
+              "message_id": "msg-000000000771",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 598,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409663723583,
+              "message_id": "msg-000000000771",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 598,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409663723583,
+              "message_id": "msg-000000000771",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 598,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409663723583,
+              "message_id": "msg-000000000771",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 598,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409663723583,
+              "message_id": "msg-000000000771",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 598,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409663723583,
+              "message_id": "msg-000000000771",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 598,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "NO_REQUESTED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9409663723583,
+            "message_id": "msg-000000000771",
+            "source_pointer": "",
+            "tick_id": 598,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9409663723583,
+            "message_id": "msg-000000000771",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 598,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9409663723583
+        },
+        {
+          "duration_s": 0.40047933599999996,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9410264476569,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 2,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9409863997233,
+              "message_id": "msg-000000000784",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 608,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409863997233,
+              "message_id": "msg-000000000784",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 608,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409863997233,
+              "message_id": "msg-000000000784",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 608,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409863997233,
+              "message_id": "msg-000000000784",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 608,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409863997233,
+              "message_id": "msg-000000000784",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 608,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409863997233,
+              "message_id": "msg-000000000784",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 608,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9409863997233,
+              "message_id": "msg-000000000784",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 608,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9409863997233,
+            "message_id": "msg-000000000784",
+            "source_pointer": "",
+            "tick_id": 608,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9409863997233,
+            "message_id": "msg-000000000784",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 608,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9409863997233
+        },
+        {
+          "duration_s": 0.400488485,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9410664965054,
+            "message_id": "msg-000000000842",
+            "source_pointer": "",
+            "tick_id": 648,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9410664965054,
+            "message_id": "msg-000000000842",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 648,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9410664965054,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "PLANNER_GEOMETRY_HOLD",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "PLANNER_GEOMETRY_HOLD",
+            "l9_active_constraints": []
+          },
+          "interval_count": 2,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9410264476569,
+              "message_id": "msg-000000000821",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 628,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410264476569,
+              "message_id": "msg-000000000821",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 628,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410264476569,
+              "message_id": "msg-000000000821",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 628,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410264476569,
+              "message_id": "msg-000000000821",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 628,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410264476569,
+              "message_id": "msg-000000000821",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 628,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410264476569,
+              "message_id": "msg-000000000821",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 628,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410264476569,
+              "message_id": "msg-000000000821",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 628,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "NO_REQUESTED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9410264476569
+        },
+        {
+          "duration_s": 6.217634393000001,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9416882599447,
+            "message_id": "msg-000000001297",
+            "source_pointer": "",
+            "tick_id": 941,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9416882599447,
+            "message_id": "msg-000000001297",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 941,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9416882599447,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 31,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9410664965054,
+              "message_id": "msg-000000000842",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 648,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410664965054,
+              "message_id": "msg-000000000842",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 648,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410664965054,
+              "message_id": "msg-000000000842",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 648,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410664965054,
+              "message_id": "msg-000000000842",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 648,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410664965054,
+              "message_id": "msg-000000000842",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 648,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410664965054,
+              "message_id": "msg-000000000842",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 648,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9410664965054,
+              "message_id": "msg-000000000842",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 648,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9410664965054,
+            "message_id": "msg-000000000842",
+            "source_pointer": "",
+            "tick_id": 648,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9410664965054,
+            "message_id": "msg-000000000842",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 648,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9410664965054
+        },
+        {
+          "duration_s": 0.181188984,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9417063788431,
+            "message_id": "msg-000000001301",
+            "source_pointer": "",
+            "tick_id": 950,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9417063788431,
+            "message_id": "msg-000000001301",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 950,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9417063788431,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "PLANNER_EXECUTION_HOLD",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "PLANNER_EXECUTION_HOLD",
+            "l9_active_constraints": []
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9416882599447,
+              "message_id": "msg-000000001297",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 941,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9416882599447,
+              "message_id": "msg-000000001297",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 941,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9416882599447,
+              "message_id": "msg-000000001297",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 941,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9416882599447,
+              "message_id": "msg-000000001297",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 941,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9416882599447,
+              "message_id": "msg-000000001297",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 941,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9416882599447,
+              "message_id": "msg-000000001297",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 941,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9416882599447,
+              "message_id": "msg-000000001297",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 941,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "NO_REQUESTED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9416882599447,
+            "message_id": "msg-000000001297",
+            "source_pointer": "",
+            "tick_id": 941,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9416882599447,
+            "message_id": "msg-000000001297",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 941,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9416882599447
+        },
+        {
+          "duration_s": 10.199527783000006,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9427263316214,
+            "message_id": "msg-000000001804",
+            "source_pointer": "",
+            "tick_id": 1434,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9427263316214,
+            "message_id": "msg-000000001804",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 1434,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9427263316214,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 51,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9417063788431,
+              "message_id": "msg-000000001301",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 950,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9417063788431,
+              "message_id": "msg-000000001301",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 950,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9417063788431,
+              "message_id": "msg-000000001301",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 950,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9417063788431,
+              "message_id": "msg-000000001301",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 950,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9417063788431,
+              "message_id": "msg-000000001301",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 950,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9417063788431,
+              "message_id": "msg-000000001301",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 950,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9417063788431,
+              "message_id": "msg-000000001301",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 950,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9417063788431,
+            "message_id": "msg-000000001301",
+            "source_pointer": "",
+            "tick_id": 950,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9417063788431,
+            "message_id": "msg-000000001301",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 950,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9417063788431
+        },
+        {
+          "duration_s": 0.199692188,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9427463008402,
+            "message_id": "msg-000000001813",
+            "source_pointer": "",
+            "tick_id": 1444,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9427463008402,
+            "message_id": "msg-000000001813",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 1444,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9427463008402,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "NO_PATH_HOLD",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "NO_PATH_HOLD",
+            "l9_active_constraints": []
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9427263316214,
+              "message_id": "msg-000000001804",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 1434,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427263316214,
+              "message_id": "msg-000000001804",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 1434,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427263316214,
+              "message_id": "msg-000000001804",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 1434,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427263316214,
+              "message_id": "msg-000000001804",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 1434,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427263316214,
+              "message_id": "msg-000000001804",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 1434,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427263316214,
+              "message_id": "msg-000000001804",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 1434,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427263316214,
+              "message_id": "msg-000000001804",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 1434,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "NO_REQUESTED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9427263316214,
+            "message_id": "msg-000000001804",
+            "source_pointer": "",
+            "tick_id": 1434,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9427263316214,
+            "message_id": "msg-000000001804",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 1434,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9427263316214
+        },
+        {
+          "duration_s": 11.999577022000002,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9439462585424,
+            "message_id": "msg-000000002397",
+            "source_pointer": "",
+            "tick_id": 2032,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9439462585424,
+            "message_id": "msg-000000002397",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2032,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9439462585424,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 60,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9427463008402,
+              "message_id": "msg-000000001813",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 1444,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427463008402,
+              "message_id": "msg-000000001813",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 1444,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427463008402,
+              "message_id": "msg-000000001813",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 1444,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427463008402,
+              "message_id": "msg-000000001813",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 1444,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427463008402,
+              "message_id": "msg-000000001813",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 1444,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427463008402,
+              "message_id": "msg-000000001813",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 1444,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9427463008402,
+              "message_id": "msg-000000001813",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 1444,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9427463008402,
+            "message_id": "msg-000000001813",
+            "source_pointer": "",
+            "tick_id": 1444,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9427463008402,
+            "message_id": "msg-000000001813",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 1444,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9427463008402
+        },
+        {
+          "duration_s": 0.220691792,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9439683277216,
+            "message_id": "msg-000000002407",
+            "source_pointer": "",
+            "tick_id": 2042,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9439683277216,
+            "message_id": "msg-000000002407",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2042,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9439683277216,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "NO_PATH_HOLD",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "NO_PATH_HOLD",
+            "l9_active_constraints": []
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9439462585424,
+              "message_id": "msg-000000002397",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 2032,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439462585424,
+              "message_id": "msg-000000002397",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 2032,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439462585424,
+              "message_id": "msg-000000002397",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 2032,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439462585424,
+              "message_id": "msg-000000002397",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 2032,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439462585424,
+              "message_id": "msg-000000002397",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 2032,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439462585424,
+              "message_id": "msg-000000002397",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 2032,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439462585424,
+              "message_id": "msg-000000002397",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 2032,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "NO_REQUESTED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9439462585424,
+            "message_id": "msg-000000002397",
+            "source_pointer": "",
+            "tick_id": 2032,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9439462585424,
+            "message_id": "msg-000000002397",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2032,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9439462585424
+        },
+        {
+          "duration_s": 1.7796572839999998,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9441462934500,
+            "message_id": "msg-000000002481",
+            "source_pointer": "",
+            "tick_id": 2131,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9441462934500,
+            "message_id": "msg-000000002481",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2131,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9441462934500,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 9,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9439683277216,
+              "message_id": "msg-000000002407",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 2042,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439683277216,
+              "message_id": "msg-000000002407",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 2042,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439683277216,
+              "message_id": "msg-000000002407",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 2042,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439683277216,
+              "message_id": "msg-000000002407",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 2042,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439683277216,
+              "message_id": "msg-000000002407",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 2042,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439683277216,
+              "message_id": "msg-000000002407",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 2042,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9439683277216,
+              "message_id": "msg-000000002407",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 2042,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9439683277216,
+            "message_id": "msg-000000002407",
+            "source_pointer": "",
+            "tick_id": 2042,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9439683277216,
+            "message_id": "msg-000000002407",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2042,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9439683277216
+        },
+        {
+          "duration_s": 0.199775396,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9441662709896,
+            "message_id": "msg-000000002484",
+            "source_pointer": "",
+            "tick_id": 2141,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9441662709896,
+            "message_id": "msg-000000002484",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2141,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9441662709896,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "NO_PATH_HOLD",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "NO_PATH_HOLD",
+            "l9_active_constraints": []
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9441462934500,
+              "message_id": "msg-000000002481",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 2131,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441462934500,
+              "message_id": "msg-000000002481",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 2131,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441462934500,
+              "message_id": "msg-000000002481",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 2131,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441462934500,
+              "message_id": "msg-000000002481",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 2131,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441462934500,
+              "message_id": "msg-000000002481",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 2131,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441462934500,
+              "message_id": "msg-000000002481",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 2131,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441462934500,
+              "message_id": "msg-000000002481",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 2131,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "NO_REQUESTED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9441462934500,
+            "message_id": "msg-000000002481",
+            "source_pointer": "",
+            "tick_id": 2131,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9441462934500,
+            "message_id": "msg-000000002481",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2131,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9441462934500
+        },
+        {
+          "duration_s": 14.983514156000002,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9456646224052,
+            "message_id": "msg-000000003471",
+            "source_pointer": "",
+            "tick_id": 2873,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9456646224052,
+            "message_id": "msg-000000003471",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2873,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9456646224052,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 75,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9441662709896,
+              "message_id": "msg-000000002484",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 2141,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441662709896,
+              "message_id": "msg-000000002484",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 2141,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441662709896,
+              "message_id": "msg-000000002484",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 2141,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441662709896,
+              "message_id": "msg-000000002484",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 2141,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441662709896,
+              "message_id": "msg-000000002484",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 2141,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441662709896,
+              "message_id": "msg-000000002484",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 2141,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9441662709896,
+              "message_id": "msg-000000002484",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 2141,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9441662709896,
+            "message_id": "msg-000000002484",
+            "source_pointer": "",
+            "tick_id": 2141,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9441662709896,
+            "message_id": "msg-000000002484",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2141,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9441662709896
+        },
+        {
+          "duration_s": 0.216358019,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9456862582071,
+            "message_id": "msg-000000003482",
+            "source_pointer": "",
+            "tick_id": 2884,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9456862582071,
+            "message_id": "msg-000000003482",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2884,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9456862582071,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "LOCAL_CLEARANCE"
+            ]
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9456646224052,
+              "message_id": "msg-000000003471",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 2873,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456646224052,
+              "message_id": "msg-000000003471",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 2873,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456646224052,
+              "message_id": "msg-000000003471",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 2873,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456646224052,
+              "message_id": "msg-000000003471",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 2873,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456646224052,
+              "message_id": "msg-000000003471",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 2873,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456646224052,
+              "message_id": "msg-000000003471",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 2873,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456646224052,
+              "message_id": "msg-000000003471",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 2873,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "ZERO_ALLOWED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9456646224052,
+            "message_id": "msg-000000003471",
+            "source_pointer": "",
+            "tick_id": 2873,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9456646224052,
+            "message_id": "msg-000000003471",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2873,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9456646224052
+        },
+        {
+          "duration_s": 18.200005917,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9475062587988,
+            "message_id": "msg-000000004546",
+            "source_pointer": "",
+            "tick_id": 3780,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9475062587988,
+            "message_id": "msg-000000004546",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 3780,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9475062587988,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 91,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9456862582071,
+              "message_id": "msg-000000003482",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 2884,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456862582071,
+              "message_id": "msg-000000003482",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 2884,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456862582071,
+              "message_id": "msg-000000003482",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 2884,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456862582071,
+              "message_id": "msg-000000003482",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 2884,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456862582071,
+              "message_id": "msg-000000003482",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 2884,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456862582071,
+              "message_id": "msg-000000003482",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 2884,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9456862582071,
+              "message_id": "msg-000000003482",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 2884,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9456862582071,
+            "message_id": "msg-000000003482",
+            "source_pointer": "",
+            "tick_id": 2884,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9456862582071,
+            "message_id": "msg-000000003482",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 2884,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9456862582071
+        },
+        {
+          "duration_s": 0.200459757,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9475263047745,
+            "message_id": "msg-000000004554",
+            "source_pointer": "",
+            "tick_id": 3790,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9475263047745,
+            "message_id": "msg-000000004554",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 3790,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9475263047745,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "PLANNER_GEOMETRY_HOLD",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "PLANNER_GEOMETRY_HOLD",
+            "l9_active_constraints": []
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9475062587988,
+              "message_id": "msg-000000004546",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 3780,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475062587988,
+              "message_id": "msg-000000004546",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 3780,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475062587988,
+              "message_id": "msg-000000004546",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 3780,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475062587988,
+              "message_id": "msg-000000004546",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 3780,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475062587988,
+              "message_id": "msg-000000004546",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 3780,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475062587988,
+              "message_id": "msg-000000004546",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 3780,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475062587988,
+              "message_id": "msg-000000004546",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 3780,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "NO_REQUESTED_MOTION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9475062587988,
+            "message_id": "msg-000000004546",
+            "source_pointer": "",
+            "tick_id": 3780,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9475062587988,
+            "message_id": "msg-000000004546",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 3780,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9475062587988
+        },
+        {
+          "duration_s": 23.799617957000006,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9499062665702,
+            "message_id": "msg-000000005906",
+            "source_pointer": "",
+            "tick_id": 4963,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9499062665702,
+            "message_id": "msg-000000005906",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 4963,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9499062665702,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 119,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9475263047745,
+              "message_id": "msg-000000004554",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 3790,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475263047745,
+              "message_id": "msg-000000004554",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 3790,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475263047745,
+              "message_id": "msg-000000004554",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 3790,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475263047745,
+              "message_id": "msg-000000004554",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 3790,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475263047745,
+              "message_id": "msg-000000004554",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 3790,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475263047745,
+              "message_id": "msg-000000004554",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 3790,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9475263047745,
+              "message_id": "msg-000000004554",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 3790,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9475263047745,
+            "message_id": "msg-000000004554",
+            "source_pointer": "",
+            "tick_id": 3790,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9475263047745,
+            "message_id": "msg-000000004554",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 3790,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9475263047745
+        },
+        {
+          "duration_s": 0.200907987,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9499263573689,
+            "message_id": "msg-000000005922",
+            "source_pointer": "",
+            "tick_id": 4973,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9499263573689,
+            "message_id": "msg-000000005922",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 4973,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9499263573689,
+          "initial_evidence": {
+            "l12_decision": "STOP",
+            "l12_reason": "NOT_ACTIVE",
+            "l6_reason": "COMMAND_STOP",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "COMMAND_STOP",
+            "l9_active_constraints": []
+          },
+          "interval_count": 1,
+          "last_mission_id": "mission-resident.rearm.operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "IDLE",
+          "mission_id": "mission-resident.rearm.operator-roomcruise-1792340403634324146-2795",
+          "mode": "STOP",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9499062665702,
+              "message_id": "msg-000000005906",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 4963,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499062665702,
+              "message_id": "msg-000000005906",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 4963,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499062665702,
+              "message_id": "msg-000000005906",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 4963,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499062665702,
+              "message_id": "msg-000000005906",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 4963,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499062665702,
+              "message_id": "msg-000000005906",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 4963,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499062665702,
+              "message_id": "msg-000000005906",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 4963,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499062665702,
+              "message_id": "msg-000000005906",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 4963,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "INACTIVE_MISSION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9499062665702,
+            "message_id": "msg-000000005906",
+            "source_pointer": "",
+            "tick_id": 4963,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9499062665702,
+            "message_id": "msg-000000005906",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 4963,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9499062665702
+        },
+        {
+          "duration_s": 18.399052743000013,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9517662626432,
+          "initial_evidence": {
+            "l12_decision": "ALLOW",
+            "l12_reason": null,
+            "l6_reason": "LOCAL_GUIDANCE_REVALIDATED",
+            "l6_status": "ACTIVE",
+            "l8_stop_reason": null,
+            "l9_active_constraints": [
+              "ACCELERATION_LIMIT"
+            ]
+          },
+          "interval_count": 92,
+          "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "lifecycle": "ACTIVE",
+          "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+          "mode": "EXPLORE",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9499263573689,
+              "message_id": "msg-000000005922",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 4973,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499263573689,
+              "message_id": "msg-000000005922",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 4973,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499263573689,
+              "message_id": "msg-000000005922",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 4973,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499263573689,
+              "message_id": "msg-000000005922",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 4973,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499263573689,
+              "message_id": "msg-000000005922",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 4973,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499263573689,
+              "message_id": "msg-000000005922",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 4973,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9499263573689,
+              "message_id": "msg-000000005922",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 4973,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "FINAL_OUTPUT_ACTIVE",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9499263573689,
+            "message_id": "msg-000000005922",
+            "source_pointer": "",
+            "tick_id": 4973,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9499263573689,
+            "message_id": "msg-000000005922",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 4973,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9499263573689
+        },
+        {
+          "duration_s": 10.207390334000003,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9527870016766,
+            "message_id": "msg-000000007590",
+            "source_pointer": "",
+            "tick_id": 6375,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9527870016766,
+            "message_id": "msg-000000007590",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 6375,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9527870016766,
+          "initial_evidence": {
+            "l12_decision": "STOP",
+            "l12_reason": "NOT_ACTIVE",
+            "l6_reason": "COMMAND_STOP",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "COMMAND_STOP",
+            "l9_active_constraints": []
+          },
+          "interval_count": 52,
+          "last_mission_id": "mission-operator-stop-1792340538922641414-36414",
+          "lifecycle": "IDLE",
+          "mission_id": "mission-resident.mailbox.expired.1159.5864",
+          "mode": "STOP",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "INACTIVE_MISSION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9517662626432
+        }
+      ],
+      "episodes_truncated": false,
+      "longest_active_mission_stop": {
+        "duration_s": 0.400488485,
+        "end_context_ref": {
+          "field_path": "/inputs/context",
+          "log_time_ns": 9410664965054,
+          "message_id": "msg-000000000842",
+          "source_pointer": "",
+          "tick_id": 648,
+          "topic": "/r2b4/tick",
+          "view": "ticks"
+        },
+        "end_ref": {
+          "field_path": "/context",
+          "log_time_ns": 9410664965054,
+          "message_id": "msg-000000000842",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 648,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        "end_time_ns": 9410664965054,
+        "initial_evidence": {
+          "l12_decision": "ALLOW",
+          "l12_reason": null,
+          "l6_reason": "PLANNER_GEOMETRY_HOLD",
+          "l6_status": "IDLE",
+          "l8_stop_reason": "PLANNER_GEOMETRY_HOLD",
+          "l9_active_constraints": []
+        },
+        "interval_count": 2,
+        "last_mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+        "lifecycle": "ACTIVE",
+        "mission_id": "mission-operator-roomcruise-1792340403634324146-2795",
+        "mode": "EXPLORE",
+        "source_refs": [
+          {
+            "field_path": null,
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L3",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L3"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L9",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L9"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L11",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L11"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L12",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L12"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L5",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L5"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9410264476569,
+            "message_id": "msg-000000000821",
+            "source_pointer": "/expected/layers/L6",
+            "tick_id": 628,
+            "topic": "/r2b4/tick",
+            "view": "layers/L6"
+          }
+        ],
+        "stage": "NO_REQUESTED_MOTION",
+        "start_context_ref": {
+          "field_path": "/inputs/context",
+          "log_time_ns": 9410264476569,
+          "message_id": "msg-000000000821",
+          "source_pointer": "",
+          "tick_id": 628,
+          "topic": "/r2b4/tick",
+          "view": "ticks"
+        },
+        "start_ref": {
+          "field_path": "/requested_v_mps",
+          "log_time_ns": 9410264476569,
+          "message_id": "msg-000000000821",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 628,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        "start_time_ns": 9410264476569
+      },
+      "longest_observed_stop": {
+        "duration_s": 10.207390334000003,
+        "end_context_ref": {
+          "field_path": "/inputs/context",
+          "log_time_ns": 9527870016766,
+          "message_id": "msg-000000007590",
+          "source_pointer": "",
+          "tick_id": 6375,
+          "topic": "/r2b4/tick",
+          "view": "ticks"
+        },
+        "end_ref": {
+          "field_path": "/context",
+          "log_time_ns": 9527870016766,
+          "message_id": "msg-000000007590",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 6375,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        "end_time_ns": 9527870016766,
+        "initial_evidence": {
+          "l12_decision": "STOP",
+          "l12_reason": "NOT_ACTIVE",
+          "l6_reason": "COMMAND_STOP",
+          "l6_status": "IDLE",
+          "l8_stop_reason": "COMMAND_STOP",
+          "l9_active_constraints": []
+        },
+        "interval_count": 52,
+        "last_mission_id": "mission-operator-stop-1792340538922641414-36414",
+        "lifecycle": "IDLE",
+        "mission_id": "mission-resident.mailbox.expired.1159.5864",
+        "mode": "STOP",
+        "source_refs": [
+          {
+            "field_path": null,
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L3",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L3"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L9",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L9"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L11",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L11"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L12",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L12"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L5",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L5"
+          },
+          {
+            "field_path": null,
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L6",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L6"
+          }
+        ],
+        "stage": "INACTIVE_MISSION",
+        "start_context_ref": {
+          "field_path": "/inputs/context",
+          "log_time_ns": 9517662626432,
+          "message_id": "msg-000000007256",
+          "source_pointer": "",
+          "tick_id": 5864,
+          "topic": "/r2b4/tick",
+          "view": "ticks"
+        },
+        "start_ref": {
+          "field_path": "/requested_v_mps",
+          "log_time_ns": 9517662626432,
+          "message_id": "msg-000000007256",
+          "source_pointer": "/expected/layers/L8",
+          "tick_id": 5864,
+          "topic": "/r2b4/tick",
+          "view": "layers/L8"
+        },
+        "start_time_ns": 9517662626432
+      },
+      "physical_stall_proven": false,
+      "semantics": "SAMPLED_PRIOR_OUTPUT_HELD_TO_NEXT_SOURCE_TIME",
+      "stage_duration_s": {
+        "FINAL_OUTPUT_ACTIVE": 115.17992866199978,
+        "INACTIVE_MISSION": 13.825698613000004,
+        "NO_REQUESTED_MOTION": 1.6025702519999998,
+        "ZERO_ALLOWED_MOTION": 0.216358019
+      }
+    },
+    "motion_quality": {
+      "allowed_angular_acceleration_rms_rad_s2": 0.8875133689855699,
+      "allowed_angular_reversal_count": 17,
+      "allowed_linear_acceleration_rms_mps2": 0.24842869007884374,
+      "allowed_stop_start_count": 11,
+      "derivative_observed_s": 130.82455554599983,
+      "thresholds": {
+        "angular_epsilon_rad_s": 0.02,
+        "linear_epsilon_mps": 0.005
+      }
+    },
+    "performance": {
+      "actuator_saturated_observed_s": 130.82455554599983,
+      "actuator_saturated_s": 0,
+      "allowed_distance_m": 22.492447360102986,
+      "allowed_motion_s": 114.97993695799978,
+      "allowed_observed_s": 130.82455554599983,
+      "constraint_active_observed_s": 130.82455554599983,
+      "constraint_active_s": 84.39974393399993,
+      "distance_semantics": "LOCAL_ESTIMATE_CHORD_SUM_AND_PER_CONTINUOUS_SEGMENT_NET",
+      "estimated_net_displacement_m": 2.0975400442426504,
+      "estimated_path_efficiency": 0.08101446873637273,
+      "estimated_path_length_m": 25.890931298558606,
+      "requested_motion_s": 115.3962866809998,
+      "requested_observed_s": 130.82455554599983,
+      "safety_blocked_observed_s": 130.82455554599983,
+      "safety_blocked_s": 13.825698613000004
+    },
+    "sampled_no_progress": {
+      "angular_epsilon_rad_s": 0.02,
+      "episode_count": 0,
+      "episodes": [],
+      "episodes_truncated": false,
+      "linear_epsilon_mps": 0.005,
+      "longest_episode": null,
+      "minimum_episode_s": 2.0,
+      "physical_stall_proven": false,
+      "qualified_active_motion_s": 114.97993695799978,
+      "semantics": "ACTIVE_ALLOWED_MOTION_AND_FINAL_OUTPUT_WITH_STATIONARY_QUALIFIED_LOCAL_ESTIMATE",
+      "stationary_estimate_fraction": 0.0,
+      "stationary_estimate_s": 0.0
+    },
+    "temporal_coverage": {
+      "aligned_rows": 656,
+      "context_resolution": "SAME_MESSAGE_INPUT_CONTEXT_REFERENCE",
+      "first_time_ns": 9397045461220,
+      "interval_counts": {
+        "qualified_estimate_intervals": 655,
+        "valid_source_intervals": 655
+      },
+      "last_time_ns": 9527870016766,
+      "max_gap_s": 0.25,
+      "measurement_time_interval_ns": null,
+      "missing_fields": {},
+      "per_view_rows": {
+        "layers/L11": 656,
+        "layers/L12": 656,
+        "layers/L3": 656,
+        "layers/L8": 656,
+        "layers/L9": 656
+      },
+      "qualified_estimate_s": 130.82455554599983,
+      "qualified_recording_s": 130.82455554599983,
+      "recording_sampling": "SAMPLED_INTERVALS_ONLY",
+      "response_reference": "NEXT_L3_TICK_ESTIMATE",
+      "sample_rate_hz_estimate": 4.999967575210275,
+      "sample_rate_semantics": "MEDIAN_OF_TRAILING_BOUNDED_SOURCE_INTERVALS",
+      "sample_rate_window_intervals": 655,
+      "sample_rate_window_limit": 1024,
+      "sample_rate_window_truncated": false,
+      "time_reference": "SOURCE_CONTEXT_MONOTONIC_NS"
+    },
+    "tracking": {
+      "active_command_pairs": 575,
+      "angular_bias_rad_s": -0.015405170546533856,
+      "angular_rmse_rad_s": 0.1970268637247012,
+      "causal_status": "OBSERVED_RELATIONSHIP_ONLY",
+      "departure_thresholds": {
+        "angular_rad_s": 0.15,
+        "linear_mps": 0.03
+      },
+      "first_departure": {
+        "allowed_omega_rad_s": 0.0,
+        "allowed_v_mps": 0.0721782798,
+        "angular_error_rad_s": 0.004365571809878802,
+        "command_context_ref": {
+          "field_path": "/inputs/context",
+          "log_time_ns": 9400462861512,
+          "message_id": "msg-000000000124",
+          "source_pointer": "",
+          "tick_id": 170,
+          "topic": "/r2b4/tick",
+          "view": "ticks"
+        },
+        "command_ref": {
+          "field_path": "/allowed_v_mps",
+          "log_time_ns": 9400462861512,
+          "message_id": "msg-000000000124",
+          "source_pointer": "/expected/layers/L9",
+          "tick_id": 170,
+          "topic": "/r2b4/tick",
+          "view": "layers/L9"
+        },
+        "command_tick_id": 170,
+        "command_time_ns": 9400462861512,
+        "estimate_context_ref": {
+          "field_path": "/inputs/context",
+          "log_time_ns": 9400662767955,
+          "message_id": "msg-000000000138",
+          "source_pointer": "",
+          "tick_id": 180,
+          "topic": "/r2b4/tick",
+          "view": "ticks"
+        },
+        "estimate_ref": {
+          "field_path": "/local_v_mps",
+          "log_time_ns": 9400662767955,
+          "message_id": "msg-000000000138",
+          "source_pointer": "/expected/layers/L3",
+          "tick_id": 180,
+          "topic": "/r2b4/tick",
+          "view": "layers/L3"
+        },
+        "estimate_tick_id": 180,
+        "estimate_time_ns": 9400662767955,
+        "estimated_omega_rad_s": 0.004365571809878802,
+        "estimated_v_mps": 0.1701286887202709,
+        "frame_id": "R2B4_ODOM_LOCAL",
+        "generation": 0,
+        "linear_error_mps": 0.0979504089202709
+      },
+      "linear_bias_mps": 0.036487114320840834,
+      "linear_rmse_mps": 0.060388848572659436,
+      "qualified_duration_s": 130.82455554599983,
+      "valid_pairs": 655
+    }
+  },
+  "observations": [
+    {
+      "code": "AMR_TIME_LINKED_MOTION",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [
+            "/context",
+            "/inputs/context",
+            "/local_pose",
+            "/localization_quality",
+            "/allowed_v_mps",
+            "/local_v_mps"
+          ],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L3",
+            "layers/L8",
+            "layers/L9",
+            "layers/L11",
+            "layers/L12",
+            "ticks"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "DERIVED_MEASUREMENT",
+      "message": "Durations use bounded sampled source-time intervals; local-estimate distances and response pairs require unchanged frame/generation and explicit continuity.",
+      "values": {
+        "qualified_estimate_s": 130.82455554599983,
+        "qualified_recording_s": 130.82455554599983,
+        "response_pairs": 655
+      }
+    },
+    {
+      "code": "AMR_SAMPLED_EVIDENCE_LIMITS",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L3",
+            "layers/L8",
+            "layers/L9",
+            "layers/L11",
+            "layers/L12"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "DATA_QUALITY",
+      "message": "L3 is an estimate at tick reference time. Sampling cannot prove between-sample motion, physical tracking, stop distance/settling, or the cause of a skill failure.",
+      "values": {
+        "excluded_intervals": {
+          "qualified_estimate_intervals": 655,
+          "valid_source_intervals": 655
+        },
+        "missing_fields": {}
+      }
+    },
+    {
+      "code": "AMR_MOTION_CONTINUITY",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L3",
+            "layers/L8",
+            "layers/L9",
+            "layers/L11",
+            "layers/L12",
+            "layers/L5",
+            "layers/L6",
+            "ticks"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "RELATIONSHIP",
+      "message": "Source-time intervals distinguish inactive missions, absent requests, zero allowed motion and final output. Stop episodes remain observable when local pose is unqualified; they do not prove physical stalling or root cause.",
+      "values": {
+        "longest_observed_stop": {
+          "duration_s": 10.207390334000003,
+          "end_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9527870016766,
+            "message_id": "msg-000000007590",
+            "source_pointer": "",
+            "tick_id": 6375,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "end_ref": {
+            "field_path": "/context",
+            "log_time_ns": 9527870016766,
+            "message_id": "msg-000000007590",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 6375,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "end_time_ns": 9527870016766,
+          "initial_evidence": {
+            "l12_decision": "STOP",
+            "l12_reason": "NOT_ACTIVE",
+            "l6_reason": "COMMAND_STOP",
+            "l6_status": "IDLE",
+            "l8_stop_reason": "COMMAND_STOP",
+            "l9_active_constraints": []
+          },
+          "interval_count": 52,
+          "last_mission_id": "mission-operator-stop-1792340538922641414-36414",
+          "lifecycle": "IDLE",
+          "mission_id": "mission-resident.mailbox.expired.1159.5864",
+          "mode": "STOP",
+          "source_refs": [
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L3",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L3"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L8",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L8"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L9",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L9"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L11",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L11"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L12",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L12"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L5",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L5"
+            },
+            {
+              "field_path": null,
+              "log_time_ns": 9517662626432,
+              "message_id": "msg-000000007256",
+              "source_pointer": "/expected/layers/L6",
+              "tick_id": 5864,
+              "topic": "/r2b4/tick",
+              "view": "layers/L6"
+            }
+          ],
+          "stage": "INACTIVE_MISSION",
+          "start_context_ref": {
+            "field_path": "/inputs/context",
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "ticks"
+          },
+          "start_ref": {
+            "field_path": "/requested_v_mps",
+            "log_time_ns": 9517662626432,
+            "message_id": "msg-000000007256",
+            "source_pointer": "/expected/layers/L8",
+            "tick_id": 5864,
+            "topic": "/r2b4/tick",
+            "view": "layers/L8"
+          },
+          "start_time_ns": 9517662626432
+        },
+        "stage_duration_s": {
+          "FINAL_OUTPUT_ACTIVE": 115.17992866199978,
+          "INACTIVE_MISSION": 13.825698613000004,
+          "NO_REQUESTED_MOTION": 1.6025702519999998,
+          "ZERO_ALLOWED_MOTION": 0.216358019
+        }
+      }
+    },
+    {
+      "code": "AMR_SAMPLED_NO_PROGRESS",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L3",
+            "layers/L5",
+            "layers/L9",
+            "ticks"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "RELATIONSHIP",
+      "message": "Active allowed-motion intervals with qualified stationary L3 estimates are measured with bounded episodes. This sampled relationship does not prove a physical stall, between-sample motion or its cause.",
+      "values": {
+        "episode_count": 0,
+        "stationary_estimate_s": 0.0
+      }
+    }
+  ],
+  "producer": {
+    "diag_source_dirty": false,
+    "diag_source_sha256": "a22e01d926d66ef53e887cc47bcf762e1d58760b8c2090dae05e4b0285715882",
+    "generated_at_utc": "2026-10-18T16:27:56.066005Z",
+    "git_commit": "87c6989cfb34558404578072bd7923b653cd9a1b",
+    "platform": "Linux-6.12.47+rpt-rpi-2712-aarch64-with-glibc2.36",
+    "python_version": "3.11.2",
+    "schema": "R2B4_DIAG_PRODUCER_V1",
+    "source_files": [
+      "tools/diag/__init__.py",
+      "tools/diag/__main__.py",
+      "tools/diag/admission.py",
+      "tools/diag/analyzers/__init__.py",
+      "tools/diag/analyzers/drive.py",
+      "tools/diag/analyzers/evidence_health.py",
+      "tools/diag/analyzers/execution_chain.py",
+      "tools/diag/analyzers/lifecycle.py",
+      "tools/diag/analyzers/lineage.py",
+      "tools/diag/analyzers/localization.py",
+      "tools/diag/analyzers/motion_performance.py",
+      "tools/diag/analyzers/navigation.py",
+      "tools/diag/analyzers/navigation_root_cause.py",
+      "tools/diag/analyzers/recovery.py",
+      "tools/diag/analyzers/safety.py",
+      "tools/diag/analyzers/world_model.py",
+      "tools/diag/basis.py",
+      "tools/diag/cli.py",
+      "tools/diag/context.py",
+      "tools/diag/contracts.py",
+      "tools/diag/episodes.py",
+      "tools/diag/persistence.py",
+      "tools/diag/profiling.py",
+      "tools/diag/provenance.py",
+      "tools/diag/registry.py",
+      "tools/diag/tick_evidence.py",
+      "tools/mcap_evidence/reader.py"
+    ]
+  },
+  "purpose": "DIAGNOSTIC_DATA_ONLY",
+  "root_cause_inferred": false,
+  "schema": "R2B4_DIAG_RESULT_V3",
+  "source": "EVI_EVIDENCE_ONLY",
+  "summary": {
+    "angular_rmse_rad_s": 0.1970268637247012,
+    "estimated_path_length_m": 25.890931298558606,
+    "first_departure": {
+      "allowed_omega_rad_s": 0.0,
+      "allowed_v_mps": 0.0721782798,
+      "angular_error_rad_s": 0.004365571809878802,
+      "command_context_ref": {
+        "field_path": "/inputs/context",
+        "log_time_ns": 9400462861512,
+        "message_id": "msg-000000000124",
+        "source_pointer": "",
+        "tick_id": 170,
+        "topic": "/r2b4/tick",
+        "view": "ticks"
+      },
+      "command_ref": {
+        "field_path": "/allowed_v_mps",
+        "log_time_ns": 9400462861512,
+        "message_id": "msg-000000000124",
+        "source_pointer": "/expected/layers/L9",
+        "tick_id": 170,
+        "topic": "/r2b4/tick",
+        "view": "layers/L9"
+      },
+      "command_tick_id": 170,
+      "command_time_ns": 9400462861512,
+      "estimate_context_ref": {
+        "field_path": "/inputs/context",
+        "log_time_ns": 9400662767955,
+        "message_id": "msg-000000000138",
+        "source_pointer": "",
+        "tick_id": 180,
+        "topic": "/r2b4/tick",
+        "view": "ticks"
+      },
+      "estimate_ref": {
+        "field_path": "/local_v_mps",
+        "log_time_ns": 9400662767955,
+        "message_id": "msg-000000000138",
+        "source_pointer": "/expected/layers/L3",
+        "tick_id": 180,
+        "topic": "/r2b4/tick",
+        "view": "layers/L3"
+      },
+      "estimate_tick_id": 180,
+      "estimate_time_ns": 9400662767955,
+      "estimated_omega_rad_s": 0.004365571809878802,
+      "estimated_v_mps": 0.1701286887202709,
+      "frame_id": "R2B4_ODOM_LOCAL",
+      "generation": 0,
+      "linear_error_mps": 0.0979504089202709
+    },
+    "linear_rmse_mps": 0.060388848572659436,
+    "motion_stage_duration_s": {
+      "FINAL_OUTPUT_ACTIVE": 115.17992866199978,
+      "INACTIVE_MISSION": 13.825698613000004,
+      "NO_REQUESTED_MOTION": 1.6025702519999998,
+      "ZERO_ALLOWED_MOTION": 0.216358019
+    },
+    "qualified_estimate_s": 130.82455554599983,
+    "qualified_recording_s": 130.82455554599983,
+    "sampled_no_progress_episode_count": 0,
+    "stationary_estimate_fraction": 0.0,
+    "tracking_pairs": 655
+  }
+}
