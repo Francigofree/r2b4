@@ -1,0 +1,564 @@
+{
+  "admission": {
+    "analyzer_id": "navigation_root_cause",
+    "applicable": true,
+    "checked": {
+      "missing_topics": [],
+      "missing_views": [],
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "events",
+        "layers/L11",
+        "layers/L4",
+        "ticks"
+      ],
+      "required_topics": [
+        "/r2b4/tick"
+      ],
+      "required_views": [
+        "layers/L3",
+        "layers/L5",
+        "layers/L6",
+        "layers/L7",
+        "layers/L8",
+        "layers/L9",
+        "layers/L12"
+      ],
+      "verification_status": "PASS"
+    },
+    "coverage": {
+      "optional": "COMPLETE",
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "events",
+        "layers/L11",
+        "layers/L4",
+        "ticks"
+      ],
+      "required": "COMPLETE"
+    },
+    "reasons": [],
+    "state": "APPLICABLE"
+  },
+  "analyzer_id": "navigation_root_cause",
+  "contract": {
+    "analyzer_id": "navigation_root_cause",
+    "contract_version": 2,
+    "description": "Source-time navigation hold/no-progress episodes with explicit decision causes, hypotheses and evidence gaps.",
+    "optional_views": [
+      "layers/L4",
+      "layers/L11",
+      "ticks",
+      "events"
+    ],
+    "required_topics": [
+      "/r2b4/tick"
+    ],
+    "required_views": [
+      "layers/L3",
+      "layers/L5",
+      "layers/L6",
+      "layers/L7",
+      "layers/L8",
+      "layers/L9",
+      "layers/L12"
+    ]
+  },
+  "coverage": {
+    "domain": {
+      "event_linkage": "PRESENT",
+      "physical_ground_truth": "NOT_PRESENT"
+    },
+    "optional": "COMPLETE",
+    "optional_views_missing": [],
+    "optional_views_present": [
+      "events",
+      "layers/L11",
+      "layers/L4",
+      "ticks"
+    ],
+    "required": "COMPLETE"
+  },
+  "episodes": [],
+  "evidence": {
+    "compiler_git_commit": "542cc8490fdd663270567c57ad6c2ad2294f31e9",
+    "compiler_git_dirty": true,
+    "compiler_status": "COMPLETE",
+    "field_path_count": 4060,
+    "json_decoded_messages": 2040,
+    "message_count": 2040,
+    "message_end_time_ns": 7704021361044,
+    "message_start_time_ns": 7664964601743,
+    "normalized_views": 27211,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20261018_175115_32643_capture.evidence",
+    "quarantined_messages": 0,
+    "source_integrity": "COMPLETE",
+    "source_path": "/home/alba/project_r2b4/runtime/captures/v3_20261018_175115_32643_capture.mcap",
+    "source_sha256": "6bf1426788169ac4c28f511c59d83eb27ee55a01afb6fde6c8659294b70ad155",
+    "source_snapshot_size": 54798676,
+    "tick_rate_hz_estimate": 48.253461810662145,
+    "topics": {
+      "/r2b4/checkpoint": 26,
+      "/r2b4/event": 538,
+      "/r2b4/raw_lidar": 247,
+      "/r2b4/runtime": 1,
+      "/r2b4/tick": 1228
+    },
+    "verification_source_checked": false,
+    "verification_status": "PASS",
+    "view_counts": {
+      "checkpoints": 26,
+      "events": 538,
+      "layers/L1": 1228,
+      "layers/L10": 1228,
+      "layers/L11": 1228,
+      "layers/L12": 1228,
+      "layers/L2": 1228,
+      "layers/L3": 1228,
+      "layers/L4": 1228,
+      "layers/L5": 1228,
+      "layers/L6": 1228,
+      "layers/L7": 1228,
+      "layers/L8": 1228,
+      "layers/L9": 1228,
+      "lidar/raw_scans": 247,
+      "runtime": 1,
+      "sensors/ekf_heading_e048380268cd": 1228,
+      "sensors/lidar_health_3fdcc774fe72": 1228,
+      "sensors/lidar_local_points_9c94aab58beb": 1163,
+      "sensors/lidar_localization_health_f0db9d34c74b": 1162,
+      "sensors/lidar_matcher_diagnostics_aa853c1f3246": 1162,
+      "sensors/lidar_pose_d5619f80047d": 1012,
+      "sensors/lidar_relative_motion_4d52d5854238": 1089,
+      "sensors/lidar_safety_clearance_9dc603647ffe": 1163,
+      "sensors/wheel_velocity_e7ee01dd8719": 1228,
+      "ticks": 1228
+    }
+  },
+  "metrics": {
+    "capture_integrity": {
+      "capture_required_loss_count": null,
+      "evidence_ref": {
+        "field_path": null,
+        "log_time_ns": 7693977202228,
+        "message_id": "msg-000000002040",
+        "source_pointer": "",
+        "tick_id": null,
+        "topic": "/r2b4/event",
+        "view": "events"
+      },
+      "ingress_drop_count": 0,
+      "replay_complete": true,
+      "sample_complete": true,
+      "tick_row_count": null
+    },
+    "causal_scope": "EXPLICIT_RECORDED_DECISION_PROPAGATED_TO_ZERO_MOTION",
+    "cause_counts": {},
+    "data_quality": {
+      "gap_order_or_mission_boundary": 814,
+      "valid_decision_events": 17,
+      "valid_samples": 1228
+    },
+    "dense_navigation": {
+      "counts": {
+        "hold_runs": 1,
+        "hold_runs_below_long_episode_threshold": 1
+      },
+      "durations": {
+        "active_navigation_ns": 499919968,
+        "zero_request_hold_ns": 499919968
+      },
+      "hold_run_limit": 64,
+      "hold_runs": [
+        {
+          "duration_ns": 499919968,
+          "end_ref": {
+            "field_path": "/payload/expected/layers/L8",
+            "log_time_ns": 7684506506467,
+            "message_id": "msg-000000001315",
+            "source_pointer": "",
+            "tick_id": null,
+            "topic": "/r2b4/event",
+            "view": "events"
+          },
+          "end_time_ns": 7684506506467,
+          "first_cause": [
+            "MOTION_REALIZATION_HOLD",
+            "L8",
+            "/stop_reason",
+            "PLANNER_PENDING_NO_VALID_OBJECTIVE"
+          ],
+          "interval_count": 4,
+          "mission_id": "mission-operator-roomcruise-1792338693128034142-2795",
+          "physical_stall_proven": false,
+          "start_ref": {
+            "field_path": "/payload/expected/layers/L8",
+            "log_time_ns": 7684006586499,
+            "message_id": "msg-000000001282",
+            "source_pointer": "",
+            "tick_id": null,
+            "topic": "/r2b4/event",
+            "view": "events"
+          },
+          "start_time_ns": 7684006586499
+        }
+      ],
+      "hold_runs_truncated": false,
+      "longest_hold_run": {
+        "duration_ns": 499919968,
+        "end_ref": {
+          "field_path": "/payload/expected/layers/L8",
+          "log_time_ns": 7684506506467,
+          "message_id": "msg-000000001315",
+          "source_pointer": "",
+          "tick_id": null,
+          "topic": "/r2b4/event",
+          "view": "events"
+        },
+        "end_time_ns": 7684506506467,
+        "first_cause": [
+          "MOTION_REALIZATION_HOLD",
+          "L8",
+          "/stop_reason",
+          "PLANNER_PENDING_NO_VALID_OBJECTIVE"
+        ],
+        "interval_count": 4,
+        "mission_id": "mission-operator-roomcruise-1792338693128034142-2795",
+        "physical_stall_proven": false,
+        "start_ref": {
+          "field_path": "/payload/expected/layers/L8",
+          "log_time_ns": 7684006586499,
+          "message_id": "msg-000000001282",
+          "source_pointer": "",
+          "tick_id": null,
+          "topic": "/r2b4/event",
+          "view": "events"
+        },
+        "start_time_ns": 7684006586499
+      },
+      "physical_stall_proven": false,
+      "reason_durations_ns": {
+        "NO_PATH_HOLD": 478933651,
+        "PLANNER_PENDING": 20986317
+      },
+      "temporal_semantics": "CONSECUTIVE_DECISION_EVENT_STATE_INTERVALS_NO_LAST_EVENT_EXTRAPOLATION",
+      "zero_request_hold_fraction": 1.0
+    },
+    "earliest_global_root_cause_proven": false,
+    "episode_count": 0,
+    "episode_limit": 64,
+    "episodes": [],
+    "episodes_truncated": false,
+    "evidence_blockers": [],
+    "exact_replay_claim": false,
+    "longest_episode": null,
+    "navigation_health_verdict": "NOT_ASSESSED",
+    "physical_stall_proven": false,
+    "sampled_translation": {
+      "absolute_yaw_during_weak_translation_rad": 0.0,
+      "absolute_yaw_rad": 0.0,
+      "counts": {
+        "qualified_active_intervals": 22,
+        "weak_translation_intervals": 22,
+        "weak_translation_runs": 1
+      },
+      "durations": {
+        "qualified_active_ns": 479840545,
+        "weak_translation_ns": 479840545,
+        "weak_translation_with_nonzero_output_ns": 0
+      },
+      "estimated_path_m": 0.0,
+      "estimated_path_speed_mps": 0.0,
+      "longest_weak_translation_run": {
+        "absolute_yaw_rad": 0.0,
+        "duration_ns": 479840545,
+        "end_ref": {
+          "field_path": null,
+          "log_time_ns": 7684486427044,
+          "message_id": "msg-000000001314",
+          "source_pointer": "/expected/layers/L3",
+          "tick_id": 776,
+          "topic": "/r2b4/tick",
+          "view": "layers/L3"
+        },
+        "end_time_ns": 7684486427044,
+        "estimated_path_m": 0.0,
+        "mission_id": "mission-operator-roomcruise-1792338693128034142-2795",
+        "start_ref": {
+          "field_path": null,
+          "log_time_ns": 7684006586499,
+          "message_id": "msg-000000001283",
+          "source_pointer": "/expected/layers/L3",
+          "tick_id": 754,
+          "topic": "/r2b4/tick",
+          "view": "layers/L3"
+        },
+        "start_time_ns": 7684006586499
+      },
+      "physical_stall_proven": false,
+      "temporal_semantics": "QUALIFIED_SAMPLED_LOCAL_POSE_CHORDS_INCLUDING_TURNING",
+      "translation_threshold_mps": 0.03,
+      "weak_translation_fraction": 1.0
+    },
+    "temporal_semantics": "SOURCE_CONTEXT_TIME_SAMPLED_INTERVALS_NO_LAST_SAMPLE_EXTRAPOLATION",
+    "thresholds": {
+      "angular_stationary_rad_s": 0.02,
+      "linear_stationary_mps": 0.005,
+      "maximum_recording_gap_s": 0.25,
+      "minimum_episode_s": 1.0
+    },
+    "zero_long_episodes_proves_healthy_navigation": false
+  },
+  "observations": [
+    {
+      "code": "NAVIGATION_CAUSAL_EPISODES",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L3",
+            "layers/L5",
+            "layers/L6",
+            "layers/L7",
+            "layers/L8",
+            "layers/L9",
+            "layers/L12",
+            "layers/L4",
+            "layers/L11",
+            "ticks",
+            "events"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "RELATIONSHIP",
+      "message": "Automatic episode diagnosis separates explicit recorded stop mechanisms from unproven physical/upstream causes and goal-selection hypotheses.",
+      "values": {
+        "cause_counts": {},
+        "episode_count": 0,
+        "evidence_blockers": []
+      }
+    },
+    {
+      "code": "DENSE_SHORT_NAVIGATION_HOLDS",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [
+            "/payload"
+          ],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "events"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "DERIVED_MEASUREMENT",
+      "message": "Consecutive navigation decision events measure every zero-request HOLD, merging reason changes and retaining short motion intervals; zero long episodes is not a healthy-navigation verdict.",
+      "values": {
+        "counts": {
+          "hold_runs": 1,
+          "hold_runs_below_long_episode_threshold": 1
+        },
+        "durations": {
+          "active_navigation_ns": 499919968,
+          "zero_request_hold_ns": 499919968
+        },
+        "hold_run_limit": 64,
+        "hold_runs": [
+          {
+            "duration_ns": 499919968,
+            "end_ref": {
+              "field_path": "/payload/expected/layers/L8",
+              "log_time_ns": 7684506506467,
+              "message_id": "msg-000000001315",
+              "source_pointer": "",
+              "tick_id": null,
+              "topic": "/r2b4/event",
+              "view": "events"
+            },
+            "end_time_ns": 7684506506467,
+            "first_cause": [
+              "MOTION_REALIZATION_HOLD",
+              "L8",
+              "/stop_reason",
+              "PLANNER_PENDING_NO_VALID_OBJECTIVE"
+            ],
+            "interval_count": 4,
+            "mission_id": "mission-operator-roomcruise-1792338693128034142-2795",
+            "physical_stall_proven": false,
+            "start_ref": {
+              "field_path": "/payload/expected/layers/L8",
+              "log_time_ns": 7684006586499,
+              "message_id": "msg-000000001282",
+              "source_pointer": "",
+              "tick_id": null,
+              "topic": "/r2b4/event",
+              "view": "events"
+            },
+            "start_time_ns": 7684006586499
+          }
+        ],
+        "hold_runs_truncated": false,
+        "longest_hold_run": {
+          "duration_ns": 499919968,
+          "end_ref": {
+            "field_path": "/payload/expected/layers/L8",
+            "log_time_ns": 7684506506467,
+            "message_id": "msg-000000001315",
+            "source_pointer": "",
+            "tick_id": null,
+            "topic": "/r2b4/event",
+            "view": "events"
+          },
+          "end_time_ns": 7684506506467,
+          "first_cause": [
+            "MOTION_REALIZATION_HOLD",
+            "L8",
+            "/stop_reason",
+            "PLANNER_PENDING_NO_VALID_OBJECTIVE"
+          ],
+          "interval_count": 4,
+          "mission_id": "mission-operator-roomcruise-1792338693128034142-2795",
+          "physical_stall_proven": false,
+          "start_ref": {
+            "field_path": "/payload/expected/layers/L8",
+            "log_time_ns": 7684006586499,
+            "message_id": "msg-000000001282",
+            "source_pointer": "",
+            "tick_id": null,
+            "topic": "/r2b4/event",
+            "view": "events"
+          },
+          "start_time_ns": 7684006586499
+        },
+        "physical_stall_proven": false,
+        "reason_durations_ns": {
+          "NO_PATH_HOLD": 478933651,
+          "PLANNER_PENDING": 20986317
+        },
+        "temporal_semantics": "CONSECUTIVE_DECISION_EVENT_STATE_INTERVALS_NO_LAST_EVENT_EXTRAPOLATION",
+        "zero_request_hold_fraction": 1.0
+      }
+    },
+    {
+      "code": "SAMPLED_WEAK_TRANSLATION",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L3",
+            "layers/L5",
+            "layers/L12"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "DERIVED_MEASUREMENT",
+      "message": "Qualified local-pose samples measure low translational progress even while turning. These sampled estimates do not prove a physical stall or localization accuracy.",
+      "values": {
+        "absolute_yaw_during_weak_translation_rad": 0.0,
+        "absolute_yaw_rad": 0.0,
+        "counts": {
+          "qualified_active_intervals": 22,
+          "weak_translation_intervals": 22,
+          "weak_translation_runs": 1
+        },
+        "durations": {
+          "qualified_active_ns": 479840545,
+          "weak_translation_ns": 479840545,
+          "weak_translation_with_nonzero_output_ns": 0
+        },
+        "estimated_path_m": 0.0,
+        "estimated_path_speed_mps": 0.0,
+        "longest_weak_translation_run": {
+          "absolute_yaw_rad": 0.0,
+          "duration_ns": 479840545,
+          "end_ref": {
+            "field_path": null,
+            "log_time_ns": 7684486427044,
+            "message_id": "msg-000000001314",
+            "source_pointer": "/expected/layers/L3",
+            "tick_id": 776,
+            "topic": "/r2b4/tick",
+            "view": "layers/L3"
+          },
+          "end_time_ns": 7684486427044,
+          "estimated_path_m": 0.0,
+          "mission_id": "mission-operator-roomcruise-1792338693128034142-2795",
+          "start_ref": {
+            "field_path": null,
+            "log_time_ns": 7684006586499,
+            "message_id": "msg-000000001283",
+            "source_pointer": "/expected/layers/L3",
+            "tick_id": 754,
+            "topic": "/r2b4/tick",
+            "view": "layers/L3"
+          },
+          "start_time_ns": 7684006586499
+        },
+        "physical_stall_proven": false,
+        "temporal_semantics": "QUALIFIED_SAMPLED_LOCAL_POSE_CHORDS_INCLUDING_TURNING",
+        "translation_threshold_mps": 0.03,
+        "weak_translation_fraction": 1.0
+      }
+    }
+  ],
+  "producer": {
+    "diag_source_dirty": false,
+    "diag_source_sha256": "a22e01d926d66ef53e887cc47bcf762e1d58760b8c2090dae05e4b0285715882",
+    "generated_at_utc": "2026-10-18T16:00:01.137094Z",
+    "git_commit": "542cc8490fdd663270567c57ad6c2ad2294f31e9",
+    "platform": "Linux-6.12.47+rpt-rpi-2712-aarch64-with-glibc2.36",
+    "python_version": "3.11.2",
+    "schema": "R2B4_DIAG_PRODUCER_V1",
+    "source_files": [
+      "tools/diag/__init__.py",
+      "tools/diag/__main__.py",
+      "tools/diag/admission.py",
+      "tools/diag/analyzers/__init__.py",
+      "tools/diag/analyzers/drive.py",
+      "tools/diag/analyzers/evidence_health.py",
+      "tools/diag/analyzers/execution_chain.py",
+      "tools/diag/analyzers/lifecycle.py",
+      "tools/diag/analyzers/lineage.py",
+      "tools/diag/analyzers/localization.py",
+      "tools/diag/analyzers/motion_performance.py",
+      "tools/diag/analyzers/navigation.py",
+      "tools/diag/analyzers/navigation_root_cause.py",
+      "tools/diag/analyzers/recovery.py",
+      "tools/diag/analyzers/safety.py",
+      "tools/diag/analyzers/world_model.py",
+      "tools/diag/basis.py",
+      "tools/diag/cli.py",
+      "tools/diag/context.py",
+      "tools/diag/contracts.py",
+      "tools/diag/episodes.py",
+      "tools/diag/persistence.py",
+      "tools/diag/profiling.py",
+      "tools/diag/provenance.py",
+      "tools/diag/registry.py",
+      "tools/diag/tick_evidence.py",
+      "tools/mcap_evidence/reader.py"
+    ]
+  },
+  "purpose": "DIAGNOSTIC_DATA_ONLY",
+  "root_cause_inferred": false,
+  "schema": "R2B4_DIAG_RESULT_V3",
+  "source": "EVI_EVIDENCE_ONLY",
+  "summary": {
+    "cause_counts": {},
+    "dense_hold_run_count": 1,
+    "dense_zero_request_hold_fraction": 1.0,
+    "episode_count": 0,
+    "evidence_blockers": [],
+    "longest_episode_ns": null,
+    "navigation_health_verdict": "NOT_ASSESSED",
+    "sampled_weak_translation_fraction": 1.0
+  }
+}
