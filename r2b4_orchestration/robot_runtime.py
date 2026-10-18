@@ -591,6 +591,10 @@ class PublicRobotRuntime:
                 params["session_owner_pid"] = os.getpid()
                 params.setdefault("session_watchdog_s", duration)
                 self._skill_motion_run = run_id
+                # A skill most atveszi a viselkedes tulajdonjogat.
+                # A korabbi kulso CLI tulajdonos nem ervenyes erre a skillre.
+                with self._state_lock:
+                    self._caller_pid = None
                 state = self.behaviors.start(name, params, max_duration_s=duration,
                                              lineage=self._skill_goals.get(run_id))
                 if not self.skills.accepts(run_id):
