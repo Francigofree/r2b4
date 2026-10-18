@@ -1,0 +1,246 @@
+{
+  "admission": {
+    "analyzer_id": "navigation_root_cause",
+    "applicable": true,
+    "checked": {
+      "missing_topics": [],
+      "missing_views": [],
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "events",
+        "layers/L11",
+        "layers/L4",
+        "ticks"
+      ],
+      "required_topics": [
+        "/r2b4/tick"
+      ],
+      "required_views": [
+        "layers/L3",
+        "layers/L5",
+        "layers/L6",
+        "layers/L7",
+        "layers/L8",
+        "layers/L9",
+        "layers/L12"
+      ],
+      "verification_status": "PASS"
+    },
+    "coverage": {
+      "optional": "COMPLETE",
+      "optional_views_missing": [],
+      "optional_views_present": [
+        "events",
+        "layers/L11",
+        "layers/L4",
+        "ticks"
+      ],
+      "required": "COMPLETE"
+    },
+    "reasons": [],
+    "state": "APPLICABLE"
+  },
+  "analyzer_id": "navigation_root_cause",
+  "contract": {
+    "analyzer_id": "navigation_root_cause",
+    "contract_version": 1,
+    "description": "Source-time navigation hold/no-progress episodes with explicit decision causes, hypotheses and evidence gaps.",
+    "optional_views": [
+      "layers/L4",
+      "layers/L11",
+      "ticks",
+      "events"
+    ],
+    "required_topics": [
+      "/r2b4/tick"
+    ],
+    "required_views": [
+      "layers/L3",
+      "layers/L5",
+      "layers/L6",
+      "layers/L7",
+      "layers/L8",
+      "layers/L9",
+      "layers/L12"
+    ]
+  },
+  "coverage": {
+    "domain": {
+      "event_linkage": "PRESENT",
+      "physical_ground_truth": "NOT_PRESENT"
+    },
+    "optional": "COMPLETE",
+    "optional_views_missing": [],
+    "optional_views_present": [
+      "events",
+      "layers/L11",
+      "layers/L4",
+      "ticks"
+    ],
+    "required": "COMPLETE"
+  },
+  "episodes": [],
+  "evidence": {
+    "compiler_git_commit": "67ac2e64be97200cecf567a3eaa577250329b9a9",
+    "compiler_git_dirty": true,
+    "compiler_status": "COMPLETE",
+    "field_path_count": 2966,
+    "json_decoded_messages": 8281,
+    "message_count": 8281,
+    "message_end_time_ns": 7853785828214,
+    "message_start_time_ns": 7714048060069,
+    "normalized_views": 16117,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20261018_110514_2932_capture.evidence",
+    "quarantined_messages": 0,
+    "source_integrity": "COMPLETE",
+    "source_path": "/home/alba/project_r2b4/runtime/captures/v3_20261018_110514_2932_capture.mcap",
+    "source_sha256": "af654a6c5ca3641c6015bbf3bf08a9197e4058dbd3eb1097bc16e6058083bf90",
+    "source_snapshot_size": 58583853,
+    "tick_rate_hz_estimate": 5.00216860028037,
+    "topics": {
+      "/r2b4/event": 7627,
+      "/r2b4/runtime": 1,
+      "/r2b4/tick": 653
+    },
+    "verification_source_checked": false,
+    "verification_status": "PASS",
+    "view_counts": {
+      "events": 7627,
+      "layers/L1": 653,
+      "layers/L10": 653,
+      "layers/L11": 653,
+      "layers/L12": 653,
+      "layers/L2": 653,
+      "layers/L3": 653,
+      "layers/L4": 653,
+      "layers/L5": 653,
+      "layers/L6": 653,
+      "layers/L7": 653,
+      "layers/L8": 653,
+      "layers/L9": 653,
+      "runtime": 1,
+      "ticks": 653
+    }
+  },
+  "metrics": {
+    "capture_integrity": {
+      "capture_required_loss_count": null,
+      "evidence_ref": {
+        "field_path": null,
+        "log_time_ns": 7847917564538,
+        "message_id": "msg-000000008281",
+        "source_pointer": "",
+        "tick_id": null,
+        "topic": "/r2b4/event",
+        "view": "events"
+      },
+      "ingress_drop_count": 0,
+      "replay_complete": false,
+      "sample_complete": true,
+      "tick_row_count": null
+    },
+    "causal_scope": "EXPLICIT_RECORDED_DECISION_PROPAGATED_TO_ZERO_MOTION",
+    "cause_counts": {},
+    "data_quality": {
+      "gap_order_or_mission_boundary": 205,
+      "valid_decision_events": 3739,
+      "valid_samples": 653
+    },
+    "earliest_global_root_cause_proven": false,
+    "episode_count": 0,
+    "episode_limit": 64,
+    "episodes": [],
+    "episodes_truncated": false,
+    "evidence_blockers": [],
+    "exact_replay_claim": false,
+    "longest_episode": null,
+    "physical_stall_proven": false,
+    "temporal_semantics": "SOURCE_CONTEXT_TIME_SAMPLED_INTERVALS_NO_LAST_SAMPLE_EXTRAPOLATION",
+    "thresholds": {
+      "angular_stationary_rad_s": 0.02,
+      "linear_stationary_mps": 0.005,
+      "maximum_recording_gap_s": 0.25,
+      "minimum_episode_s": 1.0
+    }
+  },
+  "observations": [
+    {
+      "code": "NAVIGATION_CAUSAL_EPISODES",
+      "evidence_basis": [
+        {
+          "details": {},
+          "fields": [],
+          "kind": "VIEW_SCAN",
+          "views": [
+            "layers/L3",
+            "layers/L5",
+            "layers/L6",
+            "layers/L7",
+            "layers/L8",
+            "layers/L9",
+            "layers/L12",
+            "layers/L4",
+            "layers/L11",
+            "ticks",
+            "events"
+          ]
+        }
+      ],
+      "evidence_refs": [],
+      "kind": "RELATIONSHIP",
+      "message": "Automatic episode diagnosis separates explicit recorded stop mechanisms from unproven physical/upstream causes and goal-selection hypotheses.",
+      "values": {
+        "cause_counts": {},
+        "episode_count": 0,
+        "evidence_blockers": []
+      }
+    }
+  ],
+  "producer": {
+    "diag_source_dirty": false,
+    "diag_source_sha256": "29d5827132917831ac8834956f79b2f14d43087f3413cd69bec75c7fe12e7104",
+    "generated_at_utc": "2026-10-18T09:40:40.048509Z",
+    "git_commit": "76b6c69ee496ae517f89a6b90245124b6b3ff84d",
+    "platform": "Linux-6.12.47+rpt-rpi-2712-aarch64-with-glibc2.36",
+    "python_version": "3.11.2",
+    "schema": "R2B4_DIAG_PRODUCER_V1",
+    "source_files": [
+      "tools/diag/__init__.py",
+      "tools/diag/__main__.py",
+      "tools/diag/admission.py",
+      "tools/diag/analyzers/__init__.py",
+      "tools/diag/analyzers/drive.py",
+      "tools/diag/analyzers/evidence_health.py",
+      "tools/diag/analyzers/execution_chain.py",
+      "tools/diag/analyzers/lifecycle.py",
+      "tools/diag/analyzers/lineage.py",
+      "tools/diag/analyzers/localization.py",
+      "tools/diag/analyzers/motion_performance.py",
+      "tools/diag/analyzers/navigation.py",
+      "tools/diag/analyzers/navigation_root_cause.py",
+      "tools/diag/analyzers/recovery.py",
+      "tools/diag/analyzers/safety.py",
+      "tools/diag/analyzers/world_model.py",
+      "tools/diag/basis.py",
+      "tools/diag/cli.py",
+      "tools/diag/context.py",
+      "tools/diag/contracts.py",
+      "tools/diag/episodes.py",
+      "tools/diag/persistence.py",
+      "tools/diag/profiling.py",
+      "tools/diag/provenance.py",
+      "tools/diag/registry.py",
+      "tools/mcap_evidence/reader.py"
+    ]
+  },
+  "purpose": "DIAGNOSTIC_DATA_ONLY",
+  "root_cause_inferred": false,
+  "schema": "R2B4_DIAG_RESULT_V3",
+  "source": "EVI_EVIDENCE_ONLY",
+  "summary": {
+    "cause_counts": {},
+    "episode_count": 0,
+    "evidence_blockers": [],
+    "longest_episode_ns": null
+  }
+}
