@@ -190,8 +190,8 @@ def test_full_registry_has_lineage_coverage_summary_and_compact_global_provenanc
     payload = report.as_dict()
     assert payload["schema"] == "R2B4_DIAG_FULL_REPORT_V2"
     assert payload["producer"]["diag_source_sha256"] == "sourcehash"
-    assert payload["summary"]["analyzer_count"] == 11
-    assert payload["summary"]["admission_counts"] == {"APPLICABLE": 11}
+    assert payload["summary"]["analyzer_count"] == 12
+    assert payload["summary"]["admission_counts"] == {"APPLICABLE": 12}
     for analyzer in payload["analyzers"]:
         assert analyzer["schema"] == "R2B4_DIAG_RESULT_V3"
         assert "evidence" not in analyzer

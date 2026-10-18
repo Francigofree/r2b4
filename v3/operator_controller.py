@@ -34,7 +34,7 @@ from v3.mcap_reader import McapReadError, McapReader
 from v3.resident_status import HOST_STATUS_MAX_AGE_NS, status_is_fresh
 
 
-DEFAULT_CAPTURE_MODE = "alap"
+DEFAULT_CAPTURE_MODE = "full"
 CAPTURE_MODES = frozenset({"alap", "full", "nincs"})
 
 

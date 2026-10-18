@@ -206,7 +206,8 @@ def test_capture_process_shutdown_has_no_evidence_dependency(tmp_path, monkeypat
     assert result == {'state': 'STOPPED'}
     assert not any('testhub' in adapter.capability_names for adapter in build_adapters(object(), tmp_path))
     assert not any(c['name'] == 'testhub' for c in command_catalog()['robot'])
-    root = Path(__file__).resolve().parents[2]
+    from rig import ROOT
+    root = ROOT
     assert not list((root / 'v3').glob('test_hub*.py'))
     for name in ('v3/process_sidecars.py', 'v3_process_runtime.py', 'v3/operator_controller.py', 'v3/replay.py'):
         text = (root / name).read_text()

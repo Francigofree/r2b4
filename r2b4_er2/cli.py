@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from v3.robot_interface import RobotInterface
+from v3.capture_rate import DEFAULT_CAPTURE_HZ
 
 from .config import Er2Config, PREVIEW_MODEL, STREAMING_MODEL
 from .evidence import Er2Evidence
@@ -29,7 +30,7 @@ class _RuntimeLease:
         if running:
             return
         with self.interface.controller.operator_transition(cancel_event=cancel_event):
-            self.interface.execute("operator.runtime.start", capture_mode="nincs", capture_hz=10)
+            self.interface.execute("operator.runtime.start", capture_mode="nincs", capture_hz=DEFAULT_CAPTURE_HZ)
             self.owned = True
 
     def close(self) -> None:

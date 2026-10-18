@@ -201,6 +201,61 @@ def test_complete_compiler_does_not_hide_required_capture_loss(tmp_path):
         tools["replay.run"]({"capture": str(captured.path), "output": str(tmp_path / "lost.replay.json")})
 
 
+def test_large_diagnostic_details_fit_feedback_without_changing_trial_proof_scopes():
+    from copy import deepcopy
+    from r2b4_orchestration.agent_evidence_tools import _bound_diagnostic_feedback
+
+    ref = {"message_id": "original-tick", "view": "layers/L9", "source_pointer": "/expected/layers/L9",
+           "topic": "/r2b4/tick", "log_time_ns": 1234, "tick_id": 42, "field_path": "/allowed_v_mps"}
+    detail = {"episode_count": 64, "stage_duration_s": {"L12_SAFETY_BLOCKED": 15.},
+              "episodes": [{"start_ref": ref, "initial_evidence": "x" * 3000} for _ in range(64)],
+              "longest_observed_stop": {"duration_ns": 15_000_000_000, "start_ref": ref}}
+    original = {"evidence": {"path": "/tmp/source.evidence", "verification_status": "PASS"},
+        "capture": {"status": "EVIDENCE_BLOCKED", "complete": False},
+        "trial_binding": {"status": "EVIDENCE_BLOCKED", "reasons": ["TERMINAL_SKILL_EVENT_CONFLICT"]},
+        "replay": {"status": "MISMATCH", "verified_match": False}, "root_cause_inferred": True,
+        "analyzers": [{"analyzer_id": "motion_performance", "admission": {"state": "APPLICABLE"},
+            "summary": {"qualified_estimate_s": 15.}, "root_cause_inferred": True,
+            "metrics": {"motion_continuity": detail,
+                        "performance": {"allowed_motion_s": 15., "safety_blocked_s": 15.},
+                        "tracking": {"valid_pairs": 75, "active_command_pairs": 0}},
+            "observations": [{"code": "MEASURED", "values": detail, "evidence_refs": [ref]}], "episodes": []}]}
+    feedback = _bound_diagnostic_feedback(deepcopy(original))
+    assert len(json.dumps(feedback, ensure_ascii=False, allow_nan=False)) <= 32_000
+    for scope in ("evidence", "capture", "trial_binding", "replay", "root_cause_inferred"):
+        assert feedback[scope] == original[scope]
+    result = feedback["analyzers"][0]
+    assert result["admission"] == original["analyzers"][0]["admission"]
+    assert result["metrics"]["performance"] == original["analyzers"][0]["metrics"]["performance"]
+    assert result["metrics"]["tracking"] == original["analyzers"][0]["metrics"]["tracking"]
+    projected = result["metrics"]["motion_continuity"]
+    assert projected["details_omitted"] is True and projected["episode_count"] == 64
+    assert projected["detail_evidence_refs"][0] == ref
+    serialized = json.dumps(detail, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    assert projected["original_sha256"] == hashlib.sha256(serialized.encode()).hexdigest()
+    assert projected["diagnostic_pointer"] == "/metrics/motion_continuity"
+    assert result["detail_projection"]["arguments"] == {"analyzer": "motion_performance", "evidence": "/tmp/source.evidence"}
+    assert result["observations"][0]["evidence_refs"] == [ref]
+
+
+def test_feedback_reports_automatic_causal_assessment_from_selected_analyzers(tmp_path, monkeypatch):
+    from tools.diag.contracts import AnalyzerContract, AnalyzerOutput
+    from tools.diag import registry as registry_module
+
+    captured = _native_capture(tmp_path / "causal.mcap")
+    evidence = tmp_path / "causal.evidence"
+    _tools(ROOT)["evi.compile"]({"capture": str(captured.path), "output": str(evidence)})
+    registry = registry_module.build_default_registry()
+    registry.register(AnalyzerContract(analyzer_id="causal_fixture", description="Explicit causal-assessment metadata fixture."),
+                      lambda context, owner: AnalyzerOutput(metrics={"certainty": "EVIDENCE_BLOCKED"}, root_cause_inferred=True))
+    monkeypatch.setattr(registry_module, "build_default_registry", lambda: registry)
+    feedback = collect_evidence_feedback(ROOT, evidence=evidence, analyzers=("safety", "causal_fixture"))
+    assert feedback["root_cause_inferred"] is True
+    assert feedback["analyzers"][0]["root_cause_inferred"] is False
+    assert feedback["analyzers"][1]["root_cause_inferred"] is True
+    assert feedback["replay"]["verified_match"] is False
+
+
 def test_heavy_evidence_tools_use_canonical_resident_guard(tmp_path, monkeypatch):
     from v3.operator_controller import OperatorController
     from v3.host_cli import HostCliError

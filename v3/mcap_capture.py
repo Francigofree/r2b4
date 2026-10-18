@@ -35,6 +35,7 @@ from .capture_navigation import (
 )
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .hri_evidence import HRI_EVENT_TOPIC
+from .host_telemetry import HOST_TELEMETRY_TOPIC, HOST_TELEMETRY_SCHEMA
 from .public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
 from .capture_encoding import (
     CaptureEncodingError,
@@ -772,6 +773,9 @@ class McapCaptureConsumer:
             event_sequence = _non_negative_int(payload.get("event_sequence"), "public event sequence")
         elif item.topic == HRI_EVENT_TOPIC and isinstance(payload, Mapping):
             event_time = _non_negative_int(payload.get("monotonic_ns"), "HRI event monotonic_ns")
+        elif item.topic == HOST_TELEMETRY_TOPIC and isinstance(payload, Mapping):
+            event_time = _non_negative_int(payload.get("measurement_monotonic_ns"), "host measurement time")
+            event_sequence = _non_negative_int(payload.get("sample_sequence"), "host sample sequence")
         return (
             EncodedRecord(
                 hub_sequence=item.sequence,
@@ -984,6 +988,7 @@ class McapCaptureConsumer:
                 "observation_scope": "sensor_debug" if self._config.sensor_debug else "system_behavior",
                 "raw_evidence_requested": str(self._config.sensor_debug).lower(),
                 "navigation_event_schema": "R2B4_NAVIGATION_DECISION_V1",
+                "host_telemetry_schema": HOST_TELEMETRY_SCHEMA,
             },
         )
         self._writer = writer

@@ -45,7 +45,8 @@ def _print_help(registry: AnalyzerRegistry) -> None:
         "  - motion_performance links prior L9 commands to sampled L3 estimates\n"
         "  - diagnostic payloads are atomically saved under runtime/diag by default\n"
         "  - --no-save requests an explicit ephemeral run\n"
-        "  - no recommendations, suggestions or automatic root-cause verdicts\n\n"
+        "  - navigation_root_cause separates recorded causes, hypotheses and evidence gaps\n"
+        "  - no recommendations, suggestions or production control\n\n"
         "Analyzers: " + " | ".join(registry.ids())
     )
 

@@ -278,6 +278,18 @@ Az observer/capture út a host journal új eseményeit a
 ugyanazt a payloadot viszi; EVI compilation megőrzi és indexeli a teljes
 eredeti értéket. A compilation sikeressége különbözik a capture integritytől
 és a robotfeladat sikerétől. Az 1/5/10 Hz compact capture nem exact replay.
+Új felvételnél az alapértelmezés folyamatos `full`, 5 Hz; az explicit `c alap`
+rövid triggerablakot őriz meg. A production capture sidecar 1 Hz-enként
+`v3.host_telemetry` eseményként rögzíti a CPU-frekvenciát, CPU-terhelést,
+loadot, memóriát, hőmérsékletet és saját processzének erőforrásadatait.
+A hiányzó kerneladat explicit unavailable, nem nulla terhelés. A host I/O
+nem fut a control interpreterben; az események, kommunikáció és felsőrétegű
+állapotváltások meglévő journal-útja független az 5 Hz-es tickmintavételtől.
+A public-runtime journalból a session indulása utáni események kerülnek be;
+egy korábban elindult, azóta változatlan Brain/skill működéshez nincs új
+capture-time kognitív checkpoint. A HRI út külön bounded, boot-azonos
+60 másodperces előzményt követ. Teljes munkamenethez a felvételt a feladat
+indítása előtt kell megnyitni; az új runtime `full` alapmódja ezt segíti.
 Fejlesztői ellenőrzés meglévő, explicit kiválasztott artifacttal:
 
 ```bash

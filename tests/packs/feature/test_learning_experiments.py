@@ -16,6 +16,7 @@ from r2b4_orchestration.learning_tools import build_learning_tools, measure_skil
 from r2b4_orchestration.skill_learning import SkillLearningLoop
 from r2b4_orchestration.skill_library import SkillLibrary
 from v3.config import ConfigResolver
+from v3.capture_rate import DEFAULT_CAPTURE_HZ
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -60,7 +61,7 @@ def test_live_plan_is_realizable_asks_permission_and_never_calls_robot(learning_
     assert move["parameters"]["max_v_mps"] >= wheels.target_floor_mps
     assert turn["parameters"]["max_omega_rad_s"] >= wheels.target_center_spin_rad_s
     assert result["proposal"]["constraints"] == {}  # Finite motion is not a behavior duration constraint.
-    assert result["capture"]["mode"] == "full" and result["capture"]["tick_sample_hz"] == 10
+    assert result["capture"]["mode"] == "full" and result["capture"]["tick_sample_hz"] == DEFAULT_CAPTURE_HZ
     assert events[0][0] == "learning_live_approval_requested" and events[0][1]["measurement_time_ns"] > 0
     compile(result["bounded_execution"]["source"], "reviewed_live_trial", "exec")
 
@@ -86,7 +87,7 @@ def test_live_reviewed_sdk_timeout_stops_and_does_not_retry(learning_root):
     with pytest.raises(TimeoutError):
         asyncio.run(namespace["run"](Robot()))
     assert len(calls) == 1 and stopped == [True]
-    assert calls[0][1]["capture_mode"] == "full" and calls[0][1]["capture_hz"] == 10
+    assert calls[0][1]["capture_mode"] == "full" and calls[0][1]["capture_hz"] == DEFAULT_CAPTURE_HZ
 
 
 @pytest.mark.parametrize("first_result", [
@@ -303,7 +304,7 @@ def test_passing_live_metric_cannot_hide_terminal_fault_or_interrupted_action(
         assert result["reason"] == "LIVE_EVENT_SCAN_INCOMPLETE"
 
 
-def test_actual_learning_cli_records_model_and_final_events_in_full_10hz_capture(learning_root):
+def test_actual_learning_cli_records_model_and_final_events_in_full_default_capture(learning_root):
     from r2b4_orchestration.agent_contracts import AgentModelReply
     from r2b4_orchestration.learning_cli import run_learning
     from v3.mcap_capture import EVENT_TOPIC
@@ -327,7 +328,7 @@ def test_actual_learning_cli_records_model_and_final_events_in_full_10hz_capture
                           scenario=scenario, timeout_s=30)
     assert result["status"] == "LEARNED" and result["provider_calls"] == 1, result
     reader = McapReader(result["learning_capture"])
-    assert reader.latest_metadata("r2b4.capture")["tick_sample_hz"] == "10"
+    assert reader.latest_metadata("r2b4.capture")["tick_sample_hz"] == str(DEFAULT_CAPTURE_HZ)
     host_events = [message.json()["payload"] for message in reader.iter_messages(topics=(EVENT_TOPIC,))
                    if message.json().get("source_topic") == PUBLIC_RUNTIME_EVENT_TOPIC]
     observed = {(event["kind"], event["value"].get("event_type")) for event in host_events

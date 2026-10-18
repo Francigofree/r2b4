@@ -185,7 +185,7 @@ def _metrics(rows, config, scenario):
     return result
 
 
-def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=False):
+def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=False, record_capture=True):
     """Finite closed loop with an in-memory motor sink and canonical command gateway."""
     from v3.capture_encoding import encode_value
     from v3.composition.full_fake import OfflineMotorSink
@@ -193,6 +193,8 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
     from v3.mcap_capture import McapCaptureConfig
     from v3_process_runtime import McapCaptureSession
 
+    if replay and not record_capture:
+        raise ValueError("canonical replay requires a recorded experiment")
     scenario = deepcopy(scenario if scenario is not None else scenarios()[scenario_name])
     behavior, occlusion = scenario["behavior"], scenario.get("occlusion_s", ())
     plant_scenario = motion_scenario({key: value for key, value in scenario.items()
@@ -208,14 +210,15 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
     session = McapCaptureSession("motion-"+scenario_name, directory/"capture.mcap",
         configuration={"production_control": config},
         metadata={"source": "simulation", "scenario": scenario, "physical_hardware": False},
-        config=McapCaptureConfig(mode="append_only", tick_sample_hz=50), capacity=2048)
+        config=McapCaptureConfig(mode="append_only", tick_sample_hz=50), capacity=2048) if record_capture else None
     timeline = (directory/"timeline.ndjson").open("w")
     plant = None
 
     def observe(record, scan):
-        if scan is not None:
+        if scan is not None and session is not None:
             session.hub.publish(scan, topic="v3.raw_lidar")
-        session.observe(record)
+        if session is not None:
+            session.observe(record)
         layers = {row.layer: row.output for row in record.result.trace.layers}
         follow = next((item for item in record.evidence if type(item).__name__ == "FollowPersonEvidence"), None)
         nav, mission = layers.get("L6"), layers.get("L5")
@@ -240,7 +243,7 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
                                   if type(item).__name__ == "LayerFaultEvidence"]}
         rows.append(row)
         timeline.write(json.dumps(row, allow_nan=False)+"\n")
-        if session.failed:
+        if session is not None and session.failed:
             raise RuntimeError("SIMULATION_CAPTURE_INTEGRITY_FAILURE")
 
     ingress = resolved.edges.command_ingress
@@ -252,7 +255,8 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
         lidar_ray_count=96, local_perception_config=resolved.runtime.sensor_inputs.inputs.lidar_source)
     error = None
     termination = "DURATION_REACHED"
-    session.start()
+    if session is not None:
+        session.start()
     try:
         plant.step()
         ticks = math.ceil(plant_scenario["duration_s"]*1e9/plant.dt_ns)
@@ -286,7 +290,7 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
     finally:
         composition.close()
         timeline.close()
-        capture = session.finalize(SimpleNamespace(status=0 if error is None else 1), error=error)
+        capture = session.finalize(SimpleNamespace(status=0 if error is None else 1), error=error) if session is not None else None
     metrics = _metrics(rows, resolved, scenario)
     performance = plant.performance()
     metrics.update(collision_count=plant.collision_count, safety_stop_count=plant.safety_stop_count,
@@ -300,13 +304,14 @@ def run_experiment(resolved, scenario_name, directory, *, scenario=None, replay=
     result = {"scenario": scenario_name, "scenario_input": scenario, "scenario_sha256": _digest(scenario),
               "config_snapshot_id": resolved.snapshot_id,
               "control_config_sha256": _digest(encode_value(config)), "metrics": metrics,
+              "footprint_safety_margin_m": config.navigation.footprint_safety_margin_m,
               "resolved_config": str(directory/"resolved_config.json"),
               "fault_layer": plant.fault_layer, "first_boundary": plant.first_boundary,
               "termination_reason": termination, "requested_duration_s": plant_scenario["duration_s"],
               "observed_runtime_active_s": sum(row["active"] for row in rows)*plant.dt_ns/1e9,
               "early_terminal": termination in {"NATIVE_FAULT", "FOOTPRINT_COLLISION", "GOAL_COMPLETE"},
               "final_stop": plant.output == (0., 0.), "physical_output": False,
-              "capture": str(capture), "timeline": str(directory/"timeline.ndjson"),
+              "capture": str(capture) if capture is not None else None, "timeline": str(directory/"timeline.ndjson"),
               "replay": replay_result}
     (directory/"result.json").write_text(json.dumps(result, indent=2, allow_nan=False)+"\n")
     return result

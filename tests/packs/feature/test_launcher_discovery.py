@@ -233,3 +233,19 @@ def test_runtime_d_help_keeps_the_canonical_interface_route(monkeypatch, offline
     monkeypatch.setattr(interface_cli, 'main', lambda args, **kwargs: called.append(args) or 0)
     assert launcher_cli.main(['help', 'd']) == 0
     assert called == [['d', '--help']]
+
+
+def test_automatic_tuning_cannot_load_an_active_robot_runtime(monkeypatch, offline_root):
+    from v3.operator_controller import OperatorController
+
+    invoked = []
+    monkeypatch.setattr(host_cli, '_run', lambda command, **kwargs: invoked.append(command) or 0)
+    monkeypatch.setattr(OperatorController, 'status', lambda self: {'runtime_running': True})
+    with pytest.raises(host_cli.HostCliError, match='resident V3 runtime'):
+        host_cli.tune(offline_root, ['auto', '--variants', '200'])
+    assert not invoked
+    # Discovery remains available while the robot is running.
+    assert host_cli.tune(offline_root, ['auto', '--help']) == 0
+    monkeypatch.setattr(OperatorController, 'status', lambda self: {'runtime_running': False})
+    assert host_cli.tune(offline_root, ['auto', '--variants', '200']) == 0
+    assert all('tools.tuners.r2b4_navigation_autotuner' in call for call in invoked)

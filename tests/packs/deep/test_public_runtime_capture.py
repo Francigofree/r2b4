@@ -64,7 +64,7 @@ def public_rows(path):
 def test_public_events_direct_process_equivalent_and_final_drain(tmp_path):
     path = journal(tmp_path)
     append(path, event(10))  # Outside both capture sessions.
-    config = McapCaptureConfig(mode="append_only", tick_sample_hz=10)
+    config = McapCaptureConfig(mode="append_only", tick_sample_hz=5)
     sessions = [kind(name, tmp_path / (name + ".mcap"), configuration={},
                      project_root=tmp_path, config=config)
                 for kind, name in ((McapCaptureSession, "direct"), (ProcessMcapCaptureSession, "process"))]

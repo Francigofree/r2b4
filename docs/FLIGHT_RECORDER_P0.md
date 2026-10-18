@@ -5,6 +5,9 @@ Az architekturális authority továbbra is a két V3 contract; ez a dokumentum
 az implementáció és használat leírása. Nincs új control-, naplózó- vagy
 diagnosztikai rendszer, nincs production döntési input az observation felől.
 
+A jelenlegi alapértelmezés folyamatos `full`, 5 Hz; a kapcsolódó automatikus
+hibakeresés és offline hangolás használata: [Experience Development](EXPERIENCE_DEVELOPMENT.md).
+
 ## Felvételi terv és megvalósítás
 
 1. Az állapotfelvétel a meglévő időalapú mintavétel marad, hosszú futásra
@@ -105,6 +108,20 @@ A runtime leállásakor a már létező 50 Hz-es timing accumulator összegzése
 periódusától és a sidecar saját CPU/RSS/írási metrikáitól. A wall/CPU
 fázisidők nem választják külön a GIL-várást és a scheduler-preemptiont.
 Report nélkül megszakadt futásból ez az összegzés hiányozhat.
+
+A production capture sidecar a saját interpreterében 1 Hz-enként mintázza
+a CPU magonkénti frekvenciáját (legfeljebb 64 mag), összterhelését, loadot,
+memóriát, első thermal zone hőmérsékletét és a capture processz CPU/RSS
+értékeit. Minden kernelolvasás byte-korlátos; késés után nincs pótló burst.
+A `v3.host_telemetry` source topic megőrzi a measurement/completion/publication
+időt és a sample sequence-et. Hiányzó vagy hibás kerneladat explicit unavailable.
+Ez host evidence, nem V3 health-authority és nem GIL/scheduler szétválasztás.
+Virtuális idejű direct szimuláció nem kever hozzá valós host-időt.
+
+A felsőrétegek public-runtime journalja a session alatti új eseményeket
+őrzi; nincs capture-kezdéskori Brain/skill checkpoint. A HRI follower boot-azonos,
+bounded 60 másodperces előzményt is követ. A felvételt a feladat előtt kell
+megnyitni, ha annak teljes felsőrétegi eseménysora szükséges.
 
 A futási JSON reportok source identityt, explicit küszöböket és coverage-et
 tartalmaznak, így azonos konfiguráció és coverage mellett összevethetők.

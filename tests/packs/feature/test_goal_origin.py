@@ -6,6 +6,8 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from r2b4_orchestration.goal_origin import GoalOrigin, capture_goal_origin
+from v3.capture_rate import DEFAULT_CAPTURE_HZ
+from v3.operator_controller import DEFAULT_CAPTURE_MODE
 
 
 class Clock:
@@ -68,9 +70,9 @@ def test_stopped_runtime_is_prepared_only_through_canonical_start_then_stop():
     clock = Clock()
     robot = Robot(clock, running=False)
     origin = capture_goal_origin(robot, clock)
-    assert ("operator.runtime.start", {"capture_mode": "alap", "capture_hz": 10}) in robot.operations
+    assert ("operator.runtime.start", {"capture_mode": DEFAULT_CAPTURE_MODE, "capture_hz": DEFAULT_CAPTURE_HZ}) in robot.operations
     assert robot.operations.index("STOP") > next(index for index, item in enumerate(robot.operations) if isinstance(item, tuple))
-    assert origin.capture_mode == "alap"
+    assert origin.capture_mode == DEFAULT_CAPTURE_MODE
 
 
 @pytest.mark.parametrize("change", ["runtime", "generation", "capture", "stale", "fault", "safety", "pose", "quality", "missing_quality"])

@@ -14,6 +14,7 @@ from r2b4_orchestration.skill_library import SkillLibrary
 from r2b4_voice.conversation_interface import _AgentObservationJournal
 from v3.hri_evidence import HriEventJournal, HriEventFollower, HRI_EVENT_TOPIC
 from v3.mcap_capture import McapCaptureConfig
+from v3.capture_rate import DEFAULT_CAPTURE_HZ
 from v3.mcap_reader import McapReader
 from v3.process_sidecars import ProcessMcapCaptureSession
 from v3_process_runtime import McapCaptureSession
@@ -38,7 +39,7 @@ def test_live_learning_plan_has_no_motor_effect_and_identical_direct_process_cap
                     steps=[{"action": "v3.command.move_relative", "parameters": {"forward_m": .2}}],
                     max_duration_s=10, purpose="Mérjük a canonical mozgás sebességkövetését.")
                 assert plan["status"] == "APPROVAL_REQUIRED" and plan["execution_started"] is False
-                assert plan["capture"]["tick_sample_hz"] == 10
+                assert plan["capture"]["tick_sample_hz"] == DEFAULT_CAPTURE_HZ
                 assert plan["source_hash"] == SkillLibrary(ROOT / "robot_skills").load("slow_test").source_hash
                 measured = time.monotonic_ns() - 1000
                 host._learning_event("learning_comparison", {

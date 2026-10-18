@@ -44,7 +44,7 @@ COMMAND_HELP = {
     "git": ("[ARGS...]", "Git a projekt könyvtárában; az argumentumok változatlanul továbbmennek."),
     "pytest": ("[ARGS...]", "Nyers pytest; az argumentumok változatlanul továbbmennek."),
     "test": ("[MODE|TEST_NODE] [PYTEST_ARGS...]", "Célzott tesztek; alapértelmezés: kis robot-contract gate. Hosszú próba: endurance. Módok: r test list."),
-    "tune": ("roomcruise|simulate [ARGS...]", "Offline RoomCruise keresés vagy natív V3/PWM konfigurációs kísérlet; nincs fizikai motor-output."),
+    "tune": ("auto|roomcruise|simulate [ARGS...]", "Offline automatikus hangolás vagy natív V3/PWM konfigurációs kísérlet; nincs fizikai motor-output."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
     "diag": ("[full|ANALYZER] [EVIDENCE|latest] [--json] [--no-save]", "Verified EVI evidence-ből diagnosztikai adatokat szolgáltat; alap: full/latest, artifact: runtime/diag/."),
@@ -128,16 +128,21 @@ def profile_test(root: Path, argv: list[str]) -> int:
 def tune(root: Path, argv: list[str]) -> int:
     """Run offline tuners without granting robot/runtime authority."""
     if not argv:
-        print("Használat: r tune roomcruise|simulate [OPCIÓK]\nRészletes opciók: r tune simulate --help")
+        print("Használat: r tune auto|roomcruise|simulate [OPCIÓK]\nRészletes opciók: r tune auto --help")
         return 0
-    modules = {"roomcruise": "tools.tuners.r2b4_roomcruise_tuner",
+    modules = {"auto": "tools.tuners.r2b4_navigation_autotuner",
+               "roomcruise": "tools.tuners.r2b4_roomcruise_tuner",
                "simulate": "tools.tuners.r2b4_motion_tuner"}
     if argv[0] not in modules:
-        raise HostCliError("usage: r tune roomcruise|simulate [ARGS...]")
-    return _run([
+        raise HostCliError("usage: r tune auto|roomcruise|simulate [ARGS...]")
+    command = [
         sys.executable, "-m", modules[argv[0]],
         "--project-root", str(root), *argv[1:],
-    ], root=root)
+    ]
+    if argv[0] == "auto" and not any(arg in {"-h", "--help"} for arg in argv[1:]):
+        with hardware_guard(root):
+            return _run(command, root=root)
+    return _run(command, root=root)
 
 
 def list_tools(root: Path) -> int:

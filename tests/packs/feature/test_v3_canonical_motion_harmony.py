@@ -296,7 +296,9 @@ def test_roomcruise_follow_canonical_motion_harmony_survives_background_replans(
 
     # Cover startup, multiple moving exploration goals and
     # GOOD -> bucket-crossing -> DEGRADED -> GOOD local-quality changes.
-    for tick in range(250 if mode is CommandMode.EXPLORE else 36):
+    # Goal ranges are production policy. Exercise rolling replacement instead
+    # of assuming three goals fit into a fixed five-second motion window.
+    for tick in range(500 if mode is CommandMode.EXPLORE else 36):
         sigma_m, local_state = _soft_quality(tick)
         estimate, world = _scene(
             tick,
@@ -424,6 +426,8 @@ def test_roomcruise_follow_canonical_motion_harmony_survives_background_replans(
 
         previous_allowed = allowed
         previous_context = estimate.context
+        if mode is CommandMode.EXPLORE and len(goals) >= 3:
+            break
 
     assert moving_samples >= 20, "scenario did not exercise enough continuous motion"
     assert moving_while_replanning_samples > 0, (

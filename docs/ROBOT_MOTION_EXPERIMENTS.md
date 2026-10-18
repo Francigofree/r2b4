@@ -27,7 +27,7 @@ L0–L12 lánc realizálja, a diagnózis és a tanulási napló passzív fogyasz
    Végrehajtás előtt az agent a felhasználó kifejezett engedélyét kéri.
    A tervező tool nem indít runtime-ot vagy motort.
 6. A tanulási állapotváltások a meglévő host journal → capture follower →
-   MCAP eseményútra kerülnek. A rendszerállapot 10 Hz-es mintavételű;
+   MCAP eseményútra kerülnek. A rendszerállapot alapértelmezetten 5 Hz-es mintavételű;
    a ritkább kezdés, mérési eredmény, összehasonlítás és engedélykérés
    eseményenként megmarad, saját idővel és artifact-hivatkozással.
 
@@ -51,7 +51,9 @@ próbával vizsgálandó.
 
 ## Capture és visszaellenőrzés
 
-A 10 Hz-es behavior capture kis scalar állapotot és tanulási eseményeket
+A rendszer alapértelmezetten folyamatos (`full`), 5 Hz-es behavior capture-t készít;
+az explicit `c alap` továbbra is rövid triggerablakot rögzít.
+A behavior capture kis scalar állapotot és tanulási eseményeket
 tartalmaz. Nincs benne raw szenzorhalmaz vagy replay-checkpoint, és
 nem igazol exact replayt. Az explicit 50 Hz-es sensor-debug capture
 teljes lezárt inputot rögzíthet, és a natív Replayer ellenőrizheti.
@@ -198,7 +200,7 @@ kézzel felülvizsgálható; a ciklus nem írja automatikusan vissza a baseline-
 A fizikát használó próba sikerének állapota `LIVE_VALIDATION_REQUIRED`.
 A CLI ezt nem tekinti befejezett fizikai tanulásnak, ezért nem nulla exit
 code-dal tér vissza. A teljes `learning.json`, `measured.json`, per-trial
-50 Hz-es MCAP/replay/EVI és a tanulási folyamat 10 Hz-es `learning.mcap`
+50 Hz-es MCAP/replay/EVI és a tanulási folyamat 5 Hz-es `learning.mcap`
 az eredményben megadott `/tmp` könyvtárban található.
 
 Az agent toolok szerepe:
@@ -222,13 +224,14 @@ A szimuláció `learning.mcap` fájljában a több próba mozgásmintái kis,
 trial-azonosítóval ellátott események. A gyorsított fizika virtuális mérési
 ideje külön mezőben marad a host publikációs idejétől. A per-trial 50 Hz-es
 capture tartalmazza az exact replayhez szükséges natív inputot. Élő üzemben
-a meglévő 10 Hz-es behavior capture rögzíti a natív scalar állapotot és a
+a meglévő 5 Hz-es behavior capture rögzíti a natív scalar állapotot és a
 tanulási eseményeket.
 
-Az élő tanulás teljes folyamatához a `full` módú, 10 Hz-es capture session
+Az élő tanulás teljes folyamatához a `full` módú, 5 Hz-es capture session
 már az engedélykérés előtt induljon. A mérési MCAP-ot az explicit compiler
 előtt le kell zárni; az ezt követő értékelési események rögzítéséhez újabb
-aktív 10 Hz-es session szükséges. A session-határokon a megőrzött host
+aktív capture session szükséges. Meglévő session explicit eltérő frekvenciája
+megmarad. A session-határokon a megőrzött host
 journal, run/source/clock azonosítók és artifact-hivatkozások kötik össze
 az eseményeket. A public-runtime journal követője a session kezdetén
 az aktuális fájlvéghez áll; a korábban publikált engedélykérési eseményt

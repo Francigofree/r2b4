@@ -409,6 +409,88 @@ def _motion_measurement_scope(bundle, binding: Mapping[str, object]) -> dict[str
             "terminal_ref": terminal[0]["evidence_ref"]}
 
 
+def _diagnostic_projection(value, *, budget: int, pointer: str):
+    """Bound prompt detail while retaining source refs and aggregate facts.
+
+    The full analyzer remains available through diag.run on the same verified
+    bundle. Omission metadata binds this projection to that original subtree;
+    it is neither new evidence nor an altered integrity/causal verdict.
+    """
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    if len(encoded) <= budget:
+        return value
+    result = {"details_omitted": True, "original_character_count": len(encoded),
+              "original_sha256": hashlib.sha256(encoded.encode()).hexdigest(), "diagnostic_pointer": pointer}
+    if isinstance(value, Mapping):
+        # Scalars and small aggregate dictionaries retain their original paths.
+        # Prefer explicit endpoints over incidental nested examples.
+        items = sorted(value.items(), key=lambda item: (not str(item[0]).endswith("_ref"),
+                                                       isinstance(item[1], (Mapping, list, tuple))))
+        for key, item in items:
+            size = len(json.dumps(item, ensure_ascii=False, allow_nan=False))
+            if size > min(512, budget // 3):
+                continue
+            proposed = {**result, key: item}
+            if len(json.dumps(proposed, ensure_ascii=False, allow_nan=False)) <= budget:
+                result = proposed
+    refs = []
+
+    def visit(item):
+        if isinstance(item, Mapping):
+            if "message_id" in item and "source_pointer" in item:
+                if item not in refs and len(refs) < 3:
+                    refs.append(dict(item))
+                return
+            for child in item.values():
+                if len(refs) >= 3:
+                    break
+                visit(child)
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                if len(refs) >= 3:
+                    break
+                visit(child)
+
+    visit(value)
+    while refs:
+        proposed = {**result, "detail_evidence_refs": refs}
+        if len(json.dumps(proposed, ensure_ascii=False, allow_nan=False)) <= budget:
+            return proposed
+        refs.pop()
+    return result
+
+
+def _bound_diagnostic_feedback(feedback):
+    """Project only optional DIAG detail; proof-scope gates stay intact."""
+    if len(json.dumps(feedback, ensure_ascii=False, allow_nan=False)) <= 32_000:
+        return feedback
+    originals = feedback["analyzers"]
+    for budget in (2_000, 1_000, 512):
+        projected = []
+        for source in originals:
+            result = dict(source)
+            result["metrics"] = {key: _diagnostic_projection(item,
+                budget=max(budget, 2_000) if key in {"performance", "tracking"} else budget,
+                pointer="/metrics/" + key.replace("~", "~0").replace("/", "~1"))
+                for key, item in source["metrics"].items()}
+            result["summary"] = _diagnostic_projection(source["summary"], budget=budget, pointer="/summary")
+            result["observations"] = [{**item, "values": _diagnostic_projection(item.get("values", {}),
+                budget=budget, pointer=f"/observations/{index}/values")}
+                for index, item in enumerate(source["observations"])]
+            result["episodes"] = [_diagnostic_projection(item, budget=budget, pointer=f"/episodes/{index}")
+                for index, item in enumerate(source["episodes"])]
+            result["detail_projection"] = {"status": "BOUNDED", "subtree_character_budget": budget,
+                "full_result_tool": "diag.run", "arguments": {"analyzer": source["analyzer_id"],
+                                                             "evidence": feedback["evidence"]["path"]}}
+            projected.append(result)
+        feedback["analyzers"] = projected
+        if len(json.dumps(feedback, ensure_ascii=False, allow_nan=False)) <= 32_000:
+            return feedback
+    # An oversized mandatory binding/replay/integrity scope must remain an
+    # explicit blocker. Never truncate facts used to qualify trial success.
+    raise ValueError("feedback proof scopes exceed 32000 characters after bounded diagnostic projection")
+
+
 def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> dict[str, object]:
     """Read explicit offline trial evidence, preserving independent proof scopes.
 
@@ -477,11 +559,9 @@ def read_evidence_feedback(project_root: Path, value: Mapping[str, object]) -> d
             "trial_binding": trial_binding,
             "measurement_scope": motion_scope,
             "replay": _feedback_replay(root, args.get("replay_result"), context.facts.source_sha256),
-            "root_cause_inferred": False,
+            "root_cause_inferred": any(result.get("root_cause_inferred") is True for result in results),
         }
-    if len(json.dumps(feedback, ensure_ascii=False, allow_nan=False)) > 32_000:
-        raise ValueError("feedback exceeds 32000 characters; select fewer analyzers and a smaller limit")
-    return feedback
+    return _bound_diagnostic_feedback(feedback)
 
 
 def collect_evidence_feedback(project_root: Path, *, evidence: str | Path,

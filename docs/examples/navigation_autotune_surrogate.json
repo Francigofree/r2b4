@@ -1,0 +1,26 @@
+{
+  "schema": "R2B4_NAVIGATION_TUNING_SCENARIOS_V1",
+  "source_capture_sha256": "REPLACE_WITH_FINALIZED_SOURCE_MCAP_SHA256",
+  "train": [
+    {
+      "kind": "differential_drive",
+      "behavior": "roomcruise",
+      "environment_id": "surrogate_open_room",
+      "seed": 7,
+      "duration_s": 20,
+      "room": {"x_min_m": -2.5, "x_max_m": 4, "y_min_m": -2, "y_max_m": 2}
+    }
+  ],
+  "holdout": [
+    {
+      "kind": "differential_drive",
+      "behavior": "roomcruise",
+      "environment_id": "surrogate_obstacle_asymmetric_drive",
+      "seed": 11,
+      "duration_s": 20,
+      "room": {"x_min_m": -2.5, "x_max_m": 4, "y_min_m": -2, "y_max_m": 2},
+      "plant": {"right_gain": 1.08},
+      "obstacles": [{"x_m": 1.2, "y_m": 0.6, "radius_m": 0.2}]
+    }
+  ]
+}

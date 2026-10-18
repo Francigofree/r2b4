@@ -10,6 +10,8 @@ import re
 import tempfile
 import time
 
+from v3.capture_rate import DEFAULT_CAPTURE_HZ
+
 from .agent_contracts import AgentToolSpec
 
 
@@ -415,7 +417,7 @@ def build_learning_tools(project_root: Path, *, interface=None, event_sink=None)
                 and catalog[row["action"]].get("ready") is True for row in reviewed) else "NOT_READY"
         max_speed = max((row["parameters"].get("max_v_mps", 0) for row in reviewed), default=0)
         execution_steps = [{"action": row["action"], "parameters": {**row["parameters"],
-                           "capture_mode": "full", "capture_hz": 10, "finite_timeout_s": duration}}
+                           "capture_mode": "full", "capture_hz": DEFAULT_CAPTURE_HZ, "finite_timeout_s": duration}}
                            for row in reviewed]
         # Brain plan duration_s is a behavior-duration constraint, not a finite
         # motion timeout. Keep that valid plan separate from the reviewable SDK
@@ -444,7 +446,7 @@ def build_learning_tools(project_root: Path, *, interface=None, event_sink=None)
             "calibrated_envelope": {"snapshot_id": resolved.snapshot_id, "wheel_minimum_mps": wheels.minimum_mps,
                 "target_linear_floor_mps": linear_floor, "target_center_spin_rad_s": angular_floor,
                 "maximum_linear_mps": linear_cap, "maximum_angular_rad_s": angular_cap},
-            "capture": {"mode": "full", "tick_sample_hz": 10, "learning_events": True,
+            "capture": {"mode": "full", "tick_sample_hz": DEFAULT_CAPTURE_HZ, "learning_events": True,
                 "exact_replay": "Use a separate full 50 Hz capture when exact native replay is required."},
             "stop_policy": "Canonical STOP on completion, timeout, cancellation, safety/health/timing fault or process death; no automatic retry.",
             "measurement": "Compile the original MCAP explicitly; run motion_performance; compare paired environments and preserved run/source identity.",

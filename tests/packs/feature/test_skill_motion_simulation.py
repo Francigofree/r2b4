@@ -206,7 +206,8 @@ def test_saved_motion_skill_has_independent_truth_native_replay_and_complete_lea
     reader = McapReader(timeline)
     integrity = reader.capture_integrity()["integrity"]
     assert integrity["sample_complete"] is True
-    assert integrity["tick_sample_hz"] == 10
+    from v3.capture_rate import DEFAULT_CAPTURE_HZ
+    assert integrity["tick_sample_hz"] == DEFAULT_CAPTURE_HZ
     assert integrity["replay_complete"] is False
     rows = [record.json() for record in reader.iter_messages(topics={EVENT_TOPIC})]
     events = [row["payload"] for row in rows if row.get("source_topic") == PUBLIC_RUNTIME_EVENT_TOPIC]

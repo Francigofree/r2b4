@@ -106,6 +106,7 @@ class AnalyzerRegistry:
             metrics=output.metrics,
             observations=output.observations,
             episodes=output.episodes,
+            root_cause_inferred=output.root_cause_inferred,
         )
 
     def run_all(self, context: DiagContext) -> FullDiagnosticReport:
@@ -126,6 +127,7 @@ def build_default_registry() -> AnalyzerRegistry:
         localization,
         motion_performance,
         navigation,
+        navigation_root_cause,
         recovery,
         safety,
         world_model,
@@ -138,6 +140,7 @@ def build_default_registry() -> AnalyzerRegistry:
         safety,
         recovery,
         navigation,
+        navigation_root_cause,
         localization,
         drive,
         motion_performance,

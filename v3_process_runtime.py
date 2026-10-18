@@ -687,7 +687,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--capture-mode",
         choices=("triggered", "append_only"),
-        default="triggered",
+        default="append_only",
     )
     return parser
 

@@ -1,7 +1,8 @@
 """Neutral contracts for the evidence-native R2B4 DIAG system.
 
-DIAG is a diagnostic data provider for humans and LLMs. Its contracts contain
-no recommendation/suggestion channel and no automatic root-cause verdict.
+DIAG is an evidence consumer for humans and LLMs. Automatic causal assessments
+must distinguish recorded decision mechanisms, hypotheses and evidence gaps;
+there is no recommendation/suggestion or production control channel.
 """
 from __future__ import annotations
 
@@ -271,6 +272,7 @@ class AnalyzerOutput:
     coverage: Mapping[str, object] = field(default_factory=dict)
     summary: Mapping[str, object] = field(default_factory=dict)
     episodes: tuple[DiagnosticEpisode, ...] = ()
+    root_cause_inferred: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +287,7 @@ class DiagnosticResult:
     metrics: Mapping[str, object]
     observations: tuple[DiagnosticObservation, ...] = ()
     episodes: tuple[DiagnosticEpisode, ...] = ()
+    root_cause_inferred: bool = False
 
     def as_dict(
         self, *, include_evidence: bool = True, include_producer: bool = True
@@ -301,7 +304,7 @@ class DiagnosticResult:
             "metrics": dict(self.metrics),
             "observations": [item.as_dict() for item in self.observations],
             "episodes": [item.as_dict() for item in self.episodes],
-            "root_cause_inferred": False,
+            "root_cause_inferred": self.root_cause_inferred,
         }
         if include_evidence:
             payload["evidence"] = self.evidence.as_dict()
@@ -356,7 +359,7 @@ class FullDiagnosticReport:
                 item.as_dict(include_evidence=False, include_producer=False)
                 for item in self.results
             ],
-            "root_cause_inferred": False,
+            "root_cause_inferred": any(item.root_cause_inferred for item in self.results),
         }
 
 

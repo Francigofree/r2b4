@@ -1,7 +1,7 @@
 """Motor-free skill experiments through the real host, SDK and Python worker.
 
 Semantic recordings and a bounded differential-drive plant feed native V3.
-Full native replay and a 10 Hz learning timeline use existing MCAP paths.
+Full native replay and a sampled learning timeline use existing MCAP paths.
 Generated skills are trusted ordinary Python; this is not a Python sandbox.
 """
 from __future__ import annotations
@@ -22,6 +22,7 @@ from .skill_library import SkillLibrary
 from .motion_simulation import (DifferentialDriveExperiment, MOTION_ACTIONS, compare_trials,
                                 motion_scenario, simulation_control_config)
 from v3.robot_interface import RobotInterface
+from v3.capture_rate import DEFAULT_CAPTURE_HZ
 
 
 _OBSERVE_ACTIONS = frozenset({"observe.open", "observe.status", "observe.events", "observe.finish", "observe.close"})
@@ -447,7 +448,7 @@ class MotorlessSkillSimulator:
         self._learning_session = McapCaptureSession("skill-learning", self.learning_capture,
             configuration={"scope": "learning_observation", "native_replay_capture": "per-trial capture.mcap"},
             metadata={"source": "simulation", "physical_hardware": False}, project_root=self.root,
-            config=McapCaptureConfig(mode="append_only", tick_sample_hz=10), capacity=1024)
+            config=McapCaptureConfig(mode="append_only", tick_sample_hz=DEFAULT_CAPTURE_HZ), capacity=1024)
         self._learning_session.start()
         return self
 

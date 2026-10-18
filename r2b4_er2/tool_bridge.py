@@ -205,7 +205,7 @@ class Er2RobotTools:
                     # Never force-restart a resident runtime merely to change capture.
                     "capture": False,
                     "capture_mode": current_mode if isinstance(current_mode, str) else "nincs",
-                    "capture_hz": current_hz if isinstance(current_hz, int) else 10,
+                    "capture_hz": current_hz if isinstance(current_hz, int) else DEFAULT_CAPTURE_HZ,
                 },
             )
             if command["status"] not in {"ACCEPTED", "COMPLETED"}:
