@@ -8,6 +8,7 @@ planning after a restart; current coordinates still require source revalidation.
 from __future__ import annotations
 
 import json
+import hashlib
 import threading
 import time
 from collections import OrderedDict
@@ -15,6 +16,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from .atlas_reference import AtlasReference, AtlasViewpoint, load_atlas_reference
+from .spatial_coverage import AtlasFrontierIndex, SpatialCoverage, build_atlas_frontier_index
 from .world_model import KnowledgeState, PublicWorldModel, WorldFact, WorldLocation, retention_class
 
 
@@ -36,7 +38,7 @@ class SpatialQuery:
         if self.entity_id is not None and (not isinstance(self.entity_id, str)
                 or not self.entity_id.strip() or len(self.entity_id) > 256):
             raise ValueError("spatial entity_id must be a bounded nonempty string")
-        if self.kind not in {"entities", "relations", "atlases", "viewpoints"}:
+        if self.kind not in {"entities", "relations", "atlases", "viewpoints", "coverage", "frontiers"}:
             raise ValueError("invalid spatial query kind")
         if type(self.limit) is not int or not 1 <= self.limit <= 64:
             raise ValueError("spatial query limit must be in 1..64")
@@ -88,6 +90,8 @@ class SpatialQueryResult:
     facts_evicted: int = 0
     atlas_references: tuple[AtlasReference, ...] = ()
     viewpoints: tuple[AtlasViewpoint, ...] = ()
+    coverage: tuple[SpatialCoverage, ...] = ()
+    frontier_indexes: tuple[AtlasFrontierIndex, ...] = ()
 
     def to_jsonable(self):
         return {"schema": SPATIAL_SCHEMA, "revision": self.revision,
@@ -96,7 +100,9 @@ class SpatialQueryResult:
                 "relations": [item.to_jsonable() for item in self.relations],
                 "truncated": self.truncated, "facts_evicted": self.facts_evicted,
                 "atlas_references": [item.to_jsonable() for item in self.atlas_references],
-                "viewpoints": [item.to_jsonable() for item in self.viewpoints]}
+                "viewpoints": [item.to_jsonable() for item in self.viewpoints],
+                "coverage": [item.to_jsonable() for item in self.coverage],
+                "frontier_indexes": [item.to_jsonable() for item in self.frontier_indexes]}
 
     @classmethod
     def from_jsonable(cls, value):
@@ -105,15 +111,20 @@ class SpatialQueryResult:
         query = SpatialQuery.from_jsonable(value.get("query"))
         entities, relations = value.get("entities", []), value.get("relations", [])
         atlases, viewpoints = value.get("atlas_references", []), value.get("viewpoints", [])
+        coverage, frontiers = value.get("coverage", []), value.get("frontier_indexes", [])
         if (not isinstance(entities, (list, tuple)) or not isinstance(relations, (list, tuple))
                 or len(entities) > query.limit or len(relations) > query.limit
                 or query.kind == "entities" and relations or query.kind == "relations" and entities
-                or query.kind in {"atlases", "viewpoints"} and (entities or relations)):
+                or query.kind in {"atlases", "viewpoints", "coverage", "frontiers"} and (entities or relations)):
             raise ValueError("spatial result exceeds query capacity")
         if (not isinstance(atlases, (list, tuple)) or not isinstance(viewpoints, (list, tuple))
                 or len(atlases) > query.limit or len(viewpoints) > query.limit
                 or query.kind != "atlases" and atlases or query.kind != "viewpoints" and viewpoints):
             raise ValueError("spatial atlas result exceeds query capacity")
+        if (not isinstance(coverage, (list, tuple)) or not isinstance(frontiers, (list, tuple))
+                or len(coverage) > query.limit or len(frontiers) > min(query.limit, 4)
+                or query.kind != "coverage" and coverage or query.kind != "frontiers" and frontiers):
+            raise ValueError("spatial history result exceeds query capacity")
         for item in entities:
             if not isinstance(item, Mapping) or not isinstance(item.get("facts"), (list, tuple)) or len(item["facts"]) > 128:
                 raise ValueError("invalid spatial entity evidence")
@@ -124,7 +135,9 @@ class SpatialQueryResult:
                                          WorldFact.from_jsonable(item["evidence"])) for item in relations),
                    value.get("truncated", False), value.get("facts_evicted", 0),
                    tuple(AtlasReference.from_jsonable(item) for item in atlases),
-                   tuple(AtlasViewpoint.from_jsonable(item) for item in viewpoints))
+                   tuple(AtlasViewpoint.from_jsonable(item) for item in viewpoints),
+                   tuple(SpatialCoverage.from_jsonable(item) for item in coverage),
+                   tuple(AtlasFrontierIndex.from_jsonable(item) for item in frontiers))
 
 
 class SpatialService:
@@ -151,16 +164,156 @@ class SpatialService:
         self._global_context_boundary_ns = None
         self._retired_runtimes = set()
         self._atlases = OrderedDict()
+        self._coverage = OrderedDict()
+        self._frontier_indexes = {}
+        self._frontier_errors = {}
+        self._atlas_pending = OrderedDict()
+        self._atlas_event = threading.Event()
+        self._atlas_thread = None
+        self._closed = False
 
     def load_atlas_reference(self, path):
         """Explicit host import; its source geometry remains historical."""
         reference = load_atlas_reference(path)
         with self._lock:
+            if self._closed:
+                raise RuntimeError("spatial service is closed")
             if reference.map_id not in self._atlases and len(self._atlases) >= 4:
                 raise ValueError("atlas reference capacity reached")
             self._atlases[reference.map_id] = reference
+            self._frontier_indexes.pop(reference.map_id, None)
+            self._frontier_errors.pop(reference.map_id, None)
+            self._atlas_pending[reference.map_id] = reference
+            if self._atlas_thread is None:
+                self._atlas_thread = threading.Thread(target=self._atlas_worker,
+                    name="spatial-atlas-frontier", daemon=True)
+                self._atlas_thread.start()
+            self._atlas_event.set()
             self._revision += 1
         return reference
+
+    def _atlas_worker(self):
+        """One concrete host worker, at most four queued atlas identities.
+
+        No asset decoding occurs in a poll callback or while holding state.
+        Superseded references cannot publish over their replacement.
+        """
+        while True:
+            self._atlas_event.wait()
+            with self._lock:
+                if self._closed:
+                    return
+                if not self._atlas_pending:
+                    self._atlas_event.clear()
+                    continue
+                map_id, reference = self._atlas_pending.popitem(last=False)
+            try:
+                result = build_atlas_frontier_index(reference, self.clock_ns(), computed_clock_epoch=self.world.clock_epoch)
+                error = None
+            except Exception as exc:
+                result, error = None, f"{type(exc).__name__}:{exc}"[:256]
+            with self._lock:
+                if self._closed:
+                    return
+                if self._atlases.get(map_id) != reference or map_id in self._atlas_pending:
+                    continue
+                if result is not None:
+                    self._frontier_indexes[map_id] = result
+                else:
+                    self._frontier_errors[map_id] = error
+                self._revision += 1
+
+    def close(self):
+        with self._lock:
+            self._closed = True
+            self._atlas_pending.clear()
+            self._atlas_event.set()
+
+    def _remember_coverage(self, fact):
+        value, observation = fact.value, fact.observation
+        if not isinstance(value, Mapping) or value.get("kind") != "visited_area":
+            return
+        qualified = self._qualified(self._facts[(fact.entity_id, fact.attribute)], self.clock_ns())
+        scope = observation.validity_scope
+        if (qualified.freshness != "FRESH" or qualified.state not in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
+                or scope is None or scope.runtime_pid is None):
+            return
+        generation = value.get("localization_generation")
+        visit = value.get("pose_reference_time_ns")
+        if type(generation) is not int or type(visit) is not int or visit < 0:
+            return
+        map_id = self._coverage_map_id(scope, generation, observation.clock_epoch)
+        item = SpatialCoverage(map_id, fact.entity_id, scope.frame_id, observation.clock_epoch,
+            scope.runtime_pid, generation, scope.map_revision, observation.sequence, observation.revision,
+            visit, observation.measurement_time_ns, observation.confidence, observation.source,
+            observation.lineage)
+        previous = self._coverage.get((map_id, fact.entity_id))
+        if previous is not None:
+            if item.last_observation_ns <= previous.last_observation_ns:
+                return
+            item = replace(item, last_attempt_ns=previous.last_attempt_ns,
+                           attempt_outcome=previous.attempt_outcome, cooldown_until_ns=previous.cooldown_until_ns,
+                           last_attempt_behavior_id=previous.last_attempt_behavior_id,
+                           last_attempt_command_id=previous.last_attempt_command_id)
+        self._coverage[(map_id, fact.entity_id)] = item
+        self._coverage.move_to_end((map_id, fact.entity_id))
+        self._bound_coverage()
+
+    @staticmethod
+    def _coverage_map_id(scope, generation, epoch):
+        # PIDs and localization generations can repeat after a reboot. Their
+        # originating clock epoch and frame are part of this gauge identity.
+        gauge = hashlib.sha256(json.dumps([epoch, scope.frame_id], separators=(",", ":")).encode()).hexdigest()
+        return f"runtime:{scope.runtime_pid}:generation:{generation}:gauge:{gauge}"
+
+    def _bound_coverage(self):
+        sizes = {key: len(json.dumps(item.to_jsonable(), separators=(",", ":")).encode())
+                 for key, item in self._coverage.items()}
+        total = sum(sizes.values())
+        while len(self._coverage) > 128 or total > 128 * 1024:
+            key, _ = self._coverage.popitem(last=False)
+            total -= sizes[key]
+
+    def completed_behavior(self, state):
+        """Record strategy outcomes from completed host evidence, never commands."""
+        result = dict(state.result)
+        target = result.get("strategic_target_entity_id")
+        if state.name != "strategic_explore" or not isinstance(target, str):
+            return
+        with self._lock:
+            candidates = [entry for key, entry in self._facts.items() if key[0] == target
+                          and entry[0].attribute == "location"]
+            if not candidates:
+                return
+            fact = self._qualified(candidates[0], self.clock_ns())
+            obs, location = fact.observation, fact.location
+            scope = obs.validity_scope
+            generation = candidates[0][1]
+            if (scope is None or scope.runtime_pid is None or location is None or generation is None
+                    or fact.freshness != "FRESH"):
+                return
+            map_id = self._coverage_map_id(scope, generation, obs.clock_epoch)
+            key = (map_id, target)
+            previous = self._coverage.get(key)
+            stamp = state.measurement_time_ns
+            outcome = str(result.get("strategic_target_outcome") or state.lifecycle.value)
+            if outcome not in {"ACTIVE", "COMPLETED", "FAILED", "CANCELLED"} or type(stamp) is not int:
+                return
+            attempt = result.get("strategic_target_started_ns", stamp)
+            if type(attempt) is not int or attempt < 0:
+                return
+            if (previous is not None and previous.last_attempt_ns == attempt
+                    and previous.attempt_outcome == outcome):
+                return
+            visit = stamp if outcome == "COMPLETED" else previous.last_visit_ns if previous else None
+            self._coverage[key] = SpatialCoverage(map_id, target, location.frame_id, obs.clock_epoch,
+                scope.runtime_pid, generation, scope.map_revision, obs.sequence, obs.revision,
+                visit, obs.measurement_time_ns, obs.confidence, obs.source, obs.lineage,
+                attempt, outcome, stamp + 30_000_000_000 if outcome == "FAILED" else None,
+                state.behavior_id, state.command_id)
+            self._coverage.move_to_end(key)
+            self._bound_coverage()
+            self._revision += 1
 
     @property
     def revision(self):
@@ -303,6 +456,7 @@ class SpatialService:
                     self._retention_evicted[group] += 1
                 self._facts[key], self._sizes[key] = entry, size
                 self._bytes += size
+                self._remember_coverage(fact)
                 self._revision += 1
 
     def _qualified(self, entry, now):
@@ -381,6 +535,21 @@ class SpatialService:
         self.sync_world()
         now = self.clock_ns()
         with self._lock:
+            if query.kind in {"coverage", "frontiers"}:
+                if query.kind == "coverage":
+                    selected = tuple(item for item in self._coverage.values()
+                                     if query.entity_id in (None, item.entity_id, item.map_id))
+                else:
+                    selected = tuple(item for item in self._frontier_indexes.values()
+                                     if query.entity_id in (None, item.map_id))
+                # History and historical atlas geometry cannot become current
+                # evidence by receiving a new host query timestamp.
+                if query.require_current:
+                    selected = ()
+                return SpatialQueryResult(self._revision, now, self.world.clock_epoch, query,
+                    truncated=len(selected) > query.limit, facts_evicted=self._facts_evicted,
+                    coverage=selected[:query.limit] if query.kind == "coverage" else (),
+                    frontier_indexes=selected[:query.limit] if query.kind == "frontiers" else ())
             if query.kind in {"atlases", "viewpoints"}:
                 references = tuple(self._atlases.values())
                 if query.kind == "atlases":
@@ -431,6 +600,10 @@ class SpatialService:
                           source_world_revision=self._source_revision,
                           retention=self._retention_status(),
                           atlas_references=[item.to_jsonable() for item in self._atlases.values()],
+                          coverage_count=len(self._coverage),
+                          frontier_index_count=len(self._frontier_indexes),
+                          frontier_pending=list(self._atlas_pending),
+                          frontier_errors=dict(self._frontier_errors),
                           motion_authority=False)
             return result
 
@@ -449,6 +622,8 @@ class SpatialService:
                     "atlas_references": [{"reference": item.to_jsonable(),
                                           "viewpoints": [point.to_jsonable() for point in item.viewpoints]}
                                          for item in self._atlases.values()],
+                    "coverage": [item.to_jsonable() for item in self._coverage.values()],
+                    "frontier_indexes": [item.to_jsonable() for item in self._frontier_indexes.values()],
                     "facts": [self._entry_json(key, entry) for key, entry in self._facts.items()]}
 
     def restore(self, value):
@@ -475,6 +650,28 @@ class SpatialService:
                     or len(points) != reference.indexed_viewpoint_count):
                 raise ValueError("invalid saved atlas viewpoint identity")
             atlases[reference.map_id] = replace(reference, viewpoints=points, indexed_viewpoint_count=None)
+        coverage, frontiers = OrderedDict(), {}
+        raw_coverage, raw_frontiers = value.get("coverage", []), value.get("frontier_indexes", [])
+        if (not isinstance(raw_coverage, (list, tuple)) or len(raw_coverage) > 128
+                or len(json.dumps(raw_coverage, separators=(",", ":")).encode()) > 128 * 1024
+                or not isinstance(raw_frontiers, (list, tuple)) or len(raw_frontiers) > 4):
+            raise ValueError("saved spatial history exceeded its bound")
+        for raw in raw_coverage:
+            item = SpatialCoverage.from_jsonable(raw)
+            key = (item.map_id, item.entity_id)
+            if key in coverage:
+                raise ValueError("duplicate spatial coverage")
+            coverage[key] = item
+        for raw in raw_frontiers:
+            item = AtlasFrontierIndex.from_jsonable(raw)
+            reference = atlases.get(item.map_id)
+            if (reference is None or reference.revision != item.map_revision
+                    or reference.metadata_sha256 != item.metadata_sha256
+                    or not any(name == "map.pgm" and digest == item.occupancy_sha256
+                               for name, digest, _ in reference.assets)
+                    or item.map_id in frontiers):
+                raise ValueError("saved frontier source mismatch")
+            frontiers[item.map_id] = item
         raw_retention = value.get("retention", {})
         if not isinstance(raw_retention, Mapping) or set(raw_retention) - set(self._retention_limits):
             raise ValueError("invalid saved spatial retention")
@@ -506,6 +703,7 @@ class SpatialService:
         with self._lock:
             self._facts, self._sizes, self._bytes = facts, sizes, total
             self._atlases = atlases
+            self._coverage, self._frontier_indexes = coverage, frontiers
             self._revision, self._facts_evicted = value["revision"], value["facts_evicted"]
             self._retention_evicted, self._retention_rejected = evicted, rejected
             self._source_revision, self._context = -1, None

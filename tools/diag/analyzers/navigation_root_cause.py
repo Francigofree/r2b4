@@ -23,10 +23,12 @@ MIN_EPISODE_NS = 1_000_000_000
 MAX_EPISODES = 64
 LINEAR_EPS = 0.005
 ANGULAR_EPS = 0.02
+WEAK_TRANSLATION_MPS = 0.03
 CONTRACT = AnalyzerContract(
     analyzer_id="navigation_root_cause",
     description="Source-time navigation hold/no-progress episodes with explicit decision causes, hypotheses and evidence gaps.",
     required_views=VIEWS, optional_views=OPTIONAL, required_topics=("/r2b4/tick",),
+    contract_version=2,
 )
 
 
@@ -126,7 +128,7 @@ def _samples(bundle):
                       payload=payload)
 
 
-def _events(bundle, quality, integrity):
+def _events(bundle, quality, integrity, dense=None):
     previous = None
     for row in bundle.iter_view("events") if bundle.has_view("events") else ():
         envelope = _dict(row.payload)
@@ -141,16 +143,22 @@ def _events(bundle, quality, integrity):
         sequence = payload.get("event_sequence")
         if payload.get("schema") != "R2B4_NAVIGATION_DECISION_V1" or type(sequence) is not int or sequence < 0:
             quality["invalid_decision_event"] += 1
+            if dense is not None:
+                dense.reset()
             continue
         sample = _sample(row, _dict(_dict(payload.get("expected")).get("layers")),
                          _dict(payload.get("inputs")).get("context"), event_sequence=sequence, payload=payload)
         if sample is None or previous is not None and (sample.time <= previous.time or sample.tick <= previous.tick):
             quality["invalid_decision_event_context_or_order"] += 1
+            if dense is not None:
+                dense.reset()
             continue
         if previous is not None and sequence != previous.event_sequence + 1:
             quality["decision_sequence_discontinuities"] += 1
         previous = sample
         quality["valid_decision_events"] += 1
+        if dense is not None:
+            dense.add(sample)
         yield sample
 
 
@@ -204,6 +212,152 @@ def _pose(sample):
             or any(quality.get(name) not in ("GOOD", "DEGRADED") for name in ("local_translation", "heading"))):
         return None
     return frame, generation, values, velocity
+
+
+def _active_navigation(sample):
+    mission = sample.layers["L5"]
+    return mission.get("lifecycle") == "ACTIVE" and mission.get("mode") in ("NAVIGATE", "EXPLORE", "FOLLOW_PERSON")
+
+
+class _DenseNavigation:
+    """Transition intervals, including every short HOLD and reason changes.
+
+    Event sequences delimit recorded decision states; they do not establish
+    continuous physical motion. Missing/invalid events break continuity.
+    """
+
+    def __init__(self):
+        self.previous = self.active = self.longest = None
+        self.counts = Counter({"hold_runs": 0, "hold_runs_below_long_episode_threshold": 0})
+        self.durations = Counter({"active_navigation_ns": 0, "zero_request_hold_ns": 0})
+        self.reasons = Counter()
+        self.runs = []
+
+    def close(self):
+        if self.active is not None:
+            self.counts["hold_runs"] += 1
+            self.counts["hold_runs_below_long_episode_threshold"] += self.active["duration_ns"] < MIN_EPISODE_NS
+            if len(self.runs) < MAX_EPISODES:
+                self.runs.append(self.active)
+            if self.longest is None or self.active["duration_ns"] > self.longest["duration_ns"]:
+                self.longest = self.active
+        self.active = None
+
+    def reset(self):
+        self.close()
+        self.previous = None
+
+    def add(self, sample):
+        prior, self.previous = self.previous, sample
+        if prior is None:
+            return
+        if sample.event_sequence != prior.event_sequence + 1 or sample.time <= prior.time:
+            self.counts["discontinuous_event_intervals"] += 1
+            self.close()
+            return
+        if not _active_navigation(prior):
+            self.close()
+            return
+        duration = sample.time - prior.time
+        self.durations["active_navigation_ns"] += duration
+        requested = _pair(prior.layers["L8"], "requested_v_mps", "requested_omega_rad_s")
+        allowed = _pair(prior.layers["L9"], "allowed_v_mps", "allowed_omega_rad_s")
+        output = _pair(prior.layers["L12"], "left_output", "right_output")
+        if None in (requested, allowed, output):
+            self.counts["missing_motion_fields_intervals"] += 1
+            self.close()
+            return
+        if any(_output_active(pair) for pair in (requested, allowed, output)):
+            self.close()
+            return
+        self.durations["zero_request_hold_ns"] += duration
+        reason = str(prior.layers["L6"].get("reason"))[:240]
+        self.reasons[reason] += duration
+        mission = prior.layers["L5"]["mission_id"]
+        if (self.active is None or self.active["mission_id"] != mission
+                or self.active["end_time_ns"] != prior.time):
+            self.close()
+            self.active = {"mission_id": mission, "start_time_ns": prior.time, "end_time_ns": prior.time,
+                           "duration_ns": 0, "interval_count": 0, "start_ref": prior.ref("L8"),
+                           "first_cause": _cause(prior), "physical_stall_proven": False}
+        self.active["duration_ns"] += duration
+        self.active["end_time_ns"] = sample.time
+        self.active["end_ref"] = sample.ref("L8")
+        self.active["interval_count"] += 1
+
+    def as_dict(self):
+        self.close()
+        active = self.durations["active_navigation_ns"]
+        return {"counts": dict(self.counts), "durations": dict(self.durations),
+                "zero_request_hold_fraction": self.durations["zero_request_hold_ns"] / active if active else None,
+                "reason_durations_ns": dict(self.reasons), "hold_runs": self.runs, "longest_hold_run": self.longest,
+                "hold_runs_truncated": self.counts["hold_runs"] > len(self.runs), "hold_run_limit": MAX_EPISODES,
+                "temporal_semantics": "CONSECUTIVE_DECISION_EVENT_STATE_INTERVALS_NO_LAST_EVENT_EXTRAPOLATION",
+                "physical_stall_proven": False}
+
+
+class _WeakTranslation:
+    """Qualified sampled translation is measured independently of turning."""
+
+    def __init__(self):
+        self.counts = Counter({"qualified_active_intervals": 0, "weak_translation_intervals": 0,
+                               "weak_translation_runs": 0})
+        self.durations = Counter({"qualified_active_ns": 0, "weak_translation_ns": 0,
+                                  "weak_translation_with_nonzero_output_ns": 0})
+        self.path = self.yaw = self.weak_yaw = 0.0
+        self.active = self.longest = None
+
+    def close(self):
+        if self.active is not None:
+            self.counts["weak_translation_runs"] += 1
+            if self.longest is None or self.active["duration_ns"] > self.longest["duration_ns"]:
+                self.longest = self.active
+        self.active = None
+
+    def add(self, prior, current):
+        a, b = _pose(prior), _pose(current)
+        if (not _active_navigation(prior) or a is None or b is None or a[:2] != b[:2]
+                or current.layers["L5"]["mission_id"] != prior.layers["L5"]["mission_id"]
+                or not 0 < current.time - prior.time <= MAX_GAP_NS):
+            self.close()
+            return
+        duration = current.time - prior.time
+        distance = math.hypot(b[2][0] - a[2][0], b[2][1] - a[2][1])
+        yaw = abs(math.atan2(math.sin(b[2][2] - a[2][2]), math.cos(b[2][2] - a[2][2])))
+        self.counts["qualified_active_intervals"] += 1
+        self.durations["qualified_active_ns"] += duration
+        self.path += distance
+        self.yaw += yaw
+        if distance > WEAK_TRANSLATION_MPS * duration / 1e9:
+            self.close()
+            return
+        self.counts["weak_translation_intervals"] += 1
+        self.durations["weak_translation_ns"] += duration
+        self.weak_yaw += yaw
+        output = _pair(prior.layers["L12"], "left_output", "right_output")
+        if output is not None and _output_active(output):
+            self.durations["weak_translation_with_nonzero_output_ns"] += duration
+        if self.active is None:
+            self.active = {"mission_id": prior.layers["L5"]["mission_id"], "start_time_ns": prior.time,
+                           "duration_ns": 0, "estimated_path_m": 0., "absolute_yaw_rad": 0.,
+                           "start_ref": prior.ref("L3")}
+        self.active["duration_ns"] += duration
+        self.active["end_time_ns"] = current.time
+        self.active["estimated_path_m"] += distance
+        self.active["absolute_yaw_rad"] += yaw
+        self.active["end_ref"] = current.ref("L3")
+
+    def as_dict(self):
+        self.close()
+        duration = self.durations["qualified_active_ns"]
+        return {"counts": dict(self.counts), "durations": dict(self.durations),
+                "estimated_path_m": self.path, "absolute_yaw_rad": self.yaw,
+                "absolute_yaw_during_weak_translation_rad": self.weak_yaw,
+                "estimated_path_speed_mps": self.path * 1e9 / duration if duration else None,
+                "weak_translation_fraction": self.durations["weak_translation_ns"] / duration if duration else None,
+                "longest_weak_translation_run": self.longest, "translation_threshold_mps": WEAK_TRANSLATION_MPS,
+                "temporal_semantics": "QUALIFIED_SAMPLED_LOCAL_POSE_CHORDS_INCLUDING_TURNING",
+                "physical_stall_proven": False}
 
 
 def _stage(prior, current):
@@ -270,6 +424,13 @@ def _context_evidence(sample):
         "alternatives": {"candidate_count": plan.get("trajectory_candidate_count"), "observed": min(len(alternatives), 32) if isinstance(alternatives, list) else 0,
                          "truncated": plan.get("alternatives_truncated"), "counts": dict(counts),
                          "physical_collision_proven": False},
+        "rejection_witness": {
+            **_scalars(_dict(plan.get("rejection_witness")), (
+                "candidate_id", "reason", "geometry_revision", "geometry_captured_ns", "map_revision",
+                "time_offset_ns", "x_m", "y_m", "yaw_rad", "clearance_m", "required_clearance_m", "uncertainty_m")),
+            "source_context": _scalars(_dict(_dict(plan.get("rejection_witness")).get("source_context")),
+                                        ("tick_id", "monotonic_ns")),
+        } if isinstance(plan.get("rejection_witness"), dict) else None,
         "evidence_refs": [sample.ref(layer) for layer in ("L3", "L4", "L5", "L6", "L7", "L8", "L9", "L12") if layer in layers],
     }
 
@@ -277,7 +438,8 @@ def _context_evidence(sample):
 def run(context, registry):
     del registry
     quality, integrity = Counter(), {}
-    events = iter(_events(context.bundle, quality, integrity))
+    dense, translation = _DenseNavigation(), _WeakTranslation()
+    events = iter(_events(context.bundle, quality, integrity, dense))
     event = next(events, None)
     onset = latest = prior = active = longest = last_goal = None
     episodes = []
@@ -299,6 +461,7 @@ def run(context, registry):
         if sample is None:
             quality["invalid_or_unaligned_sample"] += 1
             close()
+            translation.close()
             prior = None
             onset = latest = None
             continue
@@ -322,9 +485,11 @@ def run(context, registry):
                 or sample.layers["L5"]["mission_id"] != prior.layers["L5"]["mission_id"]):
             quality["gap_order_or_mission_boundary"] += 1
             close()
+            translation.close()
             prior = sample
             onset = latest = None
             continue
+        translation.add(prior, sample)
         stage, cause = _stage(prior, sample), _cause(prior)
         if stage is None:
             close()
@@ -375,6 +540,7 @@ def run(context, registry):
         event = next(events, None)
     for item in (*episodes, *([longest] if longest is not None else [])):
         item.pop("_signature", None)
+    dense_metrics, translation_metrics = dense.as_dict(), translation.as_dict()
     facts = getattr(context, "facts", None)
     blockers = []
     if facts is not None and facts.source_integrity != "COMPLETE":
@@ -390,12 +556,19 @@ def run(context, registry):
                "thresholds": {"minimum_episode_s": MIN_EPISODE_NS / 1e9, "maximum_recording_gap_s": MAX_GAP_NS / 1e9,
                               "linear_stationary_mps": LINEAR_EPS, "angular_stationary_rad_s": ANGULAR_EPS},
                "data_quality": dict(quality), "capture_integrity": integrity, "evidence_blockers": blockers,
+               "dense_navigation": dense_metrics, "sampled_translation": translation_metrics,
+               "navigation_health_verdict": "NOT_ASSESSED",
+               "zero_long_episodes_proves_healthy_navigation": False,
                "causal_scope": "EXPLICIT_RECORDED_DECISION_PROPAGATED_TO_ZERO_MOTION",
                "temporal_semantics": "SOURCE_CONTEXT_TIME_SAMPLED_INTERVALS_NO_LAST_SAMPLE_EXTRAPOLATION",
                "physical_stall_proven": False, "exact_replay_claim": False,
                "earliest_global_root_cause_proven": False}
     return AnalyzerOutput(metrics=metrics, summary={"episode_count": episode_count, "cause_counts": dict(cause_counts),
-                         "longest_episode_ns": longest["duration_ns"] if longest else None, "evidence_blockers": blockers},
+                         "longest_episode_ns": longest["duration_ns"] if longest else None, "evidence_blockers": blockers,
+                         "dense_hold_run_count": dense_metrics["counts"].get("hold_runs", 0),
+                         "dense_zero_request_hold_fraction": dense_metrics["zero_request_hold_fraction"],
+                         "sampled_weak_translation_fraction": translation_metrics["weak_translation_fraction"],
+                         "navigation_health_verdict": "NOT_ASSESSED"},
         root_cause_inferred=bool(episode_count),
         episodes=tuple(DiagnosticEpisode(episode_type=item["stage"], view="layers/L5", field_path="/mission_id",
             value={"mission_id": item["mission_id"], "cause_code": item["cause"]["code"], "certainty": item["cause"]["certainty"]},
@@ -405,4 +578,10 @@ def run(context, registry):
         observations=(DiagnosticObservation(kind=ObservationKind.RELATIONSHIP, code="NAVIGATION_CAUSAL_EPISODES",
             message="Automatic episode diagnosis separates explicit recorded stop mechanisms from unproven physical/upstream causes and goal-selection hypotheses.",
             values={"episode_count": episode_count, "cause_counts": dict(cause_counts), "evidence_blockers": blockers},
-            evidence_basis=(view_scan(*VIEWS, *OPTIONAL),)),))
+            evidence_basis=(view_scan(*VIEWS, *OPTIONAL),)),
+            DiagnosticObservation(kind=ObservationKind.DERIVED_MEASUREMENT, code="DENSE_SHORT_NAVIGATION_HOLDS",
+                message="Consecutive navigation decision events measure every zero-request HOLD, merging reason changes and retaining short motion intervals; zero long episodes is not a healthy-navigation verdict.",
+                values=dense_metrics, evidence_basis=(view_scan("events", fields=("/payload",)),)),
+            DiagnosticObservation(kind=ObservationKind.DERIVED_MEASUREMENT, code="SAMPLED_WEAK_TRANSLATION",
+                message="Qualified local-pose samples measure low translational progress even while turning. These sampled estimates do not prove a physical stall or localization accuracy.",
+                values=translation_metrics, evidence_basis=(view_scan("layers/L3", "layers/L5", "layers/L12"),))))

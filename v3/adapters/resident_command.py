@@ -21,6 +21,10 @@ from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_aff
 
 
 RESIDENT_COMMAND_SCHEMA = "R2B4_V3_RESIDENT_COMMAND_V2"
+_PUBLICATION_TIMING_KEYS = frozenset({
+    "previous_publication_revision", "previous_preparation_started_ns",
+    "previous_issued_monotonic_ns", "previous_publication_returned_ns",
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +37,21 @@ class CommandIngressTiming:
     observed_monotonic_ns: int
     expires_monotonic_ns: int
     ttl_remaining_ns: int
+    # A publication can only report its post-replace timestamp in the next
+    # immutable revision. This is an upper bound, sampled after os.replace
+    # returns; it must never refresh either revision's expiry.
+    previous_publication_revision: int | None = None
+    previous_preparation_started_ns: int | None = None
+    previous_issued_monotonic_ns: int | None = None
+    previous_publication_returned_ns: int | None = None
+
+
+class CommandPublicationRejected(RuntimeError):
+    """The canonical producer revoked ACTIVE publication before replacement."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 def _positive_int(value: object, name: str) -> int:
@@ -261,7 +280,7 @@ class AtomicResidentCommandGateway:
             expected_keys |= ExplorePreferences.field_names()
         if mode is CommandMode.FOLLOW_PERSON and "target_track_id" in payload:
             expected_keys.add("target_track_id")
-        if set(payload) != expected_keys:
+        if set(payload) - _PUBLICATION_TIMING_KEYS != expected_keys:
             raise ValueError("command mailbox fields do not match its mode")
 
         revision = _positive_int(payload.get("revision"), "revision")
@@ -289,9 +308,18 @@ class AtomicResidentCommandGateway:
             self._last_digest = digest
             self._requires_new_revision = False
 
+        previous_timing: dict[str, int] = {}
+        values = {key: payload.get(key) for key in _PUBLICATION_TIMING_KEYS}
+        if (all(type(value) is int and value >= 0 for value in values.values())
+                and values["previous_publication_revision"] == revision - 1
+                and values["previous_preparation_started_ns"]
+                <= values["previous_issued_monotonic_ns"]
+                <= values["previous_publication_returned_ns"] <= issued_ns):
+            previous_timing = values
         self._timing_evidence = CommandIngressTiming(
             revision, issued_ns, self._reader_received_ns or observed_ns,
             observed_ns, expires_ns, expires_ns-observed_ns,
+            **previous_timing,
         )
 
         if observed_ns > expires_ns:
@@ -449,7 +477,7 @@ class ResidentCommandClient:
     canonical L5-L12 path remains the sole control authority.
     """
 
-    __slots__ = ("_config", "_monotonic_ns", "_revision")
+    __slots__ = ("_config", "_monotonic_ns", "_revision", "_publication_timing", "_active_guard")
 
     def __init__(
         self,
@@ -464,6 +492,20 @@ class ResidentCommandClient:
         self._config = config
         self._monotonic_ns = monotonic_ns
         self._revision: int | None = None
+        self._publication_timing: dict[str, int] = {}
+        self._active_guard: Callable[[], str | None] | None = None
+
+    def set_active_guard(self, guard: Callable[[], str | None] | None) -> None:
+        """Recheck the producer's owner/watchdog around staging I/O; STOP bypasses it."""
+        if guard is not None and not callable(guard):
+            raise TypeError("active publication guard must be callable")
+        self._active_guard = guard
+
+    def _check_active_guard(self, payload: Mapping[str, object]) -> None:
+        if payload["mode"] != CommandMode.STOP.value and self._active_guard is not None:
+            reason = self._active_guard()
+            if reason is not None:
+                raise CommandPublicationRejected(reason)
 
     @property
     def last_revision(self) -> int | None:
@@ -573,6 +615,7 @@ class ResidentCommandClient:
         values: Mapping[str, object],
         ttl_ns: int,
     ) -> int:
+        preparation_started_ns = _nonnegative_int(self._monotonic_ns(), "preparation_started_ns")
         require_token(command_id, "command_id")
         if mode not in (
             CommandMode.STOP,
@@ -592,21 +635,22 @@ class ResidentCommandClient:
         if self._revision is None:
             self._revision = self._existing_revision()
         revision = self._revision + 1
-        issued_ns = _nonnegative_int(self._monotonic_ns(), "issued_monotonic_ns")
         payload: dict[str, object] = {
             "schema": RESIDENT_COMMAND_SCHEMA,
             "revision": revision,
             "command_id": command_id,
-            "issued_monotonic_ns": issued_ns,
-            "expires_monotonic_ns": issued_ns + ttl,
             "mode": mode.value,
             **normalized,
+            **self._publication_timing,
         }
-        encoded = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
-        if len(encoded) > self._config.maximum_file_bytes:
-            raise ValueError("command mailbox exceeds maximum_file_bytes")
-        self._atomic_write(encoded)
+        issued_ns, publication_returned_ns = self._atomic_write(payload, ttl)
         self._revision = revision
+        self._publication_timing = {
+            "previous_publication_revision": revision,
+            "previous_preparation_started_ns": preparation_started_ns,
+            "previous_issued_monotonic_ns": issued_ns,
+            "previous_publication_returned_ns": publication_returned_ns,
+        }
         return revision
 
     def _validated_values(
@@ -697,7 +741,7 @@ class ResidentCommandClient:
             raise ValueError("existing command mailbox schema is invalid")
         return _positive_int(payload.get("revision"), "revision")
 
-    def _atomic_write(self, encoded: bytes) -> None:
+    def _atomic_write(self, payload: dict[str, object], ttl_ns: int) -> tuple[int, int]:
         path = self._config.path
         parent = path.parent
         if parent.is_symlink() or not parent.is_dir():
@@ -710,6 +754,22 @@ class ResidentCommandClient:
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
                 0o600,
             )
+            # Prepare the trusted staging file before issuing this heartbeat.
+            # Directory checks/open/creation may block on filesystem metadata;
+            # they must not consume a freshly issued command's TTL.
+            self._check_active_guard(payload)
+            issued_ns = _nonnegative_int(self._monotonic_ns(), "issued_monotonic_ns")
+            payload["issued_monotonic_ns"] = issued_ns
+            payload["expires_monotonic_ns"] = issued_ns + ttl_ns
+            encoded = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
+            if len(encoded) > self._config.maximum_file_bytes and _PUBLICATION_TIMING_KEYS.intersection(payload):
+                # Optional diagnostics must not make a previously valid command
+                # exceed the mailbox's configured bound.
+                for key in _PUBLICATION_TIMING_KEYS:
+                    payload.pop(key, None)
+                encoded = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
+            if len(encoded) > self._config.maximum_file_bytes:
+                raise ValueError("command mailbox exceeds maximum_file_bytes")
             view = memoryview(encoded)
             while view:
                 written = os.write(descriptor, view)
@@ -722,7 +782,9 @@ class ResidentCommandClient:
             # stale before the resident process can observe it.
             os.close(descriptor)
             descriptor = None
+            self._check_active_guard(payload)
             os.replace(temporary, path)
+            publication_returned_ns = self._monotonic_ns()
         finally:
             if descriptor is not None:
                 os.close(descriptor)
@@ -730,11 +792,13 @@ class ResidentCommandClient:
                 temporary.unlink()
             except FileNotFoundError:
                 pass
+        return issued_ns, publication_returned_ns
 
 
 __all__ = [
     "AtomicResidentCommandGateway",
     "AsyncResidentCommandGateway",
+    "CommandPublicationRejected",
     "RESIDENT_COMMAND_SCHEMA",
     "ResidentCommandClient",
     "ResidentCommandMailboxConfig",

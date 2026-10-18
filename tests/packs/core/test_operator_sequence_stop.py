@@ -422,6 +422,9 @@ def test_command_producer_owner_exit_and_watchdog_stop_before_next_heartbeat(cap
         alive = True
 
         class Client:
+            def set_active_guard(self, guard):
+                pass
+
             def publish_stop(self, command_id, **kwargs):
                 publications.append("STOP")
                 return len(publications)

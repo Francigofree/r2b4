@@ -64,9 +64,20 @@ def test_completed_geometry_populates_persistent_anonymous_spatial_memory(tmp_pa
     assert {"L3:estimate_reference_time", "L3:generation:1", "L3:transform:4",
             "L4:map:9", "L4:costmap:7", "L4:source_sequence:8"} <= set(fact.observation.lineage)
     assert fact.state is KnowledgeState.LIKELY and fact.value["motion_authority"] is False
+    history = host.spatial_query(SpatialQuery(kind="coverage"))
+    assert len(history.coverage) == 1
+    memory = history.coverage[0]
+    assert memory.last_observation_ns == measured
+    assert memory.last_visit_ns == status["monotonic_ns"]
+    assert memory.source_clock_epoch == "boot-a" and memory.source_runtime_pid == 123
+    assert memory.source_generation == 1 and memory.source_sequence == 8
+    assert memory.lineage == fact.observation.lineage
+    assert SpatialQueryResult.from_jsonable(history.to_jsonable()) == history
+    assert not host.spatial_query(SpatialQuery(kind="coverage", require_current=True)).coverage
     assert not host.spatial_query(SpatialQuery(kind="relations")).relations
     host._persist(force=True)
     restored = runtime()
+    assert restored.spatial_query(SpatialQuery(kind="coverage")).coverage == history.coverage
     restored.ingest_status(status, runtime_pid=123)
     assert not restored.spatial_query(SpatialQuery(require_current=True)).entities
     remembered = restored.spatial_query(SpatialQuery(entity_id=area.entity_id)).entities[0].facts[0]
@@ -99,6 +110,19 @@ def test_predicted_pose_and_costmap_maintenance_never_renew_a_scan_or_create_are
     clock.now += 200_000_000
     host.ingest_status(completed_geometry(clock, tick=3, sequence=9, measured=measured, x_m=3.25), runtime_pid=123)
     assert len(host.spatial_query(SpatialQuery()).entities) == 1
+
+
+def test_persistent_coverage_does_not_merge_reused_pid_and_generation_across_clock_epochs():
+    clock = Clock()
+    histories = []
+    for epoch in ("boot-a", "boot-b"):
+        host = PublicRobotRuntime(object(), world=PublicWorldModel(clock_ns=clock, clock_epoch=epoch), clock_ns=clock)
+        host.ingest_status(completed_geometry(clock), runtime_pid=123)
+        histories.append(host.spatial_query(SpatialQuery(kind="coverage")).coverage[0])
+    assert histories[0].source_runtime_pid == histories[1].source_runtime_pid
+    assert histories[0].source_generation == histories[1].source_generation
+    assert histories[0].source_clock_epoch != histories[1].source_clock_epoch
+    assert histories[0].map_id != histories[1].map_id
 
 
 @pytest.mark.parametrize("invalid", ("missing_sequence", "missing_generation", "lost_pose", "discontinuous", "future_measurement"))

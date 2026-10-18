@@ -58,10 +58,12 @@ class NavigationDecisionRecorder:
             candidates = getattr(plan, "trajectory_candidates", ())
             route = getattr(plan, "route", ())
             visits = getattr(world, "global_visited_cells", ())
-            # Source context identifies an accepted plan, not the per-tick
-            # recontextualization of that plan. Velocity-only guidance has no
-            # route/rollout replan identity to record.
+            # A fresh local proof is not a new planner result. Record its
+            # semantic motion/goal changes below, without emitting one full
+            # decision snapshot just because proof source time advances.
             source = getattr(validity, "source_context", None) if candidates or route else None
+            if getattr(plan, "reason", None) == "LOCAL_GUIDANCE_REVALIDATED":
+                source = None
             signature = (
                 # Expired/inactive STOP missions may receive a new ID each tick.
                 # Preserve their source ID in the event, but don't record that
@@ -73,7 +75,8 @@ class NavigationDecisionRecorder:
                 ("plan", _get(plan, "status", "reason") + (source,)),
                 ("selection", (getattr(selection, "selected_source", None) if active else None,)
                  + _get(selection, "kind", "selection_reason")
-                 + (getattr(getattr(selection, "trajectory", None), "candidate_id", None),)),
+                 + _get(getattr(selection, "trajectory", None), "candidate_id", "v_mps", "omega_rad_s")
+                 + _get(motion, "requested_v_mps", "requested_omega_rad_s")),
                 ("constraint", _get(constraint, "active_constraints", "motion_revoked") + _get(motion, "stop_reason")),
                 ("safety", _get(final, "safety_decision", "reason", "latch_state", "enabled")
                  + (getattr(getattr(record, "inputs", None), "lifecycle", getattr(record, "lifecycle", None)),)),
@@ -92,12 +95,20 @@ class NavigationDecisionRecorder:
         plan = layers.get("L6")
         if plan is not None:
             alternatives = plan.trajectory_candidates
+            retained = alternatives[:MAX_TRAJECTORY_ALTERNATIVES]
+            selected = getattr(layers.get("L7"), "trajectory", None)
+            if (selected is not None and all(item.candidate_id != selected.candidate_id for item in retained)
+                    and any(item.candidate_id == selected.candidate_id for item in alternatives)):
+                # Preserve the selected candidate even when the rejected grid
+                # occupies the preview. The original count/truncation stays.
+                selected = next(item for item in alternatives if item.candidate_id == selected.candidate_id)
+                retained = retained[:-1] + (selected,)
             extra = (
                 ("route_preview", plan.route[:MAX_ROUTE_PREVIEW]),
                 ("route_truncated", len(plan.route) > MAX_ROUTE_PREVIEW),
                 ("trajectory_alternatives", tuple(
                     _fields(item, omit=("samples",))
-                    for item in alternatives[:MAX_TRAJECTORY_ALTERNATIVES]
+                    for item in retained
                 )),
                 ("alternatives_truncated", len(alternatives) > MAX_TRAJECTORY_ALTERNATIVES),
             )

@@ -650,6 +650,39 @@ class TrajectoryPose:
 
 
 @dataclass(frozen=True, slots=True)
+class NavigationRejectionWitness:
+    """Compact passive evidence of the first failed local geometric gate."""
+
+    candidate_id: str
+    reason: str
+    source_context: TickContext
+    geometry_revision: int
+    geometry_captured_ns: int
+    map_revision: int
+    time_offset_ns: int
+    x_m: float
+    y_m: float
+    yaw_rad: float
+    clearance_m: float
+    required_clearance_m: float
+    uncertainty_m: float
+
+    def __post_init__(self) -> None:
+        require_token(self.candidate_id, "candidate_id")
+        require_token(self.reason, "reason")
+        if not isinstance(self.source_context, TickContext):
+            raise ContractValidationError("rejection witness requires source context")
+        for name in ("geometry_revision", "geometry_captured_ns", "map_revision", "time_offset_ns"):
+            require_nonnegative(getattr(self, name), name)
+        if self.geometry_captured_ns > self.source_context.monotonic_ns:
+            raise ContractValidationError("rejection geometry cannot be from the future")
+        for name in ("x_m", "y_m", "yaw_rad", "clearance_m", "required_clearance_m", "uncertainty_m"):
+            require_finite(getattr(self, name), name)
+        if min(self.clearance_m, self.required_clearance_m, self.uncertainty_m) < 0:
+            raise ContractValidationError("rejection clearance and uncertainty cannot be negative")
+
+
+@dataclass(frozen=True, slots=True)
 class TrajectoryEvaluation:
     candidate_id: str
     v_mps: float
@@ -668,9 +701,12 @@ class TrajectoryEvaluation:
     # captures/manual constructors without these fields.
     progress_potential_score: float = 0.0
     progress_viable: bool = True
+    rejection_witness: NavigationRejectionWitness | None = None
 
     def __post_init__(self) -> None:
         require_token(self.candidate_id, "TrajectoryEvaluation.candidate_id")
+        if self.rejection_witness is not None and not isinstance(self.rejection_witness, NavigationRejectionWitness):
+            raise ContractValidationError("trajectory rejection witness must be typed")
         for name in (
             "v_mps",
             "omega_rad_s",
@@ -829,9 +865,12 @@ class NavigationPlan:
     geometry_proof: LocalMotionProof | None = None
     goal_selection_reason: str | None = None
     goal_selected_ns: int | None = None
+    rejection_witness: NavigationRejectionWitness | None = None
 
     def __post_init__(self) -> None:
         require_token(self.mission_id, "NavigationPlan.mission_id")
+        if self.rejection_witness is not None and not isinstance(self.rejection_witness, NavigationRejectionWitness):
+            raise ContractValidationError("plan rejection witness must be typed")
         if self.geometry_proof is not None and not isinstance(self.geometry_proof, LocalMotionProof):
             raise ContractValidationError("plan geometry proof must be typed")
         _require_optional_token(self.goal_selection_reason, "goal_selection_reason")
@@ -1127,6 +1166,7 @@ __all__ = [
     "RollingLocalCostmap",
     "SafetyDecision",
     "TrajectoryEvaluation",
+    "NavigationRejectionWitness",
     "TrajectoryPose",
     "Waypoint",
     "VelocityTarget",

@@ -138,6 +138,12 @@ def test_async_command_ingress_preserves_revision_timing_and_real_expiry(tmp_pat
             assert evidence.issued_monotonic_ns <= evidence.reader_received_ns <= evidence.observed_monotonic_ns
             assert evidence.ttl_remaining_ns == evidence.expires_monotonic_ns-evidence.observed_monotonic_ns
             assert evidence.ttl_remaining_ns > 0
+            if revision:
+                assert evidence.previous_publication_revision == client.last_revision - 1
+                assert (evidence.previous_preparation_started_ns
+                        <= evidence.previous_issued_monotonic_ns
+                        <= evidence.previous_publication_returned_ns
+                        <= evidence.issued_monotonic_ns)
         # No producer: cached bytes never acquire a new lifetime on a read.
         deadline = evidence.expires_monotonic_ns
         _wait_until(lambda: time.monotonic_ns() > deadline)
@@ -148,6 +154,146 @@ def test_async_command_ingress_preserves_revision_timing_and_real_expiry(tmp_pat
         assert edge.timing_evidence.reader_received_ns == evidence.reader_received_ns
     finally:
         edge.close()
+
+
+def test_command_issue_follows_staging_and_publication_timing_cannot_refresh_ttl(tmp_path, monkeypatch):
+    import json
+    import os
+    from v3.adapters.resident_command import (
+        AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig,
+    )
+    from v3.contracts import CommandMode
+
+    now = 1_000_000_000
+    config = ResidentCommandMailboxConfig(tmp_path / 'command.json')
+    client = ResidentCommandClient(config, monotonic_ns=lambda: now)
+    gateway = AtomicResidentCommandGateway(config, monotonic_ns=lambda: now)
+    real_open = os.open
+
+    def delayed_stage(path, flags, *args, **kwargs):
+        nonlocal now
+        descriptor = real_open(path, flags, *args, **kwargs)
+        if flags & os.O_CREAT:
+            now += 600_000_000  # Metadata delay before the new heartbeat exists.
+        return descriptor
+
+    monkeypatch.setattr(os, 'open', delayed_stage)
+    for tick in range(2):
+        revision = client.publish_explore(
+            'same-mission', max_v_mps=.3, max_omega_rad_s=.6, ttl_ns=200_000_000,
+        )
+        command = gateway.snapshot(TickContext(tick, now))
+        assert command.mode is CommandMode.EXPLORE
+        timing = gateway.timing_evidence
+        assert timing.issued_monotonic_ns == now
+        assert timing.ttl_remaining_ns == 200_000_000
+        if tick:
+            assert timing.previous_publication_revision == revision - 1
+            assert timing.previous_issued_monotonic_ns - timing.previous_preparation_started_ns == 600_000_000
+            assert timing.previous_publication_returned_ns == timing.previous_issued_monotonic_ns
+
+    # Missing/malformed optional diagnostics do not change command authority.
+    payload = json.loads(config.path.read_text())
+    payload['revision'] += 1
+    payload['previous_publication_returned_ns'] = 'invalid diagnostic'
+    config.path.write_text(json.dumps(payload))
+    assert gateway.snapshot(TickContext(2, now)).mode is CommandMode.EXPLORE
+    assert gateway.timing_evidence.previous_publication_revision is None
+    now += 200_000_001
+    assert gateway.snapshot(TickContext(3, now)).mode is CommandMode.STOP
+    assert gateway.timing_evidence.issued_monotonic_ns == payload['issued_monotonic_ns']
+
+
+def test_failed_command_publication_keeps_previous_revision_and_cleans_staging(tmp_path, monkeypatch):
+    import os
+    from v3.adapters.resident_command import (
+        AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig,
+    )
+    from v3.contracts import CommandMode
+
+    now = 1_000_000_000
+    config = ResidentCommandMailboxConfig(tmp_path / 'command.json')
+    client = ResidentCommandClient(config, monotonic_ns=lambda: now)
+    gateway = AtomicResidentCommandGateway(config, monotonic_ns=lambda: now)
+    client.publish_explore('same-mission', max_v_mps=.3, max_omega_rad_s=.6, ttl_ns=200_000_000)
+    previous_bytes = config.path.read_bytes()
+
+    def replace_failure(*args):
+        raise OSError('publication failed')
+
+    monkeypatch.setattr(os, 'replace', replace_failure)
+    with pytest.raises(OSError, match='publication failed'):
+        client.publish_explore('same-mission', max_v_mps=.3, max_omega_rad_s=.6, ttl_ns=200_000_000)
+    assert config.path.read_bytes() == previous_bytes
+    assert client.last_revision == 1
+    assert not tuple(tmp_path.glob('.command.json.tmp.*'))
+    now += 200_000_001
+    assert gateway.snapshot(TickContext(0, now)).mode is CommandMode.STOP
+
+
+@pytest.mark.parametrize('failure_reason', ('OWNER_EXITED', 'WATCHDOG_TIMEOUT'))
+@pytest.mark.parametrize('blocked_operation', ('open', 'write'))
+def test_command_producer_rechecks_owner_and_watchdog_after_staging_io(
+        tmp_path, monkeypatch, capsys, failure_reason, blocked_operation):
+    import json
+    import os
+    from v3 import control_cli
+    from v3.adapters.resident_command import ResidentCommandClient, ResidentCommandMailboxConfig
+
+    now = 1_000_000_000
+    alive = True
+    config = ResidentCommandMailboxConfig(tmp_path / 'command.json')
+    client = ResidentCommandClient(config, monotonic_ns=lambda: now)
+    original = getattr(os, blocked_operation)
+    delayed = False
+
+    def delayed_operation(*args, **kwargs):
+        nonlocal now, alive, delayed
+        result = original(*args, **kwargs)
+        if not delayed:
+            delayed = True
+            now += 600_000_000
+            alive = False
+        return result
+
+    monkeypatch.setattr(os, blocked_operation, delayed_operation)
+    monkeypatch.setattr(control_cli, '_pid_alive', lambda pid: alive)
+    result = control_cli._run_active(
+        client, lambda command_id: client.publish_explore(
+            command_id, max_v_mps=.3, max_omega_rad_s=.6, ttl_ns=200_000_000,
+        ), command_id='same-mission', ttl_ns=200_000_000, heartbeat_ns=100_000_000,
+        owner_pid=123 if failure_reason == 'OWNER_EXITED' else None,
+        max_runtime_s=.1 if failure_reason == 'WATCHDOG_TIMEOUT' else None,
+        monotonic_ns=lambda: now,
+        sleep=lambda seconds: pytest.fail('no heartbeat may follow rejected publication'),
+    )
+    assert result == 0
+    assert json.loads(config.path.read_text())['mode'] == 'STOP'
+    assert client.last_revision == 1  # Rejected ACTIVE never reached os.replace.
+    assert not tuple(tmp_path.glob('.command.json.tmp.*'))
+    output = capsys.readouterr().out
+    assert failure_reason in output
+    assert '"status": "ACTIVE"' not in output
+
+
+def test_optional_command_publication_timing_respects_existing_byte_limit(tmp_path):
+    from dataclasses import replace
+    from v3.adapters.resident_command import (
+        AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig,
+    )
+    from v3.contracts import CommandMode
+
+    config = ResidentCommandMailboxConfig(tmp_path / 'command.json')
+    first = ResidentCommandClient(config, monotonic_ns=lambda: 1_000_000_000)
+    first.publish_explore('same-mission', max_v_mps=.3, max_omega_rad_s=.6, ttl_ns=200_000_000)
+    config = replace(config, maximum_file_bytes=len(config.path.read_bytes()))
+    client = ResidentCommandClient(config, monotonic_ns=lambda: 1_000_000_000)
+    for tick in range(2):
+        client.publish_explore('same-mission', max_v_mps=.3, max_omega_rad_s=.6, ttl_ns=200_000_000)
+        gateway = AtomicResidentCommandGateway(config, monotonic_ns=lambda: 1_000_000_000)
+        assert gateway.snapshot(TickContext(tick, 1_000_000_000)).mode is CommandMode.EXPLORE
+        assert gateway.timing_evidence.previous_publication_revision is None
+        assert len(config.path.read_bytes()) <= config.maximum_file_bytes
 
 
 def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path, monkeypatch):

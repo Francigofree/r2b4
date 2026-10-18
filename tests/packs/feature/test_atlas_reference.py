@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -172,6 +173,78 @@ def test_legacy_map_is_historical_geometry_without_invented_source_gauge(tmp_pat
     assert reference.viewpoints[0].source_frame_id is None
     assert reference.to_jsonable()["current_alignment"] is None
     assert (tmp_path / "report.json").read_bytes() == before
+
+
+def test_atlas_frontier_uses_free_unknown_occupancy_and_retains_historical_identity(builder, tmp_path):
+    from r2b4_orchestration.spatial_coverage import build_atlas_frontier_index
+    reference = load_atlas_reference(exported(builder, tmp_path))
+    index = build_atlas_frontier_index(reference, 1000, computed_clock_epoch="host")
+    assert (index.free_cells, index.occupied_cells, index.unknown_cells, index.frontier_cells) == (1, 1, 2, 1)
+    assert len(index.candidates) == 1 and index.candidates[0][0] == "frontier:0:0"
+    assert index.candidates[0][1:3] == pytest.approx((.075, .025))
+    assert index.candidates[0][3] == 1
+    assert index.source_clock_epoch == "source-epoch" and index.source_generation == 3
+    assert index.source_runtime_pid == 42 and index.measurement_time_ns == 111
+    document = index.to_jsonable()
+    assert document["current_alignment"] is None and document["motion_authority"] is False
+    assert document["frame_id"] == reference.frame_id
+
+    service = SpatialService(PublicWorldModel(clock_epoch="host"), clock_ns=lambda: 1000)
+    service.load_atlas_reference(reference.metadata_path)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        query = service.query(SpatialQuery(kind="frontiers"))
+        if query.frontier_indexes:
+            break
+        time.sleep(.01)
+    assert query.frontier_indexes == (index,)
+    assert SpatialQueryResult.from_jsonable(query.to_jsonable()) == query
+    assert not service.query(SpatialQuery(kind="frontiers", require_current=True)).frontier_indexes
+    restored = SpatialService(PublicWorldModel(clock_epoch="next-host"))
+    restored.restore(service.export_state())
+    assert restored.query(SpatialQuery(kind="frontiers")).frontier_indexes == (index,)
+    assert not restored.query(SpatialQuery(kind="frontiers", require_current=True)).frontier_indexes
+    service.close()
+
+
+def test_frontier_worker_failure_does_not_create_geometry_or_motion(builder, tmp_path, monkeypatch):
+    import r2b4_orchestration.spatial_service as module
+    def fail(*_, **__):
+        raise ValueError("changed-geometry")
+    monkeypatch.setattr(module, "build_atlas_frontier_index", fail)
+    service = SpatialService(PublicWorldModel())
+    reference = service.load_atlas_reference(exported(builder, tmp_path))
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not service.snapshot()["frontier_errors"]:
+        time.sleep(.01)
+    assert "changed-geometry" in service.snapshot()["frontier_errors"][reference.map_id]
+    assert not service.query(SpatialQuery(kind="frontiers")).frontier_indexes
+    assert not service.query(SpatialQuery(require_current=True)).entities
+    service.close()
+
+
+def test_slow_atlas_worker_cannot_block_host_queries_or_renew_historical_measurement(builder, tmp_path, monkeypatch):
+    import threading
+    import r2b4_orchestration.spatial_service as module
+    entered, release = threading.Event(), threading.Event()
+    original = module.build_atlas_frontier_index
+    def slow(reference, stamp, **parameters):
+        entered.set()
+        assert release.wait(5)
+        return original(reference, stamp, **parameters)
+    monkeypatch.setattr(module, "build_atlas_frontier_index", slow)
+    service = SpatialService(PublicWorldModel(clock_epoch="host"), clock_ns=lambda: 1000)
+    service.load_atlas_reference(exported(builder, tmp_path))
+    assert entered.wait(2)
+    try:
+        assert service.query(SpatialQuery(kind="atlases")).atlas_references
+        assert not service.query(SpatialQuery(kind="frontiers")).frontier_indexes
+        assert not service.query(SpatialQuery(require_current=True)).entities
+        service.close()
+    finally:
+        release.set()
+    service._atlas_thread.join(2)
+    assert not service.query(SpatialQuery(kind="frontiers")).frontier_indexes
 
 
 def test_host_import_and_place_teaching_persist_without_motion_or_frame_relabelling(builder, tmp_path):

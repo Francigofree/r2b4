@@ -82,9 +82,10 @@ def test_selected_alternate_survives_real_spawned_process():
 
 
 def test_closed_alternate_acceptance_keeps_goal_source_time_and_failed_memory(monkeypatch):
+    import v3.layers.l6_navigation as navigation
     config = resolved_config().runtime.composition.live_control.control
     goals = (Waypoint(.9, 0.), Waypoint(0., .9), Waypoint(-.9, 0.), Waypoint(0., -.9))
-    monkeypatch.setattr(TrajectoryNavigator, '_local_goal_options', lambda *args: goals)
+    monkeypatch.setattr(navigation, '_rank_local_goal_options', lambda *args: goals)
     navigator = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
     direct = TrajectoryNavigator(config.navigation,
         async_config=replace(config.async_l6, enabled=False, completion_inputs=False))
@@ -95,8 +96,9 @@ def test_closed_alternate_acceptance_keeps_goal_source_time_and_failed_memory(mo
     direct.evaluate(mission, estimate, world)
     navigator.evaluate(mission, estimate, world)
     request = navigator.pending_rollout_request
-    assert len(request.alternate_goals) == 3
+    assert request.select_local_goal and request.alternate_goals == ()
     result = TrajectoryRolloutComputer(config.navigation).compute(request)
+    assert result.goal_options == goals
     assert direct.checkpoint().trajectory_candidates == result.trajectory_candidates
     estimate, world = _scene(1, tracks=tracks)
     mission = manager.evaluate(CommandRequest(estimate.context, 'alternate', CommandMode.EXPLORE, (), 1))
@@ -104,7 +106,7 @@ def test_closed_alternate_acceptance_keeps_goal_source_time_and_failed_memory(mo
                               PlannerInput(estimate.context, request.context, result))
     assert plan.local_goal == goals[1] == direct.checkpoint().local_goal
     assert plan.goal_selected_ns == request.context.monotonic_ns
-    assert plan.motion_validity.source_context == request.context
+    assert plan.motion_validity.source_context in (request.context, estimate.context)
     checkpoint = pickle.loads(pickle.dumps(navigator.checkpoint()))
     assert checkpoint.goal_reachable
     failed_cell = navigator._coverage_key(goals[0].x_m, goals[0].y_m)
@@ -142,15 +144,14 @@ def test_unreachable_completion_cannot_resume_synthetic_continuation():
     assert pending.status is NavigationStatus.IDLE
     assert not pending.trajectory_candidates
     assert MotionSelector(config.motion_selection).evaluate(pending).trajectory is None
-    # After the bounded no-path episode, L6 may ask the worker to recheck the
-    # retained goal against new evidence; it stops cycling through new goals.
+    # The no-path budget ends in an explicit HOLD and bounded cooldown.
     tick = math.ceil(config.navigation.local_goal_max_age_ns / 20_000_000) + 1
     estimate, world = _scene(tick)
     mission = manager.evaluate(CommandRequest(estimate.context, 'no-path', CommandMode.EXPLORE, (), tick))
     held = navigator.evaluate(mission, estimate, world)
     assert held.status is NavigationStatus.IDLE
-    assert navigator.pending_rollout_request.goal == request.goal
-    assert navigator.pending_rollout_request.alternate_goals == ()
+    assert held.reason == 'NO_PATH_HOLD'
+    assert navigator.pending_rollout_request is None
 
 
 def test_recovery_phase_uses_one_fresh_maneuver_and_expires_without_movement(monkeypatch):

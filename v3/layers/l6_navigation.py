@@ -21,6 +21,7 @@ from v3.contracts import (
     MotionValidity,
     LocalMotionProof,
     NavigationPlan,
+    NavigationRejectionWitness,
     NavigationStatus,
     RobotEstimate,
     LocalizationRequirement, QualityState, LOCAL_FRAME_ID, VelocityTarget,
@@ -1100,7 +1101,16 @@ class TrajectoryNavigator:
             if proof is None and plan.status is NavigationStatus.ACTIVE and viable:
                 # An unproved realizable transition is an explicit HOLD, not
                 # an ACTIVE goal whose motion is repeatedly rejected in L9.
-                plan = self._inactive(mission, NavigationStatus.IDLE, "PLANNER_EXECUTION_HOLD")
+                candidate = viable[0]
+                costmap = world.local_costmap
+                witness = NavigationRejectionWitness(candidate.candidate_id,
+                    "EXECUTION_PROOF_UNAVAILABLE", mission.context,
+                    costmap.revision, max(0, mission.context.monotonic_ns-costmap.freshness_ns),
+                    world.map_revision, 0, estimate.x_m, estimate.y_m, estimate.yaw_rad,
+                    candidate.min_clearance_m, self._config.footprint_safety_margin_m,
+                    self._config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m)
+                plan = replace(self._inactive(mission, NavigationStatus.IDLE, "PLANNER_EXECUTION_HOLD"),
+                               rejection_witness=witness)
             plan = replace(plan, geometry_proof=proof)
         if plan.status is NavigationStatus.ACTIVE:
             omega = (plan.velocity_target.omega_rad_s if plan.velocity_target is not None
@@ -1108,12 +1118,9 @@ class TrajectoryNavigator:
             if abs(omega) > 1e-3 and estimate.localization_quality.heading is QualityState.GOOD:
                 self._last_maneuver_direction = 1 if omega > 0 else -1
         if mission.mode is CommandMode.EXPLORE and self._mission_id == mission.mission_id:
-            pending = self._pending_rollout_request
-            proposed = (pending is not None and plan.local_goal == pending.goal
-                        and self._pending_goal_selected_ns is not None)
             plan = replace(plan, progress=self._progress,
-                goal_selection_reason=(self._pending_goal_selection_reason if proposed else self._goal_selection_reason),
-                goal_selected_ns=(self._pending_goal_selected_ns if proposed else self._goal_selected_ns))
+                goal_selection_reason=self._goal_selection_reason,
+                goal_selected_ns=self._goal_selected_ns)
         return plan
 
     def _motion_geometry_proof(
@@ -2183,8 +2190,7 @@ class TrajectoryNavigator:
                     not c.collision and c.progress_viable for c in self._trajectory_candidates):
                 if self._no_viable_since_ns is None:
                     self._no_viable_since_ns = now
-                if (2 * self._config.trajectory_replan_interval_ns
-                        <= now - self._no_viable_since_ns < self._config.local_goal_max_age_ns):
+                if now - self._no_viable_since_ns >= 2 * self._config.trajectory_replan_interval_ns:
                     self._remember_failed_goal(goal, now)
                     goal_reason = "NO_VIABLE_PATH"
             elif mission.context.monotonic_ns - self._goal_selected_ns >= self._config.local_goal_max_age_ns:
@@ -2195,17 +2201,12 @@ class TrajectoryNavigator:
             if goal_reason is not None:
                 # Collision lookahead is not the waypoint replacement lead.
                 # Keep an approaching, viable goal until its bounded handoff.
-                scene = self._build_planning_scene(world)
-                options = self._local_goal_options(estimate, costmap, scene, mission.explore_preferences)
-                if not options:
-                    self._goal_selection_reason = "NO_REACHABLE_GOAL"
-                    self._goal_reachable = False
-                    if self._no_viable_since_ns is None:
-                        self._no_viable_since_ns = now
-                    self._last_replan_ns = now
-                    self._last_replan_tick_id = mission.context.tick_id
-                    return self._inactive(mission, NavigationStatus.IDLE, "NO_PATH_HOLD")
-                goal, alternate_goals = options[0], options[1:]
+                # The worker ranks pure local options. Until acceptance, retain
+                # the committed endpoint. A first seed only supplies a proposal
+                # for the independent bounded continuation proof.
+                distance = (mission.explore_preferences or self._config).explore_local_goal_max_distance_m
+                goal = goal or Waypoint(estimate.x_m + distance * math.cos(estimate.yaw_rad),
+                                        estimate.y_m + distance * math.sin(estimate.yaw_rad))
                 goal_selected_ns = mission.context.monotonic_ns
             assert goal is not None
             self._schedule_or_store_rollout(
@@ -2220,6 +2221,8 @@ class TrajectoryNavigator:
                 goal_selection_reason=goal_reason,
                 allow_exploration_detour=True,
                 alternate_goals=alternate_goals,
+                select_local_goal=goal_reason is not None,
+                explore_preferences=mission.explore_preferences,
             )
         if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
             return (self._local_continuation(mission, estimate, world)
@@ -2281,6 +2284,7 @@ class TrajectoryNavigator:
             self._explore_progress_started_ns = estimate.context.monotonic_ns
             self._explore_stall_count = 0
             self._explore_retry_after_ns = None
+            self._no_viable_since_ns = None
 
     def _explore_no_progress_plan(
         self, mission: MissionIntent, estimate: RobotEstimate,
@@ -2293,23 +2297,26 @@ class TrajectoryNavigator:
         now = mission.context.monotonic_ns
         retry_after = self._explore_retry_after_ns
         if retry_after is not None:
+            prefix = "NO_PATH" if self._goal_selection_reason == "NO_PATH" else "NO_PROGRESS"
             if self._explore_stall_count >= _FAILED_LOCAL_GOAL_CAPACITY:
-                return self._inactive(mission, NavigationStatus.IDLE, "NO_PROGRESS_EXHAUSTED_HOLD")
+                return self._inactive(mission, NavigationStatus.IDLE, prefix + "_EXHAUSTED_HOLD")
             if now < retry_after:
-                return self._inactive(mission, NavigationStatus.IDLE, "NO_PROGRESS_HOLD")
+                return self._inactive(mission, NavigationStatus.IDLE, prefix + "_HOLD")
             self._explore_retry_after_ns = None
             self._explore_progress_started_ns = now
             self._local_goal = None
             self._goal_reachable = True
             return None
-        if not self._goal_reachable:
-            # An explicit worker no-path result already publishes HOLD and
-            # keeps its bounded retry policy. Time spent without an admitted
-            # path is not a failed execution attempt of a viable trajectory.
-            self._explore_progress_started_ns = now
-            return None
+        no_path = not self._goal_reachable
+        if no_path and self._no_viable_since_ns is None:
+            self._no_viable_since_ns = now
         started = self._explore_progress_started_ns
-        if started is None or now-started < self._config.local_goal_max_age_ns:
+        # Neither a no-path result nor a momentarily viable replacement is
+        # physical progress. They cannot renew either bounded episode.
+        blocked_since = self._no_viable_since_ns if no_path else None
+        elapsed = max(now-started if started is not None else 0,
+                      now-blocked_since if blocked_since is not None else 0)
+        if elapsed < self._config.local_goal_max_age_ns:
             return None
         goal = self._local_goal
         if goal is None and self._pending_rollout_request is not None:
@@ -2318,14 +2325,15 @@ class TrajectoryNavigator:
             self._remember_failed_goal(goal, now)
         self._clear_trajectory_plan()
         self._goal_reachable = False
-        self._goal_selection_reason = "NO_PROGRESS"
+        self._goal_selection_reason = "NO_PATH" if no_path else "NO_PROGRESS"
         self._explore_stall_count += 1
         # Reuse the existing no-viable hysteresis and failed-goal capacity.
         # Exhaustion remains HOLD until actual translation or a new mission /
         # odometry lineage; periodic map revisions are not physical progress.
         self._explore_retry_after_ns = now + 2*self._config.trajectory_replan_interval_ns
-        reason = ("NO_PROGRESS_EXHAUSTED_HOLD"
-                  if self._explore_stall_count >= _FAILED_LOCAL_GOAL_CAPACITY else "NO_PROGRESS_HOLD")
+        prefix = "NO_PATH" if no_path else "NO_PROGRESS"
+        reason = prefix + ("_EXHAUSTED_HOLD"
+                           if self._explore_stall_count >= _FAILED_LOCAL_GOAL_CAPACITY else "_HOLD")
         return self._inactive(mission, NavigationStatus.IDLE, reason)
 
     def _local_continuation(
@@ -2353,11 +2361,14 @@ class TrajectoryNavigator:
         if self._escape_candidate is None and not self._goal_reachable:
             return None
         if (self._escape_candidate is None and self._pending_rollout_request is not None
-                and (goal is None or mission.mode is CommandMode.EXPLORE)):
-            # A rolling exploration goal is already selected by L6. Prove the
-            # bounded continuation toward it against current geometry while
-            # its full rollout is pending; NAVIGATE keeps its committed goal.
+                and goal is None):
+            # An explicit seed still needs an independent fresh local proof.
+            # Search proposals cannot replace a committed endpoint here.
             goal = self._pending_rollout_request.goal
+            if (mission.mode is CommandMode.EXPLORE
+                    and self._failed_goals.get(self._coverage_key(goal.x_m, goal.y_m), 0)
+                    > mission.context.monotonic_ns):
+                return None
         if goal is None:
             return None
         distance = math.hypot(goal.x_m-estimate.x_m, goal.y_m-estimate.y_m)
@@ -2422,7 +2433,11 @@ class TrajectoryNavigator:
             # Rejecting one old maneuver does not prove the mission unreachable.
             # Keep its identity while the worker can supply a fresh alternative.
             self._clear_escape_phase()
-            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_GEOMETRY_HOLD")
+            witness = candidate.rejection_witness
+            if witness is not None:
+                witness = replace(witness, candidate_id=(proposal.candidate_id if proposal else "local-continuation"))
+            return replace(self._inactive(mission, NavigationStatus.IDLE, "PLANNER_GEOMETRY_HOLD"),
+                           rejection_witness=witness)
         if proposal is not None and proposal.candidate_id.startswith("escape-"):
             # Recovery progress is regained clearance or a footprint-proven
             # next step, rather than progress toward the blocked local goal.
@@ -2569,6 +2584,8 @@ class TrajectoryNavigator:
         goal_selection_reason: str | None = None,
         allow_exploration_detour: bool = False,
         alternate_goals: tuple[Waypoint, ...] = (),
+        select_local_goal: bool = False,
+        explore_preferences: ExplorePreferences | None = None,
     ) -> None:
         if estimate.localization_quality.local_translation is QualityState.DEGRADED or estimate.localization_quality.heading is QualityState.DEGRADED:
             max_v_mps = self._config.wheel_limits.degraded_linear_cap(
@@ -2581,10 +2598,14 @@ class TrajectoryNavigator:
             max_v_mps=max_v_mps, max_omega_rad_s=max_omega_rad_s,
             coverage=tuple((x, y, visits) for (x, y), (visits, _tick) in sorted(self._coverage.items())),
             allow_exploration_detour=allow_exploration_detour, alternate_goals=alternate_goals,
+            select_local_goal=select_local_goal, explore_preferences=explore_preferences,
+            failed_goals=tuple((x, y, until) for (x, y), until in sorted(self._failed_goals.items())),
+            goal_handoff_ns=self._goal_handoff_ns(),
         )
         backend = self._rollout_backend
-        # Every new mission gets one synchronous seed. This avoids an ACTIVE
-        # planner-warmup STOP and moves all recurring heavy replans off CPU3.
+        # Direct/replay mode computes the identical kernel synchronously.
+        # Production completion-input mode only closes this immutable request;
+        # its initial continuation gets a separate bounded current proof.
         if not self._completion_inputs and (backend is None or not self._trajectory_candidates):
             planning_scene = scene or self._build_planning_scene(world)
             result = _compute_goal_rollout(self._config, planning_scene, request)
@@ -2729,9 +2750,28 @@ class TrajectoryNavigator:
         selected_ns: int | None, selection_reason: str | None,
     ) -> None:
         goal = result.selected_goal or request.goal
-        options = (request.goal, *request.alternate_goals)
+        options = result.goal_options if request.select_local_goal else (request.goal, *request.alternate_goals)
+        if request.select_local_goal and not options:
+            if result.goal_reachable or result.selected_goal is not None:
+                raise RuntimeError("ASYNC_L6_SELECTED_GOAL_MISMATCH")
+            self._goal_reachable = False
+            self._goal_selection_reason = "NO_REACHABLE_GOAL"
+            if self._no_viable_since_ns is None:
+                self._no_viable_since_ns = request.context.monotonic_ns
+            self._last_replan_ns = request.context.monotonic_ns
+            self._last_replan_tick_id = request.context.tick_id
+            self._trajectory_candidates = ()
+            return
         if goal not in options:
             raise RuntimeError("ASYNC_L6_SELECTED_GOAL_MISMATCH")
+        if request.select_local_goal:
+            policy = request.explore_preferences or self._config
+            distance = math.hypot(goal.x_m-request.estimate.x_m, goal.y_m-request.estimate.y_m)
+            failed = {(x, y): until for x, y, until in request.failed_goals}
+            if (distance > policy.explore_local_goal_max_distance_m + 1e-9
+                    or distance < policy.explore_local_goal_min_distance_m - 1e-9
+                    or failed.get(self._coverage_key(goal.x_m, goal.y_m), 0) > request.context.monotonic_ns):
+                raise RuntimeError("ASYNC_L6_SELECTED_GOAL_MISMATCH")
         if not result.goal_reachable and not request.allow_exploration_detour:
             raise RuntimeError("ASYNC_L6_GOAL_REACHABILITY_MISMATCH")
         self._goal_reachable = result.goal_reachable
@@ -2746,10 +2786,6 @@ class TrajectoryNavigator:
                 self._goal_selection_reason = "NO_REACHABLE_GOAL"
                 if self._no_viable_since_ns is None:
                     self._no_viable_since_ns = request.context.monotonic_ns
-            elif any(not c.collision and c.progress_viable
-                     and not c.candidate_id.startswith("escape-")
-                     for c in result.trajectory_candidates):
-                self._no_viable_since_ns = None
         self._store_trajectory_plan(
             request.context.monotonic_ns, request.context.tick_id,
             goal, result.trajectory_candidates, estimate=request.estimate, world=request.world)
@@ -2846,80 +2882,11 @@ class TrajectoryNavigator:
         self, estimate: RobotEstimate, costmap: RollingLocalCostmap,
         scene: _LocalPlanningScene, preferences: "ExplorePreferences | None" = None,
     ) -> tuple[Waypoint, ...]:
-        # Ranking preferences arrive from the caller; geometry, sampling budget,
-        # coverage, lifecycle and feasibility remain owned by generic L6.
-        policy = self._config if preferences is None else preferences
-        options: list[tuple[float, float, int, int, Waypoint, float]] = []
-        uncertainty = self._config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m
-        tangent = estimate.yaw_rad + estimate.omega_rad_s*self._goal_handoff_ns()/1e9
-        footprint_radius = 0.5 * math.hypot(
-            self._config.footprint_length_m,
-            self._config.footprint_width_m,
+        return _rank_local_goal_options(
+            self._config, estimate, costmap, scene, preferences,
+            {key: visits for key, (visits, _tick) in self._coverage.items()},
+            self._failed_goals, self._goal_handoff_ns(),
         )
-        relevant_clearance_m = max(
-            self._config.clearance_score_cap_m,
-            footprint_radius + self._config.footprint_safety_margin_m + uncertainty,
-        ) + _POINT_CLEARANCE_EPSILON_M
-        distances = _explore_goal_distances(self._config, preferences)
-        distance_span = max(
-            policy.explore_local_goal_max_distance_m
-            - policy.explore_local_goal_min_distance_m,
-            _POINT_CLEARANCE_EPSILON_M,
-        )
-        for index in range(self._config.local_goal_heading_samples):
-            offset = _alternating_heading_offset(
-                index,
-                self._config.local_goal_heading_samples,
-            )
-            heading = _wrapped_angle(estimate.yaw_rad + offset)
-            for distance_index, distance_m in enumerate(distances):
-                goal = Waypoint(
-                    estimate.x_m + distance_m * math.cos(heading),
-                    estimate.y_m + distance_m * math.sin(heading),
-                )
-                if self._failed_goals.get(self._coverage_key(goal.x_m, goal.y_m), 0) > estimate.context.monotonic_ns:
-                    continue
-                clearance = _planning_scene_point_clearance(
-                    goal.x_m,
-                    goal.y_m,
-                    scene,
-                    costmap.radius_m,
-                    relevant_clearance_m,
-                )
-                if clearance <= footprint_radius + self._config.footprint_safety_margin_m + uncertainty:
-                    continue
-                visits = self._coverage.get(
-                    self._coverage_key(goal.x_m, goal.y_m), (0, 0)
-                )[0]
-                novelty = 1.0 / (1.0 + visits)
-                clearance_score = min(
-                    1.0, clearance / self._config.clearance_score_cap_m
-                )
-                forward_preference = 0.5 * (math.cos(offset) + 1.0)
-                distance_score = (
-                    1.0
-                    if len(distances) == 1
-                    else (distance_m - policy.explore_local_goal_min_distance_m)
-                    / distance_span
-                )
-                score = (
-                    policy.local_goal_novelty_weight * novelty
-                    + policy.local_goal_clearance_weight * clearance_score
-                    + policy.local_goal_forward_weight * forward_preference
-                    + policy.explore_local_goal_distance_weight * distance_score
-                )
-                # Distance already has caller-owned preference. Count the
-                # additional turn here, avoiding a second short-goal bias.
-                maneuver = abs(_wrapped_angle(heading-tangent))
-                options.append((score, distance_m, index, distance_index, goal, maneuver))
-        if not options:
-            return ()
-        best_score = max(item[0] for item in options)
-        score_band = policy.local_goal_clearance_weight * min(1.,
-            (costmap.resolution_m + uncertainty)/self._config.clearance_score_cap_m)
-        ranked = sorted(options, key=lambda item: (
-            item[0] < best_score-score_band-1e-12, item[5], -item[0], -item[1], item[2], item[3]))
-        return tuple(item[4] for item in ranked[:4])
 
     def _trajectory_rollout(
         self, estimate: RobotEstimate, world: WorldSnapshot, scene: _LocalPlanningScene,
@@ -2949,6 +2916,86 @@ class TrajectoryNavigator:
             start_clearance_m,
             {key: visits for key, (visits, _tick_id) in self._coverage.items()},
         )
+
+
+def _rank_local_goal_options(
+    config: NavigationConfig, estimate: RobotEstimate, costmap: RollingLocalCostmap,
+    scene: _LocalPlanningScene, preferences: ExplorePreferences | None,
+    coverage: dict[tuple[int, int], int], failed_goals: dict[tuple[int, int], int],
+    goal_handoff_ns: int,
+) -> tuple[Waypoint, ...]:
+    # Ranking preferences arrive from the caller; geometry, sampling budget,
+    # coverage, lifecycle and feasibility remain owned by generic L6.
+    policy = config if preferences is None else preferences
+    options: list[tuple[float, float, int, int, Waypoint, float]] = []
+    uncertainty = config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m
+    tangent = estimate.yaw_rad + estimate.omega_rad_s*goal_handoff_ns/1e9
+    footprint_radius = 0.5 * math.hypot(
+        config.footprint_length_m,
+        config.footprint_width_m,
+    )
+    relevant_clearance_m = max(
+        config.clearance_score_cap_m,
+        footprint_radius + config.footprint_safety_margin_m + uncertainty,
+    ) + _POINT_CLEARANCE_EPSILON_M
+    distances = _explore_goal_distances(config, preferences)
+    distance_span = max(
+        policy.explore_local_goal_max_distance_m
+        - policy.explore_local_goal_min_distance_m,
+        _POINT_CLEARANCE_EPSILON_M,
+    )
+    for index in range(config.local_goal_heading_samples):
+        offset = _alternating_heading_offset(
+            index,
+            config.local_goal_heading_samples,
+        )
+        heading = _wrapped_angle(estimate.yaw_rad + offset)
+        for distance_index, distance_m in enumerate(distances):
+            goal = Waypoint(
+                estimate.x_m + distance_m * math.cos(heading),
+                estimate.y_m + distance_m * math.sin(heading),
+            )
+            if failed_goals.get(_bucket_key(goal.x_m, goal.y_m, config.coverage_cell_size_m), 0) > estimate.context.monotonic_ns:
+                continue
+            clearance = _planning_scene_point_clearance(
+                goal.x_m,
+                goal.y_m,
+                scene,
+                costmap.radius_m,
+                relevant_clearance_m,
+            )
+            if clearance <= footprint_radius + config.footprint_safety_margin_m + uncertainty:
+                continue
+            visits = coverage.get(_bucket_key(goal.x_m, goal.y_m, config.coverage_cell_size_m), 0)
+            novelty = 1.0 / (1.0 + visits)
+            clearance_score = min(
+                1.0, clearance / config.clearance_score_cap_m
+            )
+            forward_preference = 0.5 * (math.cos(offset) + 1.0)
+            distance_score = (
+                1.0
+                if len(distances) == 1
+                else (distance_m - policy.explore_local_goal_min_distance_m)
+                / distance_span
+            )
+            score = (
+                policy.local_goal_novelty_weight * novelty
+                + policy.local_goal_clearance_weight * clearance_score
+                + policy.local_goal_forward_weight * forward_preference
+                + policy.explore_local_goal_distance_weight * distance_score
+            )
+            # Distance already has caller-owned preference. Count the
+            # additional turn here, avoiding a second short-goal bias.
+            maneuver = abs(_wrapped_angle(heading-tangent))
+            options.append((score, distance_m, index, distance_index, goal, maneuver))
+    if not options:
+        return ()
+    best_score = max(item[0] for item in options)
+    score_band = policy.local_goal_clearance_weight * min(1.,
+        (costmap.resolution_m + uncertainty)/config.clearance_score_cap_m)
+    ranked = sorted(options, key=lambda item: (
+        item[0] < best_score-score_band-1e-12, item[5], -item[0], -item[1], item[2], item[3]))
+    return tuple(item[4] for item in ranked[:4])
 
 
 class TrajectoryRolloutComputer:
@@ -3036,10 +3083,18 @@ def _compute_goal_rollout(
 ) -> TrajectoryRolloutResult:
     scene = replace(scene, uncertainty_m=config.localization_inflation_sigma
                     * request.estimate.localization_quality.local_sigma_m)
+    options = (request.goal, *request.alternate_goals)
+    if request.select_local_goal:
+        costmap = request.world.local_costmap
+        options = (() if costmap is None else _rank_local_goal_options(
+            config, request.estimate, costmap, scene, request.explore_preferences,
+            {(x, y): visits for x, y, visits in request.coverage},
+            {(x, y): until for x, y, until in request.failed_goals}, request.goal_handoff_ns))
     goal, reachable = request.goal, True
     if request.allow_exploration_detour:
         reachable = False
-        for option in (request.goal, *request.alternate_goals):
+        goal = options[0] if options else request.goal
+        for option in options:
             if _local_goal_reachable(config, scene, request, option):
                 goal, reachable = option, True
                 break
@@ -3051,7 +3106,8 @@ def _compute_goal_rollout(
         goal_reachable=reachable,
     )
     return TrajectoryRolloutResult(request.context, candidates,
-        goal if request.allow_exploration_detour else None, reachable)
+        goal if request.allow_exploration_detour and options else None, reachable,
+        options if request.select_local_goal else ())
 
 
 def _constrain_rollout_motion(
@@ -3099,7 +3155,9 @@ def _compute_rollout_candidates(
                 scene, goal, max_v_mps, max_omega_rad_s, start_clearance_m, coverage)
             motion_cache[motion] = cached
         return cached if cached.candidate_id == candidate_id else replace(
-            cached, candidate_id=candidate_id)
+            cached, candidate_id=candidate_id,
+            rejection_witness=(replace(cached.rejection_witness, candidate_id=candidate_id)
+                               if cached.rejection_witness else None))
 
     evaluations = [
         evaluate(linear_index, angular_index, v_mps, omega_rad_s)
@@ -3139,7 +3197,9 @@ def _compute_rollout_candidates(
                     goal, reverse_limit_mps, world, config, scene)
                 escape_cache[motion] = escape
             evaluations.append(escape if escape.candidate_id == candidate_id else replace(
-                escape, candidate_id=candidate_id))
+                escape, candidate_id=candidate_id,
+                rejection_witness=(replace(escape.rejection_witness, candidate_id=candidate_id)
+                                   if escape.rejection_witness else None)))
     return tuple(evaluations)
 
 
@@ -3157,6 +3217,20 @@ def _evaluate_rollout_candidate(
     min_clearance = start_clearance_m
     start_collision = min_clearance <= config.footprint_safety_margin_m
     collision = start_collision
+    candidate_id = f"trajectory-{linear_index:02d}-{angular_index:02d}"
+    witness = None
+
+    def rejection(reason, offset, x, y, yaw, clearance, required):
+        costmap = world.local_costmap
+        return NavigationRejectionWitness(candidate_id, reason, estimate.context,
+            costmap.revision if costmap is not None else world.map_revision,
+            max(0, estimate.context.monotonic_ns - (costmap.freshness_ns if costmap else world.freshness_ns)),
+            world.map_revision, offset, x, y, yaw, max(0.0, clearance), required, scene.uncertainty_m)
+
+    if start_collision:
+        witness = rejection("FOOTPRINT_CLEARANCE", 0, x_m, y_m, yaw_rad,
+                            start_clearance_m, config.footprint_safety_margin_m)
+    speed_witness = None
     for step in range(1, config.rollout_step_count + 1):
         offset_ns = (
             config.rollout_horizon_ns
@@ -3187,6 +3261,14 @@ def _evaluate_rollout_candidate(
                 clearance_limit_m=min_clearance,
             )
             min_clearance = min(min_clearance, clearance)
+            if witness is None and clearance <= config.footprint_safety_margin_m:
+                witness = rejection("FOOTPRINT_CLEARANCE", offset_ns, x_m, y_m, yaw_rad,
+                                    clearance, config.footprint_safety_margin_m)
+            if (speed_witness is None and v_mps > _MOTION_EPSILON
+                    and clearance <= config.local_escape_trigger_clearance_m
+                    and clearance + _POINT_CLEARANCE_EPSILON_M < start_clearance_m):
+                speed_witness = rejection("FORWARD_CLEARANCE_DECREASING", offset_ns,
+                    x_m, y_m, yaw_rad, clearance, config.local_escape_trigger_clearance_m)
             collision = (
                 collision
                 or clearance <= config.footprint_safety_margin_m
@@ -3197,6 +3279,7 @@ def _evaluate_rollout_candidate(
         and min_clearance + _POINT_CLEARANCE_EPSILON_M < start_clearance_m
     ):
         collision = True
+        witness = witness or speed_witness
 
     start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
     approach_scoring = start_distance <= abs(v_mps) * config.rollout_horizon_ns / 1e9
@@ -3250,7 +3333,7 @@ def _evaluate_rollout_candidate(
         * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
     )
     return TrajectoryEvaluation(
-        candidate_id=f"trajectory-{linear_index:02d}-{angular_index:02d}",
+        candidate_id=candidate_id,
         v_mps=v_mps,
         omega_rad_s=omega_rad_s,
         horizon_ns=config.rollout_horizon_ns,
@@ -3263,6 +3346,7 @@ def _evaluate_rollout_candidate(
         smoothness_score=smoothness,
         novelty_score=novelty,
         total_score=total_score,
+        rejection_witness=witness,
     )
 
 
@@ -3552,6 +3636,9 @@ def _as_escape_candidate(
     return replace(
         candidate,
         candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
+        rejection_witness=(replace(candidate.rejection_witness,
+            candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}")
+            if candidate.rejection_witness else None),
         total_score=escape_score,
         progress_potential_score=escape_potential,
         progress_viable=viable,

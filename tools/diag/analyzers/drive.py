@@ -6,6 +6,7 @@ from collections import Counter
 from ..basis import view_scan
 from ..contracts import AnalyzerContract, AnalyzerOutput, DiagnosticObservation, ObservationKind
 from ..profiling import profile_views
+from ..tick_evidence import wheel_feedback_summary
 
 LAYERS = ("layers/L8", "layers/L9", "layers/L10", "layers/L11", "layers/L12")
 TOKENS = (
@@ -17,8 +18,9 @@ CONTRACT = AnalyzerContract(
     analyzer_id="drive",
     description="L8-L12 drive command chain plus wheel/encoder/motor sensor evidence.",
     required_views=LAYERS,
+    optional_views=("ticks",),
     required_topics=("/r2b4/tick",),
-    contract_version=2,
+    contract_version=3,
 )
 
 
@@ -59,10 +61,12 @@ def run(context, registry) -> AnalyzerOutput:
         "l11_normalized": _pair_activity(context, "layers/L11", "left_normalized", "right_normalized"),
         "l12_outputs": _pair_activity(context, "layers/L12", "left_output", "right_output"),
     }
+    feedback = wheel_feedback_summary(context.bundle)
     coverage = {
         "command_chain_layers": "COMPLETE",
         "drive_sensor_view_count": len(sensor_views),
         "drive_sensor_materialization": "PRESENT" if sensor_views else "ABSENT",
+        "compact_wheel_feedback_evidence": "PRESENT" if feedback["counts"].get("valid") else "ABSENT",
     }
     observations = (
         DiagnosticObservation(
@@ -74,10 +78,19 @@ def run(context, registry) -> AnalyzerOutput:
                 "/left_mps", "/right_mps", "/left_normalized", "/right_normalized", "/left_output", "/right_output",
             )),),
         ),
+        DiagnosticObservation(
+            kind=ObservationKind.DERIVED_MEASUREMENT,
+            code="WHEEL_FEEDBACK_ADMISSION_READINESS",
+            message="Recorded compact wheel evidence counts admission, timing, readiness and target relationships independently of raw sensor views; it does not measure physical wheel tracking.",
+            values=feedback,
+            evidence_basis=(view_scan("ticks", fields=("/tick_evidence",)),),
+        ),
     )
     return AnalyzerOutput(
-        metrics={"sensor_views": list(sensor_views), "profiles": profiles, "pair_activity": activity},
+        metrics={"sensor_views": list(sensor_views), "profiles": profiles, "pair_activity": activity,
+                 "wheel_feedback": feedback},
         coverage=coverage,
-        summary={"pair_activity": activity, "drive_sensor_view_count": len(sensor_views)},
+        summary={"pair_activity": activity, "drive_sensor_view_count": len(sensor_views),
+                 "wheel_feedback_evidence_count": feedback["counts"].get("valid", 0)},
         observations=observations,
     )

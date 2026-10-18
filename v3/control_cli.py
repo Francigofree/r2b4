@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from v3.adapters.resident_command import (
+    CommandPublicationRejected,
     ResidentCommandClient,
     ResidentCommandMailboxConfig,
 )
@@ -154,6 +155,7 @@ def _run_active(
             return "WATCHDOG_TIMEOUT"
         return None
 
+    client.set_active_guard(guard_reason)
     try:
         reason = guard_reason()
         if reason is not None:
@@ -177,6 +179,8 @@ def _run_active(
             if next_heartbeat_ns <= now_ns:
                 missed = ((now_ns - next_heartbeat_ns) // heartbeat_ns) + 1
                 next_heartbeat_ns += missed * heartbeat_ns
+    except CommandPublicationRejected as exc:
+        return stop_with_reason(exc.reason, 0)
     except KeyboardInterrupt:
         return stop_with_reason("KEYBOARD_INTERRUPT", 130)
     except Exception:
@@ -185,6 +189,8 @@ def _run_active(
         except Exception:
             pass
         raise
+    finally:
+        client.set_active_guard(None)
 
 
 def _parser() -> argparse.ArgumentParser:

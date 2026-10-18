@@ -29,6 +29,7 @@ from v3.contracts import (
     DeviceSample,
     LifecycleState,
     MotionObjectiveKind,
+    MotionValidity,
     NavigationStatus,
     RawDeviceBatch,
     RollingLocalCostmap,
@@ -141,6 +142,32 @@ def test_inactive_stop_identity_churn_does_not_flood_decision_capture():
     recorder = NavigationDecisionRecorder()
     assert recorder.observe(records[0]) is not None
     assert recorder.observe(churn) is None
+
+
+def test_local_proof_refresh_deduplicates_time_but_preserves_motion_and_hold():
+    records = stop_records(4)
+    recorder = NavigationDecisionRecorder()
+    candidate = TrajectoryEvaluation('local-continuation', .1, 0., 100_000_000,
+        (TrajectoryPose(.01, 0., 0., 100_000_000),), False, .5, .5, 1., 1., 1.,
+        progress_viable=True)
+    for index, record in enumerate(records):
+        layers = layer_outputs(record)
+        context = record.inputs.context
+        validity = MotionValidity(context, context.monotonic_ns + 100_000_000,
+                                  layers['L3'].frame_id, 'same-mission:odom0')
+        plan = replace(layers['L6'], status=NavigationStatus.ACTIVE,
+            reason='LOCAL_GUIDANCE_REVALIDATED', local_goal=Waypoint(.9, 0.),
+            trajectory_candidates=(candidate,), motion_validity=validity)
+        motion = replace(layers['L8'], requested_v_mps=.2 if index == 2 else .1, stop_reason=None)
+        if index == 3:
+            plan = replace(layers['L6'], reason='PLANNER_GEOMETRY_HOLD')
+            motion = layers['L8']
+        event = recorder.observe(change_layers(record, L6=plan, L8=motion))
+        if index == 1:
+            assert event is None
+        else:
+            assert event is not None
+            assert ('selection' if index == 2 else 'plan') in event.changes
 
 
 def test_cell_visit_and_transform_correction_survive_between_samples():
@@ -266,6 +293,17 @@ def test_decision_projection_bounds_alternatives_and_omits_geometry():
     assert all("samples" not in item for item in alternatives)
     assert "samples" not in encoded["L7"]["trajectory"]
     assert encoded["L7"]["trajectory"]["sample_count"] == 128
+
+    # A selected candidate past the preview bound must still be inspectable.
+    selected = replace(candidates[-1], collision=False, progress_viable=True)
+    last_selection = replace(selection, trajectory=selected)
+    with_selected = change_layers(altered,
+        L6=replace(plan, trajectory_candidates=candidates[:-1] + (selected,)),
+        L7=last_selection)
+    selected_event = NavigationDecisionRecorder().observe(with_selected)
+    selected_preview = encode_navigation_event(selected_event)['expected']['layers']['L6']['trajectory_alternatives']
+    assert len(selected_preview) == len(alternatives)
+    assert selected.candidate_id in {item['candidate_id'] for item in selected_preview}
 
     # Route previews have an independent bound, even without rollout candidates.
     route = tuple(Waypoint(float(i), 0., 0.) for i in range(100))

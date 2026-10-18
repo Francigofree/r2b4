@@ -1,0 +1,534 @@
+{
+  "artifacts": {
+    "samples_ndjson": "/home/alba/project_r2b4/runtime/cpu/cpu2_20261018_155006.ndjson",
+    "summary_json": "/home/alba/project_r2b4/runtime/cpu/cpu2_20261018_155006_summary.json"
+  },
+  "claim_policy": {
+    "root_cause_inferred": false,
+    "statement": "cpu2 reports Linux scheduler/process/thread facts only. These observations do not by themselves identify a V3 layer as the runtime-loop root cause."
+  },
+  "core_busy": {
+    "0": {
+      "max_pct": 82.0,
+      "mean_pct": 59.26154469098868
+    },
+    "1": {
+      "max_pct": 80.3921568627451,
+      "mean_pct": 57.64728174647313
+    },
+    "2": {
+      "max_pct": 78.43137254901961,
+      "mean_pct": 58.585017449141354
+    },
+    "3": {
+      "max_pct": 83.01886792452831,
+      "mean_pct": 58.71798055952398
+    }
+  },
+  "core_frequency": {
+    "0": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    },
+    "1": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    },
+    "2": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    },
+    "3": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    }
+  },
+  "descendant_processes": [
+    {
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "pid": 2860
+    },
+    {
+      "cpu_pct_max_one_core": 13.836598570953907,
+      "cpu_pct_mean_one_core": 10.693860523304357,
+      "pid": 2862
+    },
+    {
+      "cpu_pct_max_one_core": 10.276464786224722,
+      "cpu_pct_mean_one_core": 7.045704439902907,
+      "pid": 2870
+    },
+    {
+      "cpu_pct_max_one_core": 3.9599651797091444,
+      "cpu_pct_mean_one_core": 1.6538545899735593,
+      "pid": 2876
+    },
+    {
+      "cpu_pct_max_one_core": 19.661324870826927,
+      "cpu_pct_mean_one_core": 15.775013571223665,
+      "pid": 2894
+    },
+    {
+      "cpu_pct_max_one_core": 54.46264119955366,
+      "cpu_pct_mean_one_core": 36.95686926375769,
+      "pid": 2931
+    },
+    {
+      "cpu_pct_max_one_core": 39.040810237356425,
+      "cpu_pct_mean_one_core": 24.65124641677946,
+      "pid": 2956
+    },
+    {
+      "cpu_pct_max_one_core": 29.53169948077085,
+      "cpu_pct_mean_one_core": 18.556123460946143,
+      "pid": 2966
+    }
+  ],
+  "limitations": [
+    "No Python/V3 layer execution duration is measured.",
+    "No causal root-cause classification is emitted.",
+    "Runqueue wait is Linux scheduler evidence, not layer attribution.",
+    "CPU percentages are interval deltas and may vary with sampling."
+  ],
+  "measurement": {
+    "actual_duration_s": 30.007038259000012,
+    "clock_ticks_per_second": 100,
+    "configured_runtime_affinity": {
+      "capture_cpus": [
+        1,
+        2
+      ],
+      "command_cpus": [
+        1,
+        2
+      ],
+      "control_cpus": [
+        3
+      ],
+      "diagnostics_cpus": [
+        1,
+        2
+      ],
+      "enabled": false,
+      "encoder_cpus": [
+        0
+      ],
+      "er2_cpus": [
+        1,
+        2
+      ],
+      "imu_cpus": [
+        0
+      ],
+      "l0_aux_cpus": [
+        1,
+        2
+      ],
+      "l0_encoder_cpus": [
+        0
+      ],
+      "l0_imu_cpus": [
+        0
+      ],
+      "l0_lidar_cpus": [
+        2
+      ],
+      "lidar_matcher_cpus": [
+        2
+      ],
+      "lidar_owner_cpus": [
+        2
+      ],
+      "operator_cpus": [
+        1,
+        2
+      ],
+      "planner_cpus": [
+        1
+      ],
+      "runtime_background_cpus": [
+        1,
+        2
+      ],
+      "status_cpus": [
+        1,
+        2
+      ],
+      "strict": true,
+      "vision_cpus": [
+        1
+      ],
+      "voice_cpus": [
+        1,
+        2
+      ]
+    },
+    "interval_s": 0.5,
+    "monitor_affinity": {
+      "applied": false,
+      "attempted": false,
+      "tasks": []
+    },
+    "requested_duration_s": 30.0,
+    "runtime_pid": 2854,
+    "runtime_pid_source": "runtime/.r2b4_runtime_pid",
+    "sample_count": 59
+  },
+  "runtime_main_task": {
+    "affinity_mismatch_sample_count": 0,
+    "allowed_cpu_sets_observed": [
+      "0-3"
+    ],
+    "expected_control_cpus": null,
+    "nonvoluntary_ctxt_switches": 49965,
+    "processors_observed": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "runqueue_wait_ms": 4032.765093,
+    "runqueue_wait_share": 0.2938592774573316,
+    "sched_runtime_ms": 9690.691685,
+    "voluntary_ctxt_switches": 7764
+  },
+  "runtime_process": {
+    "cpu_pct_max_one_core": 76.12957996284503,
+    "cpu_pct_mean_one_core": 60.9415200022003
+  },
+  "runtime_threads": [
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 47.11359012178166,
+      "cpu_pct_mean_one_core": 32.325621635999156,
+      "nonvoluntary_ctxt_switches": 49965,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 4032.765093,
+      "runqueue_wait_share": 0.2938592774573316,
+      "sched_runtime_ms": 9690.691685,
+      "tid": 2854,
+      "voluntary_ctxt_switches": 7764
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 17.695192383744235,
+      "cpu_pct_mean_one_core": 11.916019665392156,
+      "nonvoluntary_ctxt_switches": 5407,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 5647.93661,
+      "runqueue_wait_share": 0.6113721012275616,
+      "sched_runtime_ms": 3590.196106,
+      "tid": 2983,
+      "voluntary_ctxt_switches": 581722
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 5.89395976590539,
+      "cpu_pct_mean_one_core": 3.5302815376033796,
+      "nonvoluntary_ctxt_switches": 6830,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 1229.683575,
+      "runqueue_wait_share": 0.5377383728322123,
+      "sched_runtime_ms": 1057.085674,
+      "tid": 2981,
+      "voluntary_ctxt_switches": 3595
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 7.909697154840264,
+      "cpu_pct_mean_one_core": 2.9428468265341827,
+      "nonvoluntary_ctxt_switches": 8293,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 765.805146,
+      "runqueue_wait_share": 0.45924184143131036,
+      "sched_runtime_ms": 901.737044,
+      "tid": 2978,
+      "voluntary_ctxt_switches": 2291
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 3.974956114944103,
+      "cpu_pct_mean_one_core": 2.208676580079848,
+      "nonvoluntary_ctxt_switches": 4118,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 702.53228,
+      "runqueue_wait_share": 0.5161054979334061,
+      "sched_runtime_ms": 658.686081,
+      "tid": 2979,
+      "voluntary_ctxt_switches": 2724
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 3.954848577420132,
+      "cpu_pct_mean_one_core": 2.1474669990138198,
+      "nonvoluntary_ctxt_switches": 4292,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 745.277437,
+      "runqueue_wait_share": 0.5321672266942442,
+      "sched_runtime_ms": 655.179787,
+      "tid": 2867,
+      "voluntary_ctxt_switches": 4303
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 3.949036998302362,
+      "cpu_pct_mean_one_core": 2.136260352086023,
+      "nonvoluntary_ctxt_switches": 3170,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 1103.179642,
+      "runqueue_wait_share": 0.6373249846764333,
+      "sched_runtime_ms": 627.773433,
+      "tid": 2955,
+      "voluntary_ctxt_switches": 10852
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 3.8077198496624334,
+      "cpu_pct_mean_one_core": 1.1768424853921882,
+      "nonvoluntary_ctxt_switches": 1840,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 1066.413298,
+      "runqueue_wait_share": 0.7577985151789808,
+      "sched_runtime_ms": 340.838467,
+      "tid": 2869,
+      "voluntary_ctxt_switches": 13498
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 3.272325054000955,
+      "cpu_pct_mean_one_core": 1.0804130375116978,
+      "nonvoluntary_ctxt_switches": 1638,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 554.708849,
+      "runqueue_wait_share": 0.6329685898324823,
+      "sched_runtime_ms": 321.651934,
+      "tid": 2980,
+      "voluntary_ctxt_switches": 3692
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 1.983696171762052,
+      "cpu_pct_mean_one_core": 0.7924604680172768,
+      "nonvoluntary_ctxt_switches": 1923,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 485.993025,
+      "runqueue_wait_share": 0.6594594310665767,
+      "sched_runtime_ms": 250.963643,
+      "tid": 2977,
+      "voluntary_ctxt_switches": 973
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 3.272325054000955,
+      "cpu_pct_mean_one_core": 0.4213677476966814,
+      "nonvoluntary_ctxt_switches": 636,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 477.154959,
+      "runqueue_wait_share": 0.7974521742200185,
+      "sched_runtime_ms": 121.194352,
+      "tid": 2982,
+      "voluntary_ctxt_switches": 2972
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 1.9874780574720514,
+      "cpu_pct_mean_one_core": 0.2652638653449835,
+      "nonvoluntary_ctxt_switches": 510,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 325.379135,
+      "runqueue_wait_share": 0.7960877762579399,
+      "sched_runtime_ms": 83.343552,
+      "tid": 2965,
+      "voluntary_ctxt_switches": 4258
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 1.9038599248312167,
+      "cpu_pct_mean_one_core": 0.03226881228527486,
+      "nonvoluntary_ctxt_switches": 113,
+      "processors_observed": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runqueue_wait_ms": 44.574078,
+      "runqueue_wait_share": 0.799906991728315,
+      "sched_runtime_ms": 11.149998,
+      "tid": 2964,
+      "voluntary_ctxt_switches": 592
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 0,
+      "processors_observed": [
+        3
+      ],
+      "runqueue_wait_ms": 0.0,
+      "runqueue_wait_share": null,
+      "sched_runtime_ms": 0.0,
+      "tid": 2861,
+      "voluntary_ctxt_switches": 0
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 0,
+      "processors_observed": [
+        3
+      ],
+      "runqueue_wait_ms": 0.0,
+      "runqueue_wait_share": null,
+      "sched_runtime_ms": 0.0,
+      "tid": 2868,
+      "voluntary_ctxt_switches": 0
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0-3"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 0,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 0.0,
+      "runqueue_wait_share": null,
+      "sched_runtime_ms": 0.0,
+      "tid": 2984,
+      "voluntary_ctxt_switches": 0
+    }
+  ],
+  "schema": "R2B4_CPU2_SUMMARY_V1",
+  "thermal": {
+    "temperature_max_c": 46.85,
+    "temperature_mean_c": 44.85508474576272,
+    "throttled_end": {
+      "available": true,
+      "flags": [],
+      "raw": "0x0",
+      "value": 0
+    },
+    "throttled_start": {
+      "available": true,
+      "flags": [],
+      "raw": "0x0",
+      "value": 0
+    }
+  }
+}

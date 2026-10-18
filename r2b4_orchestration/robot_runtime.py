@@ -290,6 +290,8 @@ class PublicRobotRuntime:
             )
         self.behaviors = BehaviorSystem(program_interface, clock_ns=clock_ns, event_sink=self._behavior_event)
         self.program_interface = program_interface
+        from .strategic_explore import StrategicExplore
+        self.behaviors.register("strategic_explore", lambda: StrategicExplore(clock_ns=clock_ns))
         for name, factory in person_behavior_factories():
             self.behaviors.register(name, factory)
         self.brain = BrainCore(program_interface, self.behaviors, self.world, clock_ns=clock_ns,
@@ -492,6 +494,7 @@ class PublicRobotRuntime:
 
     def close(self):
         self.preempt("HOST_CLOSED")
+        self.spatial.close()
         if self.skills is not None:
             self.skills.close()
         if self.skill_observation is not None:
@@ -676,6 +679,7 @@ class PublicRobotRuntime:
                 self.preempt("REQUEST_OWNER_EXITED")
         with self._state_lock:
             self.projector.completed_behavior(self.behaviors.snapshot())
+            self.spatial.completed_behavior(self.behaviors.snapshot())
         self._project_goal_history()
         self._persist()
         self._flush_evidence()

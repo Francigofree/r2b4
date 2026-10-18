@@ -5,6 +5,7 @@ from ..basis import view_scan
 from ..contracts import AnalyzerContract, AnalyzerOutput, DiagnosticObservation, ObservationKind
 from ..episodes import contiguous_field_episodes
 from ..profiling import profile_views
+from ..tick_evidence import ekf_updates_summary
 
 LAYERS = ("layers/L1", "layers/L2", "layers/L3", "layers/L4")
 TOKENS = (
@@ -20,8 +21,9 @@ CONTRACT = AnalyzerContract(
     analyzer_id="localization",
     description="L1-L4 and sensor evidence for pose, heading, odometry, freshness and quality measurements.",
     required_views=LAYERS,
+    optional_views=("ticks",),
     required_topics=("/r2b4/tick",),
-    contract_version=2,
+    contract_version=3,
 )
 
 
@@ -49,6 +51,7 @@ def run(context, registry) -> AnalyzerOutput:
     sensor_views = _localization_sensor_views(all_sensor_views)
     views = (*LAYERS, *sensor_views)
     profiles = profile_views(context.bundle, views, tokens=TOKENS, max_examples=1, top_values=10)
+    updates = ekf_updates_summary(context.bundle)
     quality_episodes = contiguous_field_episodes(
         context.bundle,
         "layers/L3",
@@ -62,6 +65,7 @@ def run(context, registry) -> AnalyzerOutput:
         "sensor_views_available_count": len(all_sensor_views),
         "localization_sensor_views_profiled_count": len(sensor_views),
         "localization_sensor_materialization": "PRESENT" if sensor_views else "ABSENT",
+        "compact_ekf_update_evidence": "PRESENT" if updates["update_count"] else "ABSENT",
     }
     observations = (
         DiagnosticObservation(
@@ -76,6 +80,13 @@ def run(context, registry) -> AnalyzerOutput:
             },
             evidence_basis=(view_scan(*views, details_scope="localization token-scoped fields"),),
         ),
+        DiagnosticObservation(
+            kind=ObservationKind.DERIVED_MEASUREMENT,
+            code="EKF_RECORDED_INNOVATION_GATES",
+            message="Compact sampled EKF evidence reports accepted/rejected updates, innovation components and NIS against the recorded gate by update type; omitted ticks remain unobserved.",
+            values=updates,
+            evidence_basis=(view_scan("ticks", fields=("/tick_evidence",)),),
+        ),
     )
     return AnalyzerOutput(
         metrics={
@@ -83,12 +94,14 @@ def run(context, registry) -> AnalyzerOutput:
             "sensor_views_profiled": list(sensor_views),
             "sensor_views_available": list(all_sensor_views),
             "profiles": profiles,
+            "ekf_updates": updates,
         },
         coverage=coverage,
         summary={
             "global_position_quality_top_values": global_position_values,
             "quality_episode_count": len(quality_episodes),
             "localization_sensor_views_profiled_count": len(sensor_views),
+            "ekf_update_evidence_count": updates["update_count"],
         },
         observations=observations,
         episodes=quality_episodes,

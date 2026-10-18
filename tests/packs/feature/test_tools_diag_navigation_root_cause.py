@@ -241,3 +241,59 @@ def test_unknown_capture_completeness_remains_explicit(integrity):
     values = [hold(sample(tick, 1_000_000_000 + tick * 200_000_000)) for tick in range(7)]
     output = diagnosis.run(context(values, [{"event_type": "capture_finalized", "integrity": integrity}]), None)
     assert "CAPTURE_COMPLETENESS_NOT_REPORTED" in output.metrics["evidence_blockers"]
+
+
+def test_dense_short_holds_preserve_motion_and_merge_reason_changes_without_terminal_extrapolation():
+    values = [hold(sample(tick * 10, 1_000_000_000 + tick * 200_000_000)) for tick in range(5)]
+    states = [hold(sample(0, 1_000_000_000), "PLANNER_GEOMETRY_HOLD"),
+              sample(5, 1_100_000_000),
+              hold(sample(11, 1_220_000_000), "NO_PATH_HOLD"),
+              hold(sample(15, 1_300_000_000), "PLANNER_EXECUTION_HOLD"),
+              sample(20, 1_400_000_000),
+              hold(sample(30, 1_600_000_000))]
+    output = diagnosis.run(context(values, [event(value, index) for index, value in enumerate(states)]), None)
+    dense = output.metrics["dense_navigation"]
+    assert output.metrics["episode_count"] == 0
+    assert dense["durations"]["active_navigation_ns"] == 600_000_000
+    assert dense["durations"]["zero_request_hold_ns"] == 280_000_000
+    assert dense["counts"]["hold_runs"] == 2
+    assert dense["counts"]["hold_runs_below_long_episode_threshold"] == 2
+    assert dense["longest_hold_run"]["duration_ns"] == 180_000_000
+    assert dense["longest_hold_run"]["interval_count"] == 2
+    assert dense["longest_hold_run"]["start_ref"]["field_path"] == "/payload/expected/layers/L8"
+    assert output.summary["navigation_health_verdict"] == "NOT_ASSESSED"
+    assert output.metrics["zero_long_episodes_proves_healthy_navigation"] is False
+
+
+def test_dense_sequence_gap_does_not_invent_a_continuous_hold():
+    values = [hold(sample(tick, 1_000_000_000 + tick * 200_000_000)) for tick in range(3)]
+    states = [event(hold(sample(0, 1_000_000_000)), 0),
+              event(hold(sample(10, 1_200_000_000)), 2),
+              event(sample(20, 1_400_000_000), 3)]
+    dense = diagnosis.run(context(values, states), None).metrics["dense_navigation"]
+    assert dense["counts"]["discontinuous_event_intervals"] == 1
+    assert dense["durations"]["zero_request_hold_ns"] == 200_000_000
+
+
+def test_low_translation_while_turning_remains_visible_without_claiming_stationary_motion():
+    values = [sample(tick, 1_000_000_000 + tick * 200_000_000) for tick in range(7)]
+    for tick, value in enumerate(values):
+        estimate = value["expected"]["layers"]["L3"]
+        estimate["local_pose"].update(x_m=.001 * tick, yaw_rad=.1 * tick)
+        estimate.update(local_v_mps=.005, local_omega_rad_s=.5)
+    output = diagnosis.run(context(values), None)
+    weak = output.metrics["sampled_translation"]
+    assert output.metrics["episode_count"] == 0
+    assert weak["durations"]["weak_translation_with_nonzero_output_ns"] == 1_200_000_000
+    assert weak["absolute_yaw_during_weak_translation_rad"] == pytest.approx(.6)
+    assert weak["longest_weak_translation_run"]["estimated_path_m"] == pytest.approx(.006)
+    assert weak["physical_stall_proven"] is False
+
+
+def test_weak_translation_does_not_cross_pose_generation_boundary():
+    values = [sample(tick, 1_000_000_000 + tick * 200_000_000) for tick in range(4)]
+    for value in values[2:]:
+        value["expected"]["layers"]["L3"]["localization_quality"]["generation"] = 1
+    weak = diagnosis.run(context(values), None).metrics["sampled_translation"]
+    assert weak["durations"]["qualified_active_ns"] == 400_000_000
+    assert weak["longest_weak_translation_run"]["duration_ns"] == 200_000_000
