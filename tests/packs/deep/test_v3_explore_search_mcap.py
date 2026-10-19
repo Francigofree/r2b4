@@ -4,6 +4,7 @@ Only OfflineMotorSink receives outputs. Delayed inline completion visibility
 tests source-age rejection, not process timing or physical navigation accuracy.
 """
 from dataclasses import replace
+from copy import deepcopy
 import json
 from types import SimpleNamespace
 
@@ -158,8 +159,37 @@ def test_explore_search_full_mcap_checkpoint_replay_and_explicit_evidence(tmp_pa
     bundle = EvidenceBundle.open(compiled["output"], verification="manifest")
     persisted = list(bundle.iter_view("ticks"))
     assert persisted[accepted_tick].payload["inputs"]["planner_input"]["result"]["goal_options"] == completion["goal_options"]
+    from tools.navigation_validation_planner import evaluate_captured_planner_requests
+    kernel = evaluate_captured_planner_requests(bundle, ROOT)
+    assert kernel["status"] == "PASS", kernel
+    assert kernel["metrics"]["matched_requests"] >= 1
+    assert all(sample["exact_result_matches"] and sample["measurement_lineage_matches"]
+               and sample["pure_compute_elapsed_ns"] >= 0
+               for sample in kernel["metrics"]["samples"])
+    # A different skill interval cannot borrow another command's completion.
+    outside = evaluate_captured_planner_requests(bundle, ROOT,
+        phases=(("different-command", 100_000_000_000, 101_000_000_000),))
+    assert outside["status"] == "NOT_EXERCISED"
+    assert outside["metrics"]["matched_requests"] == 0
+    class ChangedCompletion:
+        manifest = bundle.manifest
+
+        def has_view(self, name):
+            return bundle.has_view(name)
+
+        def iter_view(self, name, **parameters):
+            for row in bundle.iter_view(name, **parameters):
+                payload = deepcopy(row.payload)
+                planner = payload.get("inputs", {}).get("planner_input", {})
+                if name == "ticks" and isinstance(planner.get("result"), dict):
+                    planner["result"]["goal_reachable"] = not planner["result"]["goal_reachable"]
+                yield replace(row, payload=payload)
+
+    mismatch = evaluate_captured_planner_requests(ChangedCompletion(), ROOT, maximum_requests=1)
+    assert mismatch["status"] == "FAIL"
+    assert mismatch["metrics"]["mismatches"] == 1
     report = {"capture": str(captured.path), "source_sha256": reader.sha256(),
               "ticks": len(rows), "accepted_tick": accepted_tick, "stale_first_result_rejected": stale_first_result,
-              "replay": replay_results, "evidence": verified["status"],
+              "replay": replay_results, "evidence": verified["status"], "captured_request_kernel": kernel,
               "limits": "SYNTHETIC_INLINE_KERNEL_AND_OFFLINE_MOTOR_ONLY_NO_LIVE_TIMING_OR_PHYSICAL_ACCURACY"}
     (tmp_path / "result.json").write_text(json.dumps(report, indent=2) + "\n")
