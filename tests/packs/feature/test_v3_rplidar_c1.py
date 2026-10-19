@@ -1,5 +1,6 @@
 from dataclasses import FrozenInstanceError
 from itertools import chain, repeat
+import time
 import pytest
 from v3.adapters.rplidar_c1 import NativeRplidarC1, RplidarC1Config, RplidarScan, decode_standard_packet
 
@@ -71,3 +72,107 @@ def test_driver_config_is_immutable_and_rejects_unbounded_distance_contract():
         RplidarC1Config(minimum_distance_m=2.0, maximum_distance_m=1.0)
     with pytest.raises(ValueError, match='midpoint'):
         RplidarScan(revision=1, captured_monotonic_ns=30, scan_start_monotonic_ns=10, scan_end_monotonic_ns=30, measurement_monotonic_ns=21, points=())
+
+
+class StartupSerial:
+    """Finite device responses, exposed only after the corresponding SCAN."""
+    def __init__(self, attempts):
+        self.attempts = iter(attempts)
+        self.pending = []
+        self.writes = []
+        self.read_sizes = []
+        self.is_open = True
+        self.on_read = None
+
+    def write(self, value):
+        self.writes.append(value)
+        if value == b'\xa5\x20':
+            self.pending = list(next(self.attempts, ()))
+        return len(value)
+
+    def read(self, size):
+        self.read_sizes.append(size)
+        if self.on_read is not None:
+            self.on_read()
+        if not self.pending:
+            time.sleep(.001)
+            return b''
+        value = self.pending[0][:size]
+        self.pending[0] = self.pending[0][size:]
+        if not self.pending[0]:
+            self.pending.pop(0)
+        return value
+
+    def reset_input_buffer(self):
+        self.pending.clear()
+
+    def cancel_read(self):
+        pass
+
+    def close(self):
+        self.is_open = False
+
+
+def startup_driver(port):
+    driver = NativeRplidarC1(
+        RplidarC1Config(command_settle_s=.002, read_timeout_s=.01),
+        serial_factory=lambda *_args, **_kwargs: port,
+    )
+    # These tests own the real start/stop handshake; packet acquisition has
+    # separate complete-scan tests above and must not consume our witness bytes.
+    driver._run = lambda: None
+    return driver
+
+
+def test_fragmented_startup_ack_preserves_first_measurement_and_closes_on_stop():
+    packet = _packet(start=True, angle_deg=0, distance_m=1)
+    port = StartupSerial(((b'\xa5', b'\x5a\x05', b'\x00\x00\x40\x81' + packet),))
+    driver = startup_driver(port)
+    try:
+        assert driver.start() is True
+        assert port.read_sizes == [7, 6, 4]
+        assert b''.join(port.pending) == packet
+        status = driver.get_runtime_status()
+        assert status['scan_descriptor'] == 'a55a0500004081'
+        assert status['startup_reset_count'] == 0
+    finally:
+        driver.stop()
+    assert port.is_open is False
+
+
+@pytest.mark.parametrize('first', ((), (b'\xa5\x5a',), (b'\xa5\x5a\x05\x00\x00\x40\x82',)))
+def test_one_protocol_reset_recovers_silent_partial_or_wrong_scan_ack(first):
+    port = StartupSerial((first, (b'\xa5\x5a\x05\x00\x00\x40\x81',)))
+    driver = startup_driver(port)
+    try:
+        assert driver.start() is True
+        assert port.writes == [b'\xa5\x25', b'\xa5\x20', b'\xa5\x40', b'\xa5\x25', b'\xa5\x20']
+        assert driver.get_runtime_status()['startup_reset_count'] == 1
+    finally:
+        driver.stop()
+
+
+@pytest.mark.parametrize('response', ((), (b'\xa5\x5a',), (b'\xa5\x5a\x06\x00\x00\x40\x81',), (b'\xa5\x5a\x05\x00\x00\x00\x81',)))
+def test_unacknowledged_start_is_bounded_fails_closed_and_releases_serial(response):
+    port = StartupSerial((response, response))
+    driver = startup_driver(port)
+    started = time.monotonic()
+    assert driver.start() is False
+    assert time.monotonic() - started < .25
+    status = driver.get_runtime_status()
+    assert status['running'] is False and status['connected'] is False
+    assert status['scan_revision'] == 0 and status['scan_descriptor'] == ''
+    assert 'RPLIDAR_SCAN_START_FAILED_AFTER_RESET' in status['last_error']
+    assert port.writes.count(b'\xa5\x40') == 1
+    assert port.writes[-1] == b'\xa5\x25'
+    assert port.is_open is False
+
+
+def test_cancellation_during_descriptor_wait_never_resets_or_starts_acquisition():
+    port = StartupSerial(((),))
+    driver = startup_driver(port)
+    port.on_read = driver._stop_event.set
+    assert driver.start() is False
+    assert 'InterruptedError' in driver.get_runtime_status()['last_error']
+    assert b'\xa5\x40' not in port.writes
+    assert port.is_open is False

@@ -203,6 +203,9 @@ class NativeRplidarC1:
 
     _STOP_COMMAND = b"\xA5\x25"
     _SCAN_COMMAND = b"\xA5\x20"
+    _RESET_COMMAND = b"\xA5\x40"
+    # SLAMTEC standard scan: 5-byte nodes, multiple-response mode, type 0x81.
+    _SCAN_DESCRIPTOR = b"\xA5\x5A\x05\x00\x00\x40\x81"
 
     def __init__(
         self,
@@ -238,6 +241,8 @@ class NativeRplidarC1:
         self._invalid_packet_count = 0
         self._reconnect_count = 0
         self._last_error = ""
+        self._scan_descriptor = ""
+        self._startup_reset_count = 0
 
     @property
     def config(self) -> RplidarC1Config:
@@ -328,6 +333,8 @@ class NativeRplidarC1:
                 "reconnect_count": self._reconnect_count,
                 "stream_seen": self._stream_seen,
                 "last_error": self._last_error,
+                "scan_descriptor": self._scan_descriptor,
+                "startup_reset_count": self._startup_reset_count,
             }
 
     def ingest_for_test(self, data: bytes) -> None:
@@ -352,20 +359,34 @@ class NativeRplidarC1:
         )
         with self._lock:
             self._serial = serial_port
+            self._scan_descriptor = ""
         try:
             serial_port.dtr = False
             serial_port.rts = False
-            serial_port.write(self._STOP_COMMAND)
-            if self._stop_event.wait(self._config.command_settle_s):
-                raise InterruptedError("RPLIDAR acquisition stopped during connect")
-            serial_port.reset_input_buffer()
-            serial_port.write(self._SCAN_COMMAND)
-            serial_port.read(7)
+            for attempt in range(2):
+                serial_port.write(self._STOP_COMMAND)
+                self._wait_connect_settle()
+                serial_port.reset_input_buffer()
+                serial_port.write(self._SCAN_COMMAND)
+                try:
+                    descriptor = self._read_scan_descriptor(serial_port)
+                    break
+                except (TimeoutError, ValueError) as exc:
+                    if attempt:
+                        raise RuntimeError(
+                            f"RPLIDAR_SCAN_START_FAILED_AFTER_RESET:{exc}"
+                        ) from exc
+                    # A stopped/error-state core may ignore SCAN. One protocol
+                    # reset returns it to idle; never claim readiness on silence.
+                    serial_port.write(self._RESET_COMMAND)
+                    with self._lock:
+                        self._startup_reset_count += 1
+                    self._wait_connect_settle()
             if self._stop_event.is_set():
                 raise InterruptedError("RPLIDAR acquisition stopped during connect")
             now_ns = self._checked_clock()
         except Exception:
-            self._close_serial()
+            self._close_serial(send_stop=True)
             raise
         with self._lock:
             self._last_byte_ns = now_ns
@@ -373,6 +394,28 @@ class NativeRplidarC1:
             self._building.clear()
             self._building_start_ns = None
             self._last_error = ""
+            self._scan_descriptor = descriptor.hex()
+
+    def _wait_connect_settle(self) -> None:
+        if self._stop_event.wait(self._config.command_settle_s):
+            raise InterruptedError("RPLIDAR acquisition stopped during connect")
+
+    def _read_scan_descriptor(self, serial_port: RplidarSerialPort) -> bytes:
+        # Device I/O stays in this edge owner. Read exactly the missing bytes so
+        # the first measurement node remains available to the acquisition loop.
+        deadline = time.monotonic() + max(
+            self._config.command_settle_s, self._config.read_timeout_s
+        )
+        response = bytearray()
+        while len(response) < len(self._SCAN_DESCRIPTOR):
+            if self._stop_event.is_set():
+                raise InterruptedError("RPLIDAR acquisition stopped during descriptor")
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"RPLIDAR_SCAN_DESCRIPTOR_TIMEOUT:{response.hex()}")
+            response.extend(serial_port.read(len(self._SCAN_DESCRIPTOR) - len(response)))
+        if response != self._SCAN_DESCRIPTOR:
+            raise ValueError(f"RPLIDAR_SCAN_DESCRIPTOR_INVALID:{response.hex()}")
+        return bytes(response)
 
     def _close_serial(self, *, send_stop: bool = False) -> None:
         with self._lock:

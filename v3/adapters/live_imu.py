@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -189,7 +190,11 @@ class NativeImuSource:
         except Exception as exc:
             self._read_errors += 1
             self._error = f"{type(exc).__name__}:{exc}"[:256]
-            raise
+            return LiveDeviceSnapshot(
+                context,
+                DeviceHealth(self.device_id, DeviceHealthState.FAILED,
+                             "IMU_READ_ERROR:" + re.sub(r"[^A-Za-z0-9_.:/-]+", "_", self._error[:240])),
+            )
         if not isinstance(reading, ImuHeadingReading):
             raise TypeError("IMU backend must return ImuHeadingReading")
         self._latest = reading
