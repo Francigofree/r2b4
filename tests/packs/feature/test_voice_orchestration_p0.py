@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import struct
 from types import SimpleNamespace
 
@@ -142,6 +143,77 @@ def build_service(*, running: bool, clock: Clock):
         monotonic_ns=clock.monotonic_ns,
     )
     return service, interface, tts, playback
+
+
+@pytest.mark.parametrize("session_open,voiced", [(False, False), (True, False), (True, True)])
+def test_listening_status_has_bounded_io_and_fresh_heartbeat(
+    monkeypatch, tmp_path, session_open, voiced
+):
+    clock = Clock()
+    service, interface, _, _ = build_service(running=False, clock=clock)
+    if session_open:
+        service._open_session()
+        service._resume_session_timeout()
+    service._status_file = tmp_path / "wake_status.json"
+    publications = []
+    runtime_reads = []
+    monkeypatch.setattr("r2b4_voice.voice_service.os.fsync", lambda fd: publications.append(clock.now_ns))
+    monkeypatch.setattr(service._coordinator, "robot_running", lambda: runtime_reads.append(clock.now_ns) or False)
+    pcm = struct.pack("<h", 1000 if voiced else 0) * 960
+
+    def read_frame(*args, **kwargs):
+        return AudioFrame(service._microphone.sequence, clock.now_ns, 48000, 1, "S16_LE", 960, pcm)
+
+    monkeypatch.setattr(service._microphone.port, "read_after", read_frame)
+    cycle = service._conversation_cycle if session_open else service._wake_cycle
+    for i in range(150):
+        service._microphone.sequence = 8 + i
+        cycle()
+        clock.now_ns += 20_000_000
+
+    # Three seconds of native PCM must not cause 150 (or 300 for voiced
+    # conversation) durable status writes and operator-status reads.
+    assert 2 <= len(publications) <= 4
+    assert len(runtime_reads) == len(publications)
+    snapshot = json.loads(service._status_file.read_text())
+    assert 0 < clock.now_ns - snapshot["monotonic_ns"] <= 1_000_000_000
+    assert snapshot["frame_sequence"] > 8
+    assert interface.executed == []
+
+    # Error and shutdown transitions publish in the same clock instant,
+    # regardless of the heartbeat deadline.
+    before = len(publications)
+    service._last_error = "microphone disconnected"
+    service._set_state(VoiceServiceState.FAILED)
+    snapshot = json.loads(service._status_file.read_text())
+    assert len(publications) == before + 1
+    assert snapshot["state"] == "FAILED"
+    assert snapshot["last_error"] == "microphone disconnected"
+    service._set_state(VoiceServiceState.STOPPED)
+    assert len(publications) == before + 2
+    assert json.loads(service._status_file.read_text())["state"] == "STOPPED"
+
+
+def test_failed_periodic_status_io_does_not_retry_per_pcm_frame(monkeypatch, tmp_path):
+    clock = Clock()
+    service, _, _, _ = build_service(running=False, clock=clock)
+    service._status_file = tmp_path / "wake_status.json"
+    attempts = []
+
+    def fail_status_file(**kwargs):
+        attempts.append(clock.now_ns)
+        raise OSError("status filesystem unavailable")
+
+    monkeypatch.setattr("r2b4_voice.voice_service.tempfile.mkstemp", fail_status_file)
+    monkeypatch.setattr(service, "_read_utterance", lambda: None)
+    for _ in range(50):
+        service._wake_cycle()
+        clock.now_ns += 20_000_000
+    assert len(attempts) == 1
+    service._wake_cycle()
+    assert len(attempts) == 2
+    service._set_state(VoiceServiceState.STOPPED)
+    assert len(attempts) == 3
 
 
 @pytest.mark.parametrize("interrupt", [False, True])

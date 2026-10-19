@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import multiprocessing
+import os
 import queue
 import threading
 import time
@@ -374,7 +375,7 @@ class NativeLidarPort:
         process = context.Process(
             target=matcher_process_main,
             args=(input_queue, result_queue, stop_event, ready_event,
-                  self._matcher_cpus, self._strict_affinity),
+                  self._matcher_cpus, self._strict_affinity, os.getpid()),
             name="v3-lidar-matcher",
             daemon=False,
         )

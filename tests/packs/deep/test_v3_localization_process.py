@@ -1,5 +1,8 @@
 """Real matcher process transport without serial devices or motor access."""
 import multiprocessing
+import os
+from pathlib import Path
+import signal
 import time
 import random
 
@@ -7,6 +10,62 @@ from rig import resolved_config, room_lidar_scan
 from v3.contracts.lidar import MATCHER_CONTRACT_ID
 from v3.lidar_matcher_process import matcher_process_main
 from v3.lidar_relative_odometry import RelativeLidarOdometry
+
+
+class _IdleLidarDriver:
+    def start(self): return True
+    def stop(self): pass
+    def get_latest_scan(self): return None
+    def get_runtime_status(self): return {"running": True, "connected": True}
+
+
+def _matcher_owner(connection):
+    from v3.adapters.native_lidar_port import NativeLidarPort
+
+    port = NativeLidarPort(resolved_config().lidar, lambda _: None, driver=_IdleLidarDriver())
+    try:
+        assert port.start()
+        connection.send(port._process.pid)
+        # The test kills this owner without its ordinary stop/finally path.
+        connection.recv()
+    finally:
+        port.stop()
+        connection.close()
+
+
+def _process_running(pid):
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except FileNotFoundError:
+        return False
+    return state != "Z"
+
+
+def test_matcher_exits_when_its_acquisition_owner_dies_without_stop():
+    context = multiprocessing.get_context("spawn")
+    parent, child = context.Pipe()
+    owner = context.Process(target=_matcher_owner, args=(child,))
+    matcher_pid = None
+    owner.start()
+    child.close()
+    try:
+        assert parent.poll(10), "the production matcher did not become ready"
+        matcher_pid = parent.recv()
+        assert _process_running(matcher_pid)
+        owner.terminate()
+        owner.join(5)
+        assert not owner.is_alive()
+        deadline = time.monotonic() + 5
+        while _process_running(matcher_pid) and time.monotonic() < deadline:
+            time.sleep(.02)
+        assert not _process_running(matcher_pid), "matcher retained the terminated owner's session"
+    finally:
+        parent.close()
+        if owner.is_alive():
+            owner.terminate()
+            owner.join(5)
+        if matcher_pid is not None and _process_running(matcher_pid):
+            os.kill(matcher_pid, signal.SIGTERM)
 
 
 def test_localization_relative_process_equivalence_and_stale_input():

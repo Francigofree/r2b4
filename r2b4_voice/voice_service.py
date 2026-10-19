@@ -53,6 +53,7 @@ from .wake_core import EnergyUtteranceBuilder, WakePhraseMatcher, WakeVoiceActiv
 # R2B4_HRI_P0_V1
 
 DEFAULT_ACTION_MODE = "execute"
+_STATUS_HEARTBEAT_NS = 1_000_000_000
 
 
 def _action_receipt_text(*, status: str, executed: bool, action_name: str | None) -> str:
@@ -269,6 +270,7 @@ class VoiceConversationService:
         self._last_error: str | None = None
         self._session_open = False
         self._session_deadline_ns: int | None = None
+        self._last_status_attempt_ns: int | None = None
 
     def request_stop(self) -> None:
         self._stop_event.set()
@@ -937,7 +939,7 @@ class VoiceConversationService:
             if health.state is not MicrophoneState.CAPTURING:
                 self._restart_microphone()
             else:
-                self._publish_status()
+                self._publish_status_periodically()
             return None
         self._last_sequence = frame.sequence
         utterance = self._builder.feed(frame)
@@ -949,7 +951,7 @@ class VoiceConversationService:
             self._session_deadline_ns = min(frame.read_monotonic_ns, self._monotonic_ns()) + int(
                 self._config.session_silence_s * 1_000_000_000
             )
-            self._publish_status()
+            self._publish_status_periodically()
         return utterance
 
     def _transcribe(self, utterance) -> str | None:
@@ -1049,8 +1051,20 @@ class VoiceConversationService:
         self._publish_status()
 
     def _set_state(self, state: VoiceServiceState) -> None:
+        changed = state is not self._state
         self._state = state
-        self._publish_status()
+        if changed:
+            self._publish_status()
+        else:
+            self._publish_status_periodically()
+
+    def _publish_status_periodically(self) -> None:
+        # PCM frames arrive every 20 ms. Keep observation fresh without a
+        # filesystem fsync and operator-status read for every listening frame.
+        # Transitions and explicit error/STOP publications remain immediate.
+        last = self._last_status_attempt_ns
+        if last is None or self._monotonic_ns() - last >= _STATUS_HEARTBEAT_NS:
+            self._publish_status()
 
     def _interruptible_sleep(self, seconds: float) -> None:
         deadline = time.monotonic() + seconds
@@ -1063,6 +1077,8 @@ class VoiceConversationService:
     def _publish_status(self) -> None:
         if self._status_file is None:
             return
+        # Bound retries of periodic publication even when the status path fails.
+        self._last_status_attempt_ns = self._monotonic_ns()
         try:
             snapshot = self.snapshot()
             payload = asdict(snapshot)

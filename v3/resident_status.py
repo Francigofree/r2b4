@@ -27,7 +27,7 @@ def status_is_fresh(status: Mapping[str, object], *, observed_ns: int | None = N
     return 0 <= now - stamp < max_age_ns
 
 
-def _atomic_private_json(path: Path, payload: Mapping[str, object], mode: int) -> None:
+def _atomic_private_json(path: Path, payload: Mapping[str, object], mode: int, *, durable: bool = True) -> None:
     parent = path.parent
     parent.mkdir(parents=True, exist_ok=True)
     if parent.is_symlink() or not parent.is_dir():
@@ -52,7 +52,8 @@ def _atomic_private_json(path: Path, payload: Mapping[str, object], mode: int) -
             if written <= 0:
                 raise OSError("status write made no progress")
             view = view[written:]
-        os.fsync(descriptor)
+        if durable:
+            os.fsync(descriptor)
         os.close(descriptor)
         descriptor = None
         os.replace(temporary, path)

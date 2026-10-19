@@ -123,6 +123,56 @@ def test_roomcruise_start_uses_mission_acknowledgement(roomcruise_ack_status, mo
     assert stops == [{}]  # Initial preemption only; accepted HOLD is not cancelled.
 
 
+@pytest.mark.parametrize("condition", ["detector_pending", "target_missing", "foreign_mission", "foreign_navigation",
+                                        "wrong_mode", "inactive", "fault"])
+def test_followperson_admission_uses_own_active_mission_even_during_stop_hold(
+    roomcruise_ack_status, monkeypatch, condition,
+):
+    from v3.config import ConfigResolver
+
+    resolved = SimpleNamespace(
+        followperson=SimpleNamespace(max_v_mps=0.2, max_omega_rad_s=1.1),
+        edges=SimpleNamespace(command_ingress=SimpleNamespace(
+            maximum_linear_speed_mps=0.5, maximum_angular_speed_rad_s=1.2,
+        )),
+    )
+    monkeypatch.setattr(ConfigResolver, "for_project", lambda root: SimpleNamespace(resolve=lambda: resolved))
+    controller, status = roomcruise_ack_status
+    stops = []
+    monkeypatch.setattr(controller, "ensure_runtime", lambda *args: 123)
+    monkeypatch.setattr(controller, "stop", lambda **kwargs: stops.append(kwargs))
+    monkeypatch.setattr(controller, "current_capture_mode", lambda: "nincs")
+
+    def spawn_control(command):
+        command_id = command[command.index("--command-id") + 1]
+        status.update(tick_id=3, monotonic_ns=time.monotonic_ns())
+        status["mission"].update(mission_id="mission-" + command_id, mode="FOLLOW_PERSON")
+        status["navigation"].update(mission_id="mission-" + command_id, status="PENDING",
+                                    reason="PERSON_DETECTOR_PENDING" if condition == "detector_pending" else "PERSON_NOT_FOUND")
+        if condition == "foreign_mission":
+            status["mission"]["mission_id"] = "mission-other"
+        elif condition == "foreign_navigation":
+            status["navigation"]["mission_id"] = "mission-other"
+        elif condition == "wrong_mode":
+            status["mission"]["mode"] = "EXPLORE"
+        elif condition == "inactive":
+            status["mission"]["lifecycle"] = "CANCELLED"
+        elif condition == "fault":
+            status["safety_decision"] = "FAULT"
+        return 456
+
+    monkeypatch.setattr(controller, "_spawn_control_process", spawn_control)
+    if condition in {"detector_pending", "target_missing"}:
+        handle = controller.followperson(capture=False, capture_mode="nincs")
+        assert status["mission"]["mission_id"] == "mission-" + handle.command_id
+        assert stops == [{}]
+    else:
+        with pytest.raises(OperatorError, match="followperson was not acknowledged"):
+            controller.followperson(capture=False, capture_mode="nincs")
+        assert stops == [{}, {"wait_idle": False}]
+    assert status["enabled"] is False and status["left_output"] == status["right_output"] == 0
+
+
 def test_stop_cleanup_preserves_concurrent_stop_and_passive_clients(tmp_path, monkeypatch):
     import v3.operator_controller as module
 
@@ -232,7 +282,9 @@ def test_runtime_start_reports_bounded_original_fault_without_diagnostic_authori
     monkeypatch.setattr(controller, "_read_status_optional", lambda: diagnostic["status"] if failure == "previous_report" else None)
     monkeypatch.setattr(controller, "_read_pid_file", lambda path: 123)
     monkeypatch.setattr(controller, "_pid_matches", lambda *args: True)
-    monkeypatch.setattr(controller, "_wait_fresh_ready", lambda *args, **kwargs: False)
+    created_before_readiness = []
+    monkeypatch.setattr(controller, "_wait_fresh_ready",
+                        lambda *args, **kwargs: created_before_readiness.append(controller.runtime_start_identity) or False)
     monkeypatch.setattr(controller, "_transition_sleep", lambda seconds: None)
     monkeypatch.setattr(controller, "diagnostics", lambda: diagnostic)
     monkeypatch.setattr(controller, "runtime_stop", lambda: stopped.append("STOP"))
@@ -247,6 +299,8 @@ def test_runtime_start_reports_bounded_original_fault_without_diagnostic_authori
     assert len(str(caught.value)) <= 1024
     assert "large observation payload" not in str(caught.value)
     assert stopped == ["STOP"]
+    assert created_before_readiness == [(1, 123)]
+    assert OperatorController(tmp_path).runtime_start_identity == (0, None)
     assert events[-1].data is diagnostic
 
 

@@ -7,6 +7,7 @@ input/output queues and owns no serial device, V3 state, safety or actuation.
 from __future__ import annotations
 
 import math
+import os
 import queue
 import time
 from collections.abc import Mapping
@@ -66,6 +67,7 @@ def matcher_process_main(
     ready_event: Any,
     matcher_cpus: CpuSet | None = None,
     strict_affinity: bool = False,
+    owner_pid: int | None = None,
 ) -> None:
     """Consume only the newest raw scan and publish only the newest result."""
 
@@ -79,6 +81,10 @@ def matcher_process_main(
     ready_event.set()
 
     while not stop_event.is_set():
+        # The acquisition owner can be terminated before delivering its normal
+        # stop event. Its pure matcher must not outlive that device session.
+        if owner_pid is not None and os.getppid() != owner_pid:
+            return
         try:
             first = input_queue.get(timeout=0.05)
         except queue.Empty:

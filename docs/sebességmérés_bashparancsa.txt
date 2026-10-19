@@ -1,61 +1,117 @@
 cd /home/alba/project_r2b4 && python3 - <<'PY'
-import json
-import math
-import sys
 from pathlib import Path
+from v3.mcap_reader import McapReader, TICK_TOPIC
+import math
 
-root = Path("runtime")
-print("🔎 Legfrissebb FULL DIAG keresése...", flush=True)
+HUMAN_M = 1.237
 
-files = sorted(root.glob("diag/diag_*_full_v3_*_capture_*.json"),
-               key=lambda p: p.stat().st_mtime, reverse=True)
+files = sorted(
+    Path("runtime/captures").glob("v3_*_capture.mcap"),
+    key=lambda p: p.name, reverse=True
+)
 if not files:
-    sys.exit("HIBA: Nem található FULL DIAG.")
+    raise SystemExit("Nincs MCAP!")
 
-diag = files[0]
-print(f"📂 DIAG: {diag.name}", flush=True)
-print("⏳ Mozgásadatok feldolgozása...", flush=True)
+path = files[0]
+print("MCAP:", path.name)
+print("Feldolgozás indul...", flush=True)
 
-with diag.open() as f:
-    data = json.load(f)
+reader = McapReader(path)
+poses = {k: [] for k in ("local_pose", "global_pose", "primary")}
+transforms = []
+count = 0
 
-def find_metrics(obj, path="root"):
-    found = []
-    if isinstance(obj, dict):
-        d = obj.get("estimated_path_m")
-        t = obj.get("estimated_path_speed_mps")
-        if isinstance(d, (float, int)) and isinstance(t, (float, int)):
-            if math.isfinite(d) and math.isfinite(t):
-                found.append((path, float(d), float(t)))
-        for k, v in obj.items():
-            found.extend(find_metrics(v, path + "." + k))
-    elif isinstance(obj, list):
-        for i, v in enumerate(obj):
-            found.extend(find_metrics(v, path + f"[{i}]"))
-    return found
+def getpose(v):
+    if not isinstance(v, dict):
+        return None
+    try:
+        x, y, yaw = (float(v[k]) for k in ("x_m", "y_m", "yaw_rad"))
+        if not all(math.isfinite(z) for z in (x, y, yaw)):
+            return None
+        return (x, y, yaw, v.get("frame_id"))
+    except (KeyError, TypeError, ValueError):
+        return None
 
-matches = find_metrics(data)
-matches = [(p, d, v) for p, d, v in matches
-           if "longest_weak_translation_run" not in p]
+for msg, row in reader.iter_json_messages(topics=[TICK_TOPIC]):
+    count += 1
+    if count % 500 == 0:
+        print(f"\rFeldolgozva: {count} tick", end="", flush=True)
 
-print("\n========== R2B4 MOZGÁSMÉRÉS ==========")
-print(f"DIAG: {diag.name}")
+    if not isinstance(row, dict):
+        continue
+    layers = row.get("expected", {}).get("layers", {})
+    l3 = layers.get("L3", {})
+    if not isinstance(l3, dict):
+        continue
 
-if not matches:
-    print("NINCS KIÉRTÉKELHETŐ ÚT-/SEBESSÉGADAT")
-    print("A FULL DIAG nem tartalmazott együtt")
-    print("estimated_path_m és estimated_path_speed_mps mezőt.")
-    sys.exit(2)
+    for key in ("local_pose", "global_pose"):
+        p = getpose(l3.get(key))
+        if p:
+            poses[key].append(p)
 
-for path, distance, speed in matches:
-    print(f"\nMérés: {path}")
-    print(f"Megtett út:       {distance:.3f} m")
-    print(f"Átlagsebesség:    {speed:.3f} m/s")
-    print(f"                   {speed*3.6:.2f} km/h")
-    if speed > 0:
-        print(f"Mért aktív idő:   {distance/speed:.2f} s")
+    p = getpose(l3)
+    if p:
+        poses["primary"].append(p)
 
-print("\n✅ Feldolgozás kész")
-print("MEGJEGYZÉS: Belső pozícióbecslés, nem")
-print("független fizikai távolságmérés.")
+    p = getpose(l3.get("map_to_odom"))
+    if p:
+        transforms.append(p)
+
+print(f"\nKész: {count} tick feldolgozva.")
+
+def angle(a):
+    return math.atan2(math.sin(a), math.cos(a))
+
+def report(name, samples):
+    if len(samples) < 2:
+        print(f"\n{name}: NINCS ELÉG ADAT")
+        return
+
+    a, b = samples[0], samples[-1]
+    if a[3] != b[3]:
+        print(f"\n{name}: ELTÉRŐ KOORDINÁTARENDSZER")
+        return
+
+    dx, dy = b[0]-a[0], b[1]-a[1]
+    dist = math.hypot(dx, dy)
+    yaw = math.degrees(angle(b[2]-a[2]))
+    forward = dx*math.cos(a[2]) + dy*math.sin(a[2])
+    sideways = -dx*math.sin(a[2]) + dy*math.cos(a[2])
+    error = dist-HUMAN_M
+
+    print(f"\n========== {name} ==========")
+    print(f"Koordinátarendszer: {a[3]}")
+    print(f"Minták: {len(samples)}")
+    print(f"Kezdő X: {a[0]:+.4f} m")
+    print(f"Kezdő Y: {a[1]:+.4f} m")
+    print(f"Kezdő YAW: {math.degrees(a[2]):+.2f}°")
+    print(f"Végső X: {b[0]:+.4f} m")
+    print(f"Végső Y: {b[1]:+.4f} m")
+    print(f"Végső YAW: {math.degrees(b[2]):+.2f}°")
+    print(f"Delta X: {dx:+.4f} m")
+    print(f"Delta Y: {dy:+.4f} m")
+    print(f"Előre/hátra: {forward:+.4f} m")
+    print(f"Oldalirányban: {sideways:+.4f} m")
+    print(f"NETTÓ ELMOZDULÁS: {dist:.4f} m")
+    print(f"YAW VÁLTOZÁS: {yaw:+.2f}°")
+    print(f"HUMAN: {HUMAN_M:.4f} m")
+    print(f"ELTÉRÉS: {error:+.4f} m ({error/HUMAN_M*100:+.2f}%)")
+    if dist > 0:
+        print(f"Kalibrációs arány (HUMAN/robot): {HUMAN_M/dist:.6f}")
+
+report("LOCAL / ODOM", poses["local_pose"])
+report("GLOBAL", poses["global_pose"])
+report("L3 ELSŐDLEGES", poses["primary"])
+
+if transforms:
+    print("\n========== MAP -> ODOM ==========")
+    print("Ez koordináta-átalakítás, nem önálló útmérés.")
+    print("Kezdet:", transforms[0])
+    print("Végállapot:", transforms[-1])
+
+print("\n=== HUMAN REFERENCIA: 1.237 m ===")
+print("MEGJEGYZÉS: A mérés a teljes MCAP első és utolsó")
+print("elérhető pozíciómintáját hasonlítja össze.")
+print("Kalibrációt csak azonos mérési pontok és")
+print("érvényes, folytonos koordináták esetén végezz!")
 PY

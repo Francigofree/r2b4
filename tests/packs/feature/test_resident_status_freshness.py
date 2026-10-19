@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+import stat
+import threading
 import time
 from dataclasses import replace
 from types import SimpleNamespace
@@ -92,17 +94,85 @@ def _blocked_status_sidecar(entered, release, written, *arguments):
     from v3 import process_sidecars
     original = process_sidecars._atomic_private_json
 
-    def write(path, payload, mode):
+    def write(path, payload, mode, **options):
         if payload["state"] == "RUNNING":
             if not entered.is_set():
                 entered.set()
                 if not release.wait(5):
                     raise TimeoutError("test status writer was not released")
             written.value += 1
-        original(path, payload, mode)
+        original(path, payload, mode, **options)
 
     process_sidecars._atomic_private_json = write
     process_sidecars._status_sidecar_main(*arguments)
+
+
+def _slow_status_fsync_sidecar(sync_count, terminal_sync_entered, release, *arguments):
+    from v3 import process_sidecars, resident_status
+    original = resident_status.os.fsync
+
+    def sync(descriptor):
+        sync_count.value += 1
+        if sync_count.value > 1:
+            terminal_sync_entered.set()
+            if not release.wait(5):
+                raise TimeoutError("test terminal status fsync was not released")
+        original(descriptor)
+
+    resident_status.os.fsync = sync
+    process_sidecars._status_sidecar_main(*arguments)
+
+
+def test_running_status_stays_atomic_and_current_without_waiting_for_storage_sync(tmp_path):
+    context = multiprocessing.get_context("spawn")
+    sync_count = context.RawValue("I", 0)
+    terminal_sync_entered, release = context.Event(), context.Event()
+    path = tmp_path / "status.json"
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=path, file_mode=0o600))
+    publisher._process = context.Process(target=_slow_status_fsync_sidecar, args=(
+        sync_count, terminal_sync_entered, release, str(path), 0o600, publisher._tick_mailbox,
+        publisher._control_queue, publisher._result_queue, publisher._ready_event,
+        publisher._failed_event, None, False,
+    ))
+    publisher.start()
+    errors = []
+    finishing = None
+    try:
+        assert sync_count.value == 1  # BOOTING is durable before readiness.
+        clock = Clock()
+        for tick_id in range(1, 101):
+            clock.now += 20_000_000
+            latest = geometry_tick(clock, tick=tick_id, sequence=tick_id, cells=1)
+            publisher.publish_tick(latest, ready_for_active=True)
+        received = _wait_status(path, 100)
+        assert received == _tick_status(latest, ready_for_active=True)
+        assert sync_count.value == 1 and not terminal_sync_entered.is_set()
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert status_is_fresh(received, observed_ns=clock.now)
+        assert not status_is_fresh(received, observed_ns=clock.now + HOST_STATUS_MAX_AGE_NS)
+
+        def finish():
+            try:
+                publisher.finish()
+            except BaseException as exc:
+                errors.append(exc)
+
+        finishing = threading.Thread(target=finish)
+        finishing.start()
+        assert terminal_sync_entered.wait(3)
+        # The final durable write cannot expose a partial replacement.
+        assert json.loads(path.read_text()) == received
+        release.set()
+        finishing.join(3)
+        assert not finishing.is_alive() and not errors
+        terminal = json.loads(path.read_text())
+        assert terminal["state"] == "STOPPED" and sync_count.value == 2
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    finally:
+        release.set()
+        if finishing is not None:
+            finishing.join(3)
+        publisher.finish()
 
 
 def test_slow_process_writer_supersedes_backlog_and_preserves_final_tick(tmp_path):

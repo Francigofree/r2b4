@@ -88,9 +88,9 @@ async def eventually(predicate, timeout=5):
 
 
 @asynccontextmanager
-async def robot_service(project):
+async def robot_service(project, *, backend_factory=FakeCanonicalOwner):
     socket_path = project / "robot.sock"
-    backend = FakeCanonicalOwner(project)
+    backend = backend_factory(project)
     interface = RobotInterface(project_root=project, controller=backend, adapters=(backend,), upper_runtime=False)
     owner = PublicRobotRuntime(interface, root=project, socket_path=socket_path)
     handlers = set()

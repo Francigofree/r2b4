@@ -176,10 +176,16 @@ class OperatorController:
         self._transition_stream = None
         self._transition_deadline = None
         self._transition_cancel_event = None
+        self._runtime_start_identity: tuple[int, int | None] = (0, None)
 
     # ------------------------------------------------------------------
     # Public API: status / lifecycle
     # ------------------------------------------------------------------
+
+    @property
+    def runtime_start_identity(self) -> tuple[int, int | None]:
+        """Local creation identity; another operator instance cannot claim it."""
+        return self._runtime_start_identity
 
     def snapshot(self) -> OperatorSnapshot:
         pid = self._runtime_pid()
@@ -365,6 +371,10 @@ class OperatorController:
             except Exception:
                 pass  # Passive diagnostics must not mask the startup failure.
             raise error
+
+        # Record creation before readiness can fail. The host skill supervisor
+        # can release its own failed startup without adopting a manual session.
+        self._runtime_start_identity = (self._runtime_start_identity[0] + 1, pid)
 
         if not self._wait_fresh_ready(pid, baseline, timeout=20.0):
             diag = self.diagnostics()
@@ -789,6 +799,7 @@ class OperatorController:
             args.extend(["--target-track-id", target_track_id])
         pid, mode = self._start_motion(
             "followperson", capture, capture_mode, args, require_real_motion=False,
+            mission_command_id=command_id, mission_mode="FOLLOW_PERSON",
             capture_hz=capture_hz, session_owner_pid=session_owner_pid,
             session_watchdog_s=session_watchdog_s,
         )

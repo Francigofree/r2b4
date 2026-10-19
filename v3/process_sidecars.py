@@ -334,6 +334,7 @@ def _status_sidecar_main(
                 target,
                 {**snapshot, **configuration},
                 file_mode,
+                durable=False,
             )
         result_queue.put(("done",))
     except BaseException as exc:

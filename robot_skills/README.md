@@ -17,6 +17,39 @@ The existing LCE supervises the worker after the launcher returns its `run_id`.
 Names and absolute paths under the saved library also work. See
 [`docs/R_LAUNCHER.md`](../docs/R_LAUNCHER.md) for discovery and evidence commands.
 
+`room_cruise` runs the existing autonomous room navigation for a finite active
+interval (default five minutes, maximum one hour), without an LLM in the loop:
+
+```bash
+r skill room_cruise --parameters '{"duration_s":300}' --json
+```
+
+The behavior owner measures the interval from acknowledged navigation activity,
+keeps its canonical heartbeat and safety, and stops at completion. The skill
+checks only the compact behavior state twice per second. A runtime started by
+the invocation is shut down after the terminal event; a manually prepared
+runtime and its capture settings are preserved. `r x` cancels the task. This is
+a timed navigation task, not proof of complete room coverage or uninterrupted
+physical movement. Capability holds and failures retain their native meaning;
+the skill never retries motion after a failure.
+
+`follow_person` uses the same finite lifecycle with the live person-following
+behavior and demand-driven camera/detector:
+
+```bash
+r skill follow_person --parameters '{"duration_s":300}' --json
+```
+
+The current V3 detector/tracker selects the visible person. This is not named
+person recognition. The skill first waits for a fresh detector measurement in
+an owning SDK observer session, then prepares V3; cold camera/model startup is
+outside the requested following interval. Missing/stale targets cause the canonical zero-motion hold;
+the skill never substitutes a historical track or starts a search. If following
+never becomes active, or the target is still unavailable at the duration boundary,
+the behavior fails rather than reporting completed following. Both timed skills
+accept optional `max_v_mps`, `max_omega_rad_s`, `capture_mode` and `capture_hz`;
+omitted values use the maintained native profile.
+
 `monitor_region` observes locally and records person-presence events using the
 installed camera and person detector. `region` is `None` for the entire image or
 a normalized box with `xmin`, `ymin`, `xmax`, `ymax`, all within `[0, 1]`.

@@ -262,6 +262,7 @@ class PublicRobotRuntime:
         self._sdk_event_sequence = 0
         self._sdk_event_lock = threading.Lock()
         self._skill_motion_run = None
+        self._skill_runtime_pids = {}
         self._skill_cleanup_error = None
         self._skill_goals = {}
         self.software = None
@@ -410,7 +411,7 @@ class PublicRobotRuntime:
                 **self._skill_goals.get(invocation_id, {}), **self._bounded_skill_result(result)}
             self._queue_evidence("skill_observation", event)
 
-    def _skill_evidence(self, state, *, event_type, cleanup_error=None):
+    def _skill_evidence(self, state, *, event_type, cleanup_error=None, runtime_pid=None):
         event = {key: state.get(key) for key in ("run_id", "name", "state", "source_hash", "generation",
                  "revision", "started_ns", "finished_ns", "error", "returncode")}
         event.update(event_type=event_type, measurement_time_ns=state.get("finished_ns") or state.get("started_ns"),
@@ -425,6 +426,8 @@ class PublicRobotRuntime:
                         event["reported_" + name] = value
             event["cleanup_status"] = "FAILED" if cleanup_error else "COMPLETED"
             event["cleanup_error"] = cleanup_error
+            if runtime_pid is not None:
+                event.update(owned_runtime_pid=runtime_pid, runtime_cleanup="PENDING")
         self._queue_evidence("skill", event)
 
     def _sdk_event(self, producer: str, event: object) -> None:
@@ -477,20 +480,83 @@ class PublicRobotRuntime:
             cleanup_error = self._skill_cleanup_error
             raise
         finally:
+            # A revoked request can still be unwinding. Its finally block must
+            # identify a runtime it started before terminal cleanup can own it.
+            with self._action_lock:
+                try:
+                    if self.skill_observation is not None:
+                        self.skill_observation.close_invocation(run_id)
+                except Exception as exc:
+                    cleanup_error = cleanup_error or f"SKILL_OBSERVATION_CLOSE_FAILED:{type(exc).__name__}:{exc}"
+                    self._skill_cleanup_error = cleanup_error
+                    self._health_error = cleanup_error
+                    raise
+                finally:
+                    runtime_pid = self._skill_runtime_pids.get(run_id)
+                    try:
+                        self._sdk_event("skill", state)
+                        with self._state_lock:
+                            self._skill_evidence(state, event_type="skill_terminal", cleanup_error=cleanup_error,
+                                                 runtime_pid=runtime_pid)
+                        # The capture follower drains this journal at shutdown.
+                        # Publish the source-bound outcome before finalization.
+                        if runtime_pid is not None:
+                            self._flush_evidence()
+                    except Exception as exc:
+                        self._health_error = "SKILL_TERMINAL_EVIDENCE_FAILED:" + type(exc).__name__
+                    try:
+                        self._shutdown_skill_runtime(run_id, state)
+                    finally:
+                        with self._state_lock:
+                            self._skill_goals.pop(run_id, None)
+                        self.brain.notify("SKILL_UPDATED")
+
+    def _skill_runtime_status(self):
+        try:
+            status = self.interface.read("operator.status")
+        except (OSError, RuntimeError, ValueError, KeyError):
+            return {}
+        return status if isinstance(status, Mapping) else {}
+
+    def _remember_skill_runtime(self, run_id, before, start_identity):
+        created = getattr(self.interface.controller, "runtime_start_identity", None)
+        if created is None or created == start_identity:
+            return
+        pid = created[1]
+        owned = self._skill_runtime_pids.get(run_id)
+        if (type(pid) is int and pid > 0 and (before.get("runtime_running") is False
+                or owned is not None and before.get("runtime_pid") == owned)):
+            self._skill_runtime_pids[run_id] = pid
+
+    def _shutdown_skill_runtime(self, run_id, state):
+        pid = self._skill_runtime_pids.get(run_id)
+        if pid is None:
+            return
+        outcome, error = "RELEASED", None
+        try:
+            # Reuse the existing cross-process operator transaction. A manual
+            # replacement cannot slip between the identity check and shutdown.
+            with self.interface.controller.operator_transition():
+                current = self._skill_runtime_status()
+                if current.get("runtime_running") is True and current.get("runtime_pid") == pid:
+                    self.interface.execute("operator.runtime.stop")
+                    outcome = "STOPPED"
+                elif current.get("runtime_running") not in {True, False}:
+                    raise RuntimeError("SKILL_RUNTIME_STATUS_UNAVAILABLE")
+        except Exception as exc:
+            outcome = "FAILED"
+            error = "SKILL_RUNTIME_SHUTDOWN_FAILED:" + type(exc).__name__
+            self._skill_cleanup_error = self._health_error = error
+            raise
+        finally:
+            self._skill_runtime_pids.pop(run_id, None)
             try:
-                if self.skill_observation is not None:
-                    self.skill_observation.close_invocation(run_id)
+                self._queue_evidence("skill", {"event_type": "skill_runtime_cleanup", "run_id": run_id,
+                    "source_hash": state.get("source_hash"), "owned_runtime_pid": pid,
+                    "runtime_cleanup": outcome, "cleanup_error": error, "measurement_time_ns": self.clock_ns()})
+                self._flush_evidence()
             except Exception as exc:
-                cleanup_error = cleanup_error or f"SKILL_OBSERVATION_CLOSE_FAILED:{type(exc).__name__}:{exc}"
-                self._skill_cleanup_error = cleanup_error
-                self._health_error = cleanup_error
-                raise
-            finally:
-                self._sdk_event("skill", state)
-                with self._state_lock:
-                    self._skill_evidence(state, event_type="skill_terminal", cleanup_error=cleanup_error)
-                    self._skill_goals.pop(run_id, None)
-                self.brain.notify("SKILL_UPDATED")
+                self._health_error = "SKILL_TERMINAL_EVIDENCE_FAILED:" + type(exc).__name__
 
     def close(self):
         self.preempt("HOST_CLOSED")
@@ -579,43 +645,53 @@ class PublicRobotRuntime:
         with self._action_lock:
             if not self.skills.accepts(run_id):
                 raise RuntimeError("SKILL_INVOCATION_REVOKED")
-            params = dict(parameters)
-            if action.startswith("behavior."):
-                if action == "behavior.cancel":
-                    self.behaviors.revoke(params.get("reason", "SKILL_CANCEL"))
-                    return self.interface.stop()
-                name = params.pop("name", None) if action == "behavior.start" else action.removeprefix("behavior.")
-                duration = params.pop("max_duration_s", 300.0)
-                if self.behaviors.active:
-                    raise RuntimeError("active behavior must be explicitly cancelled")
-                params["session_owner_pid"] = os.getpid()
-                params.setdefault("session_watchdog_s", duration)
-                self._skill_motion_run = run_id
-                # A skill most atveszi a viselkedes tulajdonjogat.
-                # A korabbi kulso CLI tulajdonos nem ervenyes erre a skillre.
-                with self._state_lock:
-                    self._caller_pid = None
-                state = self.behaviors.start(name, params, max_duration_s=duration,
-                                             lineage=self._skill_goals.get(run_id))
-                if not self.skills.accepts(run_id):
-                    self.behaviors.revoke("SKILL_INVOCATION_REVOKED")
+            before = self._skill_runtime_status() if physical else {}
+            start_identity = getattr(self.interface.controller, "runtime_start_identity", None) if physical else None
+            try:
+                params = dict(parameters)
+                if action.startswith("behavior."):
+                    if action == "behavior.cancel":
+                        self.behaviors.revoke(params.get("reason", "SKILL_CANCEL"))
+                        return self.interface.stop()
+                    name = params.pop("name", None) if action == "behavior.start" else action.removeprefix("behavior.")
+                    duration = params.pop("max_duration_s", 300.0)
+                    completion_on_duration = params.pop("completion_on_duration", False)
+                    if self.behaviors.active:
+                        raise RuntimeError("active behavior must be explicitly cancelled")
+                    params["session_owner_pid"] = os.getpid()
+                    params.setdefault("session_watchdog_s", duration)
+                    self._skill_motion_run = run_id
+                    # A skill most atveszi a viselkedes tulajdonjogat.
+                    # A korabbi kulso CLI tulajdonos nem ervenyes erre a skillre.
+                    with self._state_lock:
+                        self._caller_pid = None
+                    state = self.behaviors.start(name, params, max_duration_s=duration,
+                                                 completion_on_duration=completion_on_duration,
+                                                 lineage=self._skill_goals.get(run_id))
+                    if not self.skills.accepts(run_id):
+                        self.behaviors.revoke("SKILL_INVOCATION_REVOKED")
+                        self.interface.stop()
+                        raise RuntimeError("SKILL_INVOCATION_REVOKED")
+                    return state.to_jsonable()
+                if physical:
+                    if self.behaviors.active:
+                        self.behaviors.revoke("SKILL_MOTION_REPLACED")
+                        self.interface.stop()
+                    self._skill_motion_run = run_id
+                    if action.startswith("v3.command."):
+                        params["session_owner_pid"] = os.getpid()
+                result = self.interface.execute(action, **params)
+                if physical and not self.skills.accepts(run_id):
                     self.interface.stop()
                     raise RuntimeError("SKILL_INVOCATION_REVOKED")
-                return state.to_jsonable()
-            if physical:
-                if self.behaviors.active:
-                    self.behaviors.revoke("SKILL_MOTION_REPLACED")
-                    self.interface.stop()
-                self._skill_motion_run = run_id
-                if action.startswith("v3.command."):
-                    params["session_owner_pid"] = os.getpid()
-            result = self.interface.execute(action, **params)
-            if physical and not self.skills.accepts(run_id):
-                self.interface.stop()
-                raise RuntimeError("SKILL_INVOCATION_REVOKED")
-            if physical and isinstance(result, Mapping) and result.get("status") == "COMPLETED":
-                self._skill_motion_run = None
-            return result
+                if physical and isinstance(result, Mapping) and result.get("status") == "COMPLETED":
+                    self._skill_motion_run = None
+                return result
+            finally:
+                if physical:
+                    # Keep the runtime across completed phases, and remember a
+                    # successful startup even when admission or execution fails.
+                    self._remember_skill_runtime(run_id, before, start_identity)
 
     def world_input_evidence(self, snapshot: Mapping[str, object]) -> None:
         # Only behavior inputs are recorded here; ordinary UI state reads do not
@@ -1098,6 +1174,7 @@ class PublicRobotRuntime:
         if action not in names:
             raise KeyError(action)
         duration = params.pop("max_duration_s", params.get("session_watchdog_s", 300.0))
+        completion_on_duration = params.pop("completion_on_duration", False)
         # Service death ends its autonomous command at the existing producer
         # owner/watchdog boundary. Keep caller watchdog if it is more restrictive.
         caller_pid = params.pop("session_owner_pid", None)
@@ -1128,7 +1205,8 @@ class PublicRobotRuntime:
             with self._state_lock:
                 if generation != self._generation:
                     raise RuntimeError("behavior start revoked before admission")
-            state = self.behaviors.start(names[action], params, max_duration_s=duration)
+            state = self.behaviors.start(names[action], params, max_duration_s=duration,
+                                         completion_on_duration=completion_on_duration)
             if not self.behaviors.active:
                 self.interface.stop()
             return state.to_jsonable()
