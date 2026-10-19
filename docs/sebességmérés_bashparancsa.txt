@@ -1,0 +1,61 @@
+cd /home/alba/project_r2b4 && python3 - <<'PY'
+import json
+import math
+import sys
+from pathlib import Path
+
+root = Path("runtime")
+print("🔎 Legfrissebb FULL DIAG keresése...", flush=True)
+
+files = sorted(root.glob("diag/diag_*_full_v3_*_capture_*.json"),
+               key=lambda p: p.stat().st_mtime, reverse=True)
+if not files:
+    sys.exit("HIBA: Nem található FULL DIAG.")
+
+diag = files[0]
+print(f"📂 DIAG: {diag.name}", flush=True)
+print("⏳ Mozgásadatok feldolgozása...", flush=True)
+
+with diag.open() as f:
+    data = json.load(f)
+
+def find_metrics(obj, path="root"):
+    found = []
+    if isinstance(obj, dict):
+        d = obj.get("estimated_path_m")
+        t = obj.get("estimated_path_speed_mps")
+        if isinstance(d, (float, int)) and isinstance(t, (float, int)):
+            if math.isfinite(d) and math.isfinite(t):
+                found.append((path, float(d), float(t)))
+        for k, v in obj.items():
+            found.extend(find_metrics(v, path + "." + k))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            found.extend(find_metrics(v, path + f"[{i}]"))
+    return found
+
+matches = find_metrics(data)
+matches = [(p, d, v) for p, d, v in matches
+           if "longest_weak_translation_run" not in p]
+
+print("\n========== R2B4 MOZGÁSMÉRÉS ==========")
+print(f"DIAG: {diag.name}")
+
+if not matches:
+    print("NINCS KIÉRTÉKELHETŐ ÚT-/SEBESSÉGADAT")
+    print("A FULL DIAG nem tartalmazott együtt")
+    print("estimated_path_m és estimated_path_speed_mps mezőt.")
+    sys.exit(2)
+
+for path, distance, speed in matches:
+    print(f"\nMérés: {path}")
+    print(f"Megtett út:       {distance:.3f} m")
+    print(f"Átlagsebesség:    {speed:.3f} m/s")
+    print(f"                   {speed*3.6:.2f} km/h")
+    if speed > 0:
+        print(f"Mért aktív idő:   {distance/speed:.2f} s")
+
+print("\n✅ Feldolgozás kész")
+print("MEGJEGYZÉS: Belső pozícióbecslés, nem")
+print("független fizikai távolságmérés.")
+PY
