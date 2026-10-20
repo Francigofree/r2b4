@@ -1,6 +1,6 @@
 # Funkcionális élő robot: parancstól a nyugalmi állapotig
 
-2026-10-19. Fejlesztési terv és mérési jegyzet; nem új architektúracontract.
+2026-10-19–20. Fejlesztési terv és mérési jegyzet; nem új architektúracontract.
 Az authority továbbra is a `STRUKTURALIS_RETEGEK_V3.md` és az
 `ASZINKRON_RUNTIME_CONTRACT_V3.md`. Az alábbi megállapítások az aktív source-ra
 és az itt megnevezett konkrét mérésekre vonatkoznak.
@@ -91,3 +91,38 @@ Részletes helyi mérési eredmény: `/tmp/r2b4-functional-live-6fl2rboy/`.
 
 Az aktuális szoftveres és további live eredményeket a feladat zárójelentése
 és a konkrét artifactok tartalmazzák; hiányzó evidence nem jelent PASS-t.
+
+## Október 20-i működési evidence
+
+A resident status a teljes costmap-cellalista helyett ismét csak darabszámot
+és kompakt lineage-et ad. A korábbi RUNNING-státusz fsync nélküli, atomikus
+publikálásával együtt ezt a 20 s kamera/detektor + IDLE mérés ellenőrizte:
+197 megfigyelés, legnagyobb státuszkor 243,339 ms, végig nulla motorkimenet;
+utána V3 OFF, kamera OFF, detektor OFF, consumers 0. FULL 50 Hz capture:
+`runtime/captures/v3_20261020_182543_3026_capture.mcap`, 1320 tick, integrity PASS.
+Az eredmény nem bizonyítja önmagában a korábbi státuszmegállás kizárólagos okát.
+
+A következő FOLLOW futás (`03d3209ebcc8400fb0dbd4b7c67dc0aa`)
+8,126 s időablakot és szabályos teljes leállást ért el. Capture:
+`runtime/captures/v3_20261020_182643_3027_capture.mcap`, 771 tick;
+compiler COMPLETE, verification PASS, teljes canonical replay MATCH.
+Az encoder átlagos útja 0,633 m; végül 240 STOP tick mind nulla kimenetű.
+Az ember visszajelzése szerint a követés túl korán megállt/akadozott, ezért
+ez **nem elfogadott fizikai követési eredmény**.
+
+A lezárt inputokból két szünet különült el:
+
+* 4,294 s `PLANNER_GEOMETRY_HOLD`: a heading-lassítás 0,20 m/s mission cap
+  mellett a 0,19 m/s planner floor alá került. A 246. ticknél a cap
+  0,1895017 m/s; a continuation a sebességkapun lépett ki, még collision
+  ellenőrzés előtt. Nem bizonyított akadály okozta ezt a konkrét HOLD-ot.
+* 0,982 s `PERSON_OCCLUDED_HOLD`: a pozitív személymérés prediction ideje
+  lejárt. 113 detector-resultból 23 üres; az elfogadott 88 pozitív mérés
+  mind ugyanazt a person-1 tracket frissítette. Inference medián 62,6 ms,
+  maximum 111,9 ms. Két pozitív mérés a L0 és input-closure közti késéssel
+  átlépte a 250 ms L2 freshness limitet. Ezek alapján általános timeoutemelés
+  nem indokolt.
+
+Az új javítás és a következő live próba elfogadási feltétele a fizikailag
+megvalósítható heading-lassítás, változatlan közelségi fékezés és stale-target
+STOP; külön értékelendő a követés folytonossága és az ember visszajelzése.

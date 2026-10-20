@@ -2002,11 +2002,15 @@ class TrajectoryNavigator:
                 "LOCAL_COSTMAP_STALE",
             )
 
-        # Arrival and HOLD share a boundary. The heading envelope's speed floor
-        # must not override distance braking, which tends continuously to zero.
+        # Steering slowdown must retain a realizable planner speed inside the
+        # mission cap. Distance braking still tends continuously to zero at HOLD.
         max_follow_v_mps = mission.constraints.max_v_mps
         minimum_follow_v_mps = min(
-            self._config.follow_person_minimum_follow_speed_mps,
+            max(
+                self._config.follow_person_minimum_follow_speed_mps,
+                self._config.minimum_planning_speed_mps,
+                self._config.wheel_limits.target_floor_mps,
+            ),
             max_follow_v_mps,
         )
 
