@@ -1,0 +1,257 @@
+"""RobotInterface adapter for canonical V3 status and motion command ingress."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from contextlib import nullcontext
+
+from v3.action_catalog import (
+    ACTION_CATALOG,
+    ActionDescriptor,
+)
+from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
+from v3.contracts import ExplorePreferences
+from v3.finite_navigation import FiniteNavigationExecutor
+from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
+
+
+class V3ControlInterfaceAdapter:
+    name = "v3_control"
+    read_capability_names = frozenset({"v3.status", "v3.pose", "v3.safety", "v3.health"})
+    capability_names = read_capability_names | frozenset(
+        name for name in ACTION_CATALOG if name.startswith("v3.command.")
+    )
+
+    def __init__(self, controller: OperatorController) -> None:
+        self.controller = controller
+
+    def capabilities(self) -> Mapping[str, Mapping[str, object]]:
+        status = self.controller.status()
+        runtime_running = bool(status.get("runtime_running"))
+        runtime_status = self.controller.live_runtime_status()
+        runtime_ready = bool(
+            isinstance(runtime_status, Mapping)
+            and runtime_status.get("state") == "RUNNING"
+            and runtime_status.get("ready_for_active") is True
+        )
+        current = "RUNTIME_READY" if runtime_ready else (
+            "RUNTIME_RUNNING_NOT_READY" if runtime_running else "RUNTIME_WILL_AUTO_START"
+        )
+        read_ready = isinstance(runtime_status, Mapping)
+        result: dict[str, dict[str, object]] = {
+            "v3.status": {
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
+                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+            },
+            "v3.pose": {
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
+                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+            },
+            "v3.safety": {
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
+                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+            },
+            "v3.health": {
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
+                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+            },
+        }
+        for name, descriptor in ACTION_CATALOG.items():
+            if not name.startswith("v3.command."):
+                continue
+            ready = runtime_running if name == "v3.command.stop" else True
+            reason = "STOP_IS_SAFE_NOOP_WHEN_IDLE" if name == "v3.command.stop" else current
+            result[name] = self._action(descriptor, True, ready, reason)
+        return result
+
+    @staticmethod
+    def _action(descriptor: ActionDescriptor, available: bool, ready: bool, reason: str | None) -> dict[str, object]:
+        result = descriptor.to_jsonable()
+        result.update({
+            "kind": "action",
+            "supported": True,
+            "available": available,
+            "ready": ready,
+            "reason": reason,
+        })
+        return result
+
+    def read(self, resource: str) -> object:
+        status = self.controller.live_runtime_status()
+        if not isinstance(status, Mapping):
+            raise RuntimeError("live resident V3 status is unavailable")
+        if resource == "v3.status":
+            return status
+        if resource == "v3.pose":
+            estimate = status.get("estimate")
+            return dict(estimate) if isinstance(estimate, Mapping) else None
+        if resource == "v3.safety":
+            return {
+                "state": status.get("state"),
+                "tick_id": status.get("tick_id"),
+                "ready_for_active": status.get("ready_for_active"),
+                "decision": status.get("safety_decision"),
+                "reason": status.get("safety_reason"),
+                "fault_layer": status.get("fault_layer"),
+                "enabled": status.get("enabled"),
+                "left_output": status.get("left_output"),
+                "right_output": status.get("right_output"),
+            }
+        if resource == "v3.health":
+            health = status.get("source_health")
+            return list(health) if isinstance(health, list) else []
+        raise KeyError(resource)
+
+    def execute(self, action: str, **parameters: object) -> object:
+        params = dict(parameters)
+        if action == "v3.command.stop":
+            self._reject_unknown(params, set())
+            self.controller.stop()
+            return {"status": "STOPPED"}
+
+        capture = bool(params.pop("capture", True))
+        # Unspecified settings inherit the operator's current recording session.
+        # A finite action must not silently restart FULL as a bounded ALAP slot.
+        current_mode = self.controller.current_capture_mode() or DEFAULT_CAPTURE_MODE
+        current_hz = self.controller.current_capture_hz() or DEFAULT_CAPTURE_HZ
+        capture_mode = str(params.pop("capture_mode", current_mode))
+        capture_hz = validate_capture_hz(params.pop("capture_hz", current_hz))
+        session = {
+            "session_owner_pid": params.pop("session_owner_pid", None),
+            "session_watchdog_s": params.pop("session_watchdog_s", None),
+        }
+        if action in {"v3.command.move_relative", "v3.command.turn_by"}:
+            cancel_event = params.pop("cancel_event", None)
+            finite_timeout_s = params.pop("finite_timeout_s", None)
+            admission_sink = params.pop("admission_sink", None)
+            return FiniteNavigationExecutor(self.controller).execute(
+                action, params, cancel_event=cancel_event, finite_timeout_s=finite_timeout_s, capture=capture,
+                capture_mode=capture_mode, capture_hz=capture_hz, admission_sink=admission_sink, **session,
+            )
+        if action == "v3.command.forward":
+            speed = params.pop("speed_mps", 0.15)
+            self._reject_unknown(params, set())
+            return self.controller.forward(speed, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+        if action == "v3.command.backward":
+            speed = params.pop("speed_mps", 0.15)
+            self._reject_unknown(params, set())
+            return self.controller.backward(speed, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+        if action == "v3.command.teleop":
+            v_mps = self._required(params, "v_mps")
+            omega_rad_s = self._required(params, "omega_rad_s")
+            max_v = params.pop("max_v_mps", 0.50)
+            max_omega = params.pop("max_omega_rad_s", 1.20)
+            self._reject_unknown(params, set())
+            return self.controller.start_teleop(
+                v_mps=v_mps, omega_rad_s=omega_rad_s, max_v_mps=max_v,
+                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+            )
+        if action == "v3.command.navigate":
+            # Host-only blocking mode for the ER2 absolute-pose bridge. The
+            # default low-level navigate action still returns acceptance.
+            wait_for_completion = params.pop("wait_for_completion", False)
+            expected_runtime_pid = params.pop("expected_runtime_pid", None)
+            if expected_runtime_pid is not None and (type(expected_runtime_pid) is not int or expected_runtime_pid <= 0):
+                raise ValueError("expected_runtime_pid must be a positive integer")
+            if type(wait_for_completion) is not bool:
+                raise ValueError("wait_for_completion must be bool")
+            if wait_for_completion:
+                if expected_runtime_pid is not None:
+                    raise ValueError("expected_runtime_pid is supported for nonblocking world-goal navigation")
+                cancel_event = params.pop("cancel_event", None)
+                finite_timeout_s = params.pop("finite_timeout_s", None)
+                admission_sink = params.pop("admission_sink", None)
+                return FiniteNavigationExecutor(self.controller).execute(
+                    action, params, cancel_event=cancel_event, finite_timeout_s=finite_timeout_s, capture=capture,
+                    capture_mode=capture_mode, capture_hz=capture_hz, admission_sink=admission_sink, **session,
+                )
+            frame_id = params.pop("frame_id", "R2B4_BOOT_ROBOT_MAP")
+            x = self._required(params, "x_m")
+            y = self._required(params, "y_m")
+            yaw = params.pop("yaw_rad", None)
+            max_v = params.pop("max_v_mps", 0.20)
+            max_omega = params.pop("max_omega_rad_s", 0.60)
+            self._reject_unknown(params, set())
+            transaction = self.controller.operator_transition() if expected_runtime_pid is not None else nullcontext()
+            with transaction:
+                if expected_runtime_pid is not None:
+                    if self.controller.snapshot().runtime_pid != expected_runtime_pid:
+                        raise RuntimeError("world goal runtime session changed before admission")
+                    if (capture or self.controller.current_capture_mode() != capture_mode
+                            or self.controller.current_capture_hz() != capture_hz):
+                        raise RuntimeError("world goal requires the current capture session without re-arm")
+                return self.controller.navigate(
+                    x_m=x, y_m=y, yaw_rad=yaw, frame_id=frame_id, max_v_mps=max_v,
+                    max_omega_rad_s=max_omega, capture=capture,
+                    capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                )
+        if action == "v3.command.wheels":
+            left = self._required(params, "left_mps")
+            right = self._required(params, "right_mps")
+            self._reject_unknown(params, set())
+            return self.controller.wheels(left, right, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+        if action == "v3.command.explore":
+            envelope = {name: params.pop(name) for name in ("max_v_mps", "max_omega_rad_s") if name in params}
+            preferences = {name: params.pop(name) for name in ExplorePreferences.field_names() if name in params}
+            self._reject_unknown(params, set())
+            if preferences:
+                from v3.config import ConfigResolver
+                profile = ConfigResolver.for_project(self.controller.root).resolve().roomcruise.preferences
+                request = ExplorePreferences.from_mapping({**{f.key: f.value for f in profile.as_fields()}, **preferences})
+                envelope["explore_preferences"] = request
+            return self.controller.roomcruise(capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **envelope, **session)
+        if action == "v3.command.face_person":
+            max_omega = params.pop("max_omega_rad_s", 0.50)
+            expected_pid = params.pop("expected_runtime_pid", None)
+            if expected_pid is not None and (type(expected_pid) is not int or expected_pid <= 0):
+                raise ValueError("expected_runtime_pid must be a positive integer")
+            self._reject_unknown(params, set())
+            transaction = self.controller.operator_transition() if expected_pid is not None else nullcontext()
+            with transaction:
+                if expected_pid is not None:
+                    if self.controller.snapshot().runtime_pid != expected_pid:
+                        raise RuntimeError("person acquisition runtime session changed before admission")
+                    if (capture or self.controller.current_capture_mode() != capture_mode
+                            or self.controller.current_capture_hz() != capture_hz):
+                        raise RuntimeError("bound person acquisition requires the current capture session without re-arm")
+                return self.controller.faceperson(
+                    max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                )
+        if action == "v3.command.follow_person":
+            envelope = {name: params.pop(name) for name in ("max_v_mps", "max_omega_rad_s") if name in params}
+            target = params.pop("target_track_id", None)
+            expected_pid = params.pop("expected_runtime_pid", None)
+            if target is not None and (type(expected_pid) is not int or expected_pid <= 0):
+                raise ValueError("bound follow requires expected_runtime_pid")
+            if expected_pid is not None and (type(expected_pid) is not int or expected_pid <= 0):
+                raise ValueError("expected_runtime_pid must be a positive integer")
+            self._reject_unknown(params, set())
+            transaction = self.controller.operator_transition() if expected_pid is not None else nullcontext()
+            with transaction:
+                if expected_pid is not None:
+                    if self.controller.snapshot().runtime_pid != expected_pid:
+                        raise RuntimeError("person target runtime session changed before admission")
+                    if (capture or self.controller.current_capture_mode() != capture_mode
+                            or self.controller.current_capture_hz() != capture_hz):
+                        raise RuntimeError("bound follow requires the current capture session without re-arm")
+                bound = {"target_track_id": target} if target is not None else {}
+                return self.controller.followperson(
+                    **envelope, **bound,
+                    capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                )
+        raise KeyError(action)
+
+    @staticmethod
+    def _required(parameters: dict[str, object], name: str) -> object:
+        if name not in parameters:
+            raise ValueError(f"missing required parameter: {name}")
+        return parameters.pop(name)
+
+    @staticmethod
+    def _reject_unknown(parameters: Mapping[str, object], allowed: set[str]) -> None:
+        unknown = sorted(set(parameters) - allowed)
+        if unknown:
+            raise ValueError(f"unknown parameters: {', '.join(unknown)}")
+
+
+__all__ = ["V3ControlInterfaceAdapter"]

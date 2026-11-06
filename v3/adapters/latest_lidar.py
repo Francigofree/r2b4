@@ -1,0 +1,597 @@
+"""Native adapter for the protected latest-only scan-matcher result port."""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Protocol
+
+from v3.contracts import TickContext
+from v3.contracts.lidar import (
+    MATCHER_CONFIDENCE_MODEL,
+    MATCHER_CONTRACT_ID,
+    MATCHER_TRANSPORT,
+    ODOMETRY_MODE,
+    POSE_FRAME_ID,
+    POSE_FRAME_OWNER,
+    POSE_FRAME_YAW,
+)
+
+from .live_lidar import (
+    LidarHealthReading,
+    LidarRelativeMotionReading,
+    LidarMatcherDiagnostics,
+    LidarPointReading,
+    LidarPoseReading,
+    LidarScanReading,
+)
+
+SLAM_CONTRACT_ID = "R2B4_SLAM_TOOLBOX_LATEST_V1"
+SLAM_CONFIDENCE_MODEL = "SLAM_TOOLBOX_COVARIANCE_V1"
+SLAM_TRANSPORT = "slam_toolbox_edge_latest"
+
+
+def _finite(value: object, name: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ValueError(f"{name} must be finite numeric")
+    return float(value)
+
+
+def _nonnegative_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _optional_finite(value: object, name: str) -> float | None:
+    if value is None:
+        return None
+    return _finite(value, name)
+
+
+def _optional_bool(value: object, name: str) -> bool | None:
+    if value is None:
+        return None
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be bool or None")
+    return value
+
+
+def _string_tuple(value: object, name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)) or any(
+        not isinstance(item, str) for item in value
+    ):
+        raise ValueError(f"{name} must be a string sequence")
+    return tuple(value)
+
+
+def _optional_pose(value: object, name: str) -> tuple[float, float, float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a pose object or None")
+    return (
+        _finite(value.get("x"), f"{name}.x"),
+        _finite(value.get("y"), f"{name}.y"),
+        _wrapped_yaw(_finite(value.get("theta"), f"{name}.theta")),
+    )
+
+
+def _wrapped_yaw(value: float) -> float:
+    return math.atan2(math.sin(value), math.cos(value))
+
+
+class LatestMatcherResultPort(Protocol):
+    """Read-only latest-result surface of the protected matcher owner."""
+
+    def get_matcher_result(self) -> object | None: ...
+
+    def get_runtime_status(self) -> Mapping[str, object]: ...
+
+    def get_raw_scan_snapshot(self) -> object | None: ...
+
+    def stop(self) -> object: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LatestLidarBackendConfig:
+    """Immutable freshness and protected-identity contract."""
+
+    maximum_result_age_ns: int
+    pose_r_scale: float = 1.0
+    odometry_mode: str = ODOMETRY_MODE
+    matcher_contract_id: str = MATCHER_CONTRACT_ID
+    matcher_confidence_model: str = MATCHER_CONFIDENCE_MODEL
+    matcher_transport: str = MATCHER_TRANSPORT
+    pose_frame_id: str = POSE_FRAME_ID
+    pose_frame_owner: str = POSE_FRAME_OWNER
+    pose_frame_yaw: str = POSE_FRAME_YAW
+    maximum_future_skew_ns: int = 0
+    global_backend: str = "native"
+    pose_measurement_variance: tuple[float, float, float] | None = None
+
+    def __post_init__(self) -> None:
+        maximum_age = _nonnegative_int(
+            self.maximum_result_age_ns,
+            "maximum_result_age_ns",
+        )
+        if maximum_age == 0:
+            raise ValueError("maximum_result_age_ns must be positive")
+        future_skew = _nonnegative_int(
+            self.maximum_future_skew_ns,
+            "maximum_future_skew_ns",
+        )
+        if future_skew > maximum_age:
+            raise ValueError(
+                "maximum_future_skew_ns cannot exceed maximum_result_age_ns"
+            )
+        r_scale = _finite(self.pose_r_scale, "pose_r_scale")
+        if not 0.05 <= r_scale <= 20.0:
+            raise ValueError("pose_r_scale must be within [0.05, 20]")
+        if self.global_backend not in {"native", "slam_toolbox"}:
+            raise ValueError("global_backend must be native or slam_toolbox")
+        slam = self.global_backend == "slam_toolbox"
+        if slam and (not isinstance(self.pose_measurement_variance, tuple)
+                     or len(self.pose_measurement_variance) != 3
+                     or any(_finite(v, "pose_measurement_variance") <= 0
+                            for v in self.pose_measurement_variance)):
+            raise ValueError("SLAM requires the resolved L3 measurement variances")
+        expected = {
+            "odometry_mode": ODOMETRY_MODE,
+            "matcher_contract_id": SLAM_CONTRACT_ID if slam else MATCHER_CONTRACT_ID,
+            "matcher_confidence_model": SLAM_CONFIDENCE_MODEL if slam else MATCHER_CONFIDENCE_MODEL,
+            "matcher_transport": SLAM_TRANSPORT if slam else MATCHER_TRANSPORT,
+            "pose_frame_id": POSE_FRAME_ID,
+            "pose_frame_owner": POSE_FRAME_OWNER,
+            "pose_frame_yaw": POSE_FRAME_YAW,
+        }
+        for name, value in expected.items():
+            if getattr(self, name) != value:
+                raise ValueError(f"{name} must be {value}")
+
+
+class NativeLatestLidarBackend:
+    """Close one latest matcher result into the native lidar contract."""
+
+    __slots__ = ("_config", "_port", "_raw_point_cache_key", "_raw_point_cache")
+
+    def __init__(
+        self,
+        port: LatestMatcherResultPort,
+        config: LatestLidarBackendConfig,
+    ) -> None:
+        if not isinstance(config, LatestLidarBackendConfig):
+            raise TypeError("config must be LatestLidarBackendConfig")
+        for method_name in (
+            "get_matcher_result",
+            "get_runtime_status",
+            "get_raw_scan_snapshot",
+            "stop",
+        ):
+            if not callable(getattr(port, method_name, None)):
+                raise TypeError(f"port must provide a callable {method_name} method")
+        self._port = port
+        self._config = config
+        self._raw_point_cache_key: tuple[int, int] | None = None
+        self._raw_point_cache: tuple[LidarPointReading, ...] = ()
+
+    @property
+    def port(self) -> LatestMatcherResultPort:
+        return self._port
+
+    def _runtime_contract_valid(self, status: Mapping[str, object]) -> bool:
+        return (
+            status.get("matcher_contract_id")
+            == self._config.matcher_contract_id
+            and status.get("matcher_confidence_model")
+            == self._config.matcher_confidence_model
+            and status.get("matcher_transport") == self._config.matcher_transport
+            and type(status.get("running")) is bool
+            and status.get("running") is True
+            and type(status.get("matcher_process_alive")) is bool
+            and status.get("matcher_process_alive") is True
+            and not status.get("matcher_error")
+        )
+
+    def _read_raw_snapshot(
+        self,
+        context: TickContext,
+        status: Mapping[str, object],
+    ) -> LidarScanReading:
+        snapshot = self._port.get_raw_scan_snapshot()
+        physical_runtime_valid = (
+            type(status.get("running")) is bool
+            and status.get("running") is True
+            and type(status.get("driver_connected", True)) is bool
+            and status.get("driver_connected", True) is True
+        )
+        if snapshot is None:
+            return LidarScanReading(
+                revision=0,
+                captured_monotonic_ns=context.monotonic_ns,
+                scan_start_monotonic_ns=context.monotonic_ns,
+                scan_end_monotonic_ns=context.monotonic_ns,
+                measurement_monotonic_ns=context.monotonic_ns,
+                measurement_age_ns=0,
+                health="STALE" if physical_runtime_valid else "ERROR",
+                stale=physical_runtime_valid,
+                timing_valid=physical_runtime_valid,
+                point_count=0,
+                front_clearance_m=0.0,
+                rear_clearance_m=0.0,
+                left_clearance_m=0.0,
+                right_clearance_m=0.0,
+                front_observation_count=0,
+                rear_observation_count=0,
+                left_observation_count=0,
+                right_observation_count=0,
+            )
+        revision = _nonnegative_int(
+            getattr(snapshot, "raw_scan_id", None),
+            "raw_scan_id",
+        )
+        if revision == 0:
+            raise ValueError("raw_scan_id must be positive")
+        captured_s = _finite(
+            getattr(snapshot, "raw_scan_timestamp", None),
+            "raw_scan_timestamp",
+        )
+        captured_ns = int(round(captured_s * 1_000_000_000.0))
+        scan_start_ns = _nonnegative_int(
+            getattr(snapshot, "scan_start_monotonic_ns", None),
+            "scan_start_monotonic_ns",
+        )
+        scan_end_ns = _nonnegative_int(
+            getattr(snapshot, "scan_end_monotonic_ns", None),
+            "scan_end_monotonic_ns",
+        )
+        measurement_ns = _nonnegative_int(
+            getattr(snapshot, "measurement_monotonic_ns", None),
+            "measurement_monotonic_ns",
+        )
+        midpoint_ns = scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+        if (
+            captured_ns != scan_end_ns
+            or scan_start_ns > scan_end_ns
+            or measurement_ns != midpoint_ns
+        ):
+            raise ValueError("raw scan timing contract is invalid")
+        measurement_age_ns = context.monotonic_ns - measurement_ns
+        observed_ns_value = getattr(snapshot, "observed_monotonic_ns", None)
+        observed_ns = (
+            context.monotonic_ns
+            if observed_ns_value is None
+            else _nonnegative_int(observed_ns_value, "observed_monotonic_ns")
+        )
+        snapshot_health = getattr(snapshot, "health", None)
+        if snapshot_health not in {"OK", "STALE", "ERROR"}:
+            raise ValueError("raw scan health must be OK, STALE or ERROR")
+        summary = getattr(snapshot, "summary", None)
+        if not isinstance(summary, Mapping):
+            raise TypeError("raw scan summary must be a mapping")
+
+        def clearance(name: str) -> float:
+            value = _finite(summary.get(name), name)
+            if value < 0.0:
+                raise ValueError(f"{name} must be non-negative")
+            return value
+
+        def count(name: str) -> int:
+            return _nonnegative_int(summary.get(name), name)
+
+        point_count = count("raw_safety_valid_point_count")
+        timing_valid = bool(
+            physical_runtime_valid
+            and captured_ns >= 0
+            and captured_ns - observed_ns <= self._config.maximum_future_skew_ns
+        )
+        stale = bool(
+            timing_valid
+            and (
+                snapshot_health != "OK"
+                or measurement_age_ns > self._config.maximum_result_age_ns
+            )
+        )
+        # Raw scan geometry is immutable for one physical revision. The LiDAR
+        # source is polled faster than the scanner produces revisions, so avoid
+        # rebuilding hundreds of Python point objects for duplicate polls.
+        # Freshness/health below are still recomputed from the current context.
+        cache_key = (revision, captured_ns)
+        if self._raw_point_cache_key == cache_key:
+            local_points = self._raw_point_cache
+        else:
+            raw_points = tuple(getattr(snapshot, "raw_scan", ()) or ())
+            local_points = tuple(
+                LidarPointReading(
+                    angle_deg=_finite(
+                        getattr(point, "angle_deg", None),
+                        "raw_scan.angle_deg",
+                    ),
+                    distance_m=_finite(
+                        getattr(point, "distance_m", None),
+                        "raw_scan.distance_m",
+                    ),
+                    quality=_nonnegative_int(
+                        getattr(point, "quality", None),
+                        "raw_scan.quality",
+                    ),
+                )
+                for point in raw_points
+            )
+            self._raw_point_cache_key = cache_key
+            self._raw_point_cache = local_points
+        return LidarScanReading(
+            revision=revision,
+            captured_monotonic_ns=captured_ns,
+            scan_start_monotonic_ns=scan_start_ns,
+            scan_end_monotonic_ns=scan_end_ns,
+            measurement_monotonic_ns=measurement_ns,
+            measurement_age_ns=max(0, measurement_age_ns),
+            health=str(snapshot_health),
+            stale=stale,
+            timing_valid=timing_valid,
+            point_count=point_count,
+            front_clearance_m=clearance("front_clearance_m"),
+            rear_clearance_m=clearance("rear_clearance_m"),
+            left_clearance_m=clearance("left_clearance_m"),
+            right_clearance_m=clearance("right_clearance_m"),
+            front_observation_count=count("front_observation_count"),
+            rear_observation_count=count("rear_observation_count"),
+            left_observation_count=count("left_observation_count"),
+            right_observation_count=count("right_observation_count"),
+            local_points=local_points,
+        )
+
+    def read(self, context: TickContext) -> LidarHealthReading:
+        if not isinstance(context, TickContext):
+            raise TypeError("context must be TickContext")
+        result = self._port.get_matcher_result()
+        status = self._port.get_runtime_status()
+        if not isinstance(status, Mapping):
+            raise TypeError("get_runtime_status must return a mapping")
+        scan = self._read_raw_snapshot(context, status)
+        runtime_contract_valid = self._runtime_contract_valid(status)
+        independent_relative = None
+        relative_getter = getattr(self._port, "get_relative_result", None)
+        if callable(relative_getter):
+            relative = relative_getter()
+            if relative is not None:
+                if not isinstance(relative, LidarRelativeMotionReading) or relative.end_ns is None:
+                    raise TypeError("relative result requires immutable source identity")
+                if (runtime_contract_valid and status.get("health") == "OK"
+                        and 0 <= context.monotonic_ns-relative.end_ns <= self._config.maximum_result_age_ns):
+                    independent_relative = relative
+
+        if result is None:
+            return LidarHealthReading(
+                revision=0,
+                captured_monotonic_ns=context.monotonic_ns,
+                measurement_age_ns=0,
+                confidence=0.0,
+                stale=runtime_contract_valid,
+                timing_valid=runtime_contract_valid,
+                scan=scan,
+                relative_motion=independent_relative,
+            )
+
+        revision = _nonnegative_int(
+            getattr(result, "matcher_result_id", None),
+            "matcher_result_id",
+        )
+        if revision == 0:
+            raise ValueError("matcher_result_id must be positive")
+        candidate_id = _nonnegative_int(
+            getattr(result, "candidate_id", None),
+            "candidate_id",
+        )
+        source_scan_id = _nonnegative_int(
+            getattr(result, "source_raw_scan_id", None),
+            "source_raw_scan_id",
+        )
+        if candidate_id != revision or source_scan_id == 0:
+            raise ValueError("matcher result identity is inconsistent")
+
+        captured_s = _finite(getattr(result, "timestamp", None), "timestamp")
+        source_s = _finite(
+            getattr(result, "source_raw_scan_timestamp", None),
+            "source_raw_scan_timestamp",
+        )
+        if captured_s < 0.0 or source_s < 0.0:
+            raise ValueError("matcher timestamps must be non-negative")
+        captured_ns = int(round(captured_s * 1_000_000_000.0))
+        source_ns = int(round(source_s * 1_000_000_000.0))
+        scan_start_ns = _nonnegative_int(
+            getattr(result, "scan_start_monotonic_ns", None),
+            "scan_start_monotonic_ns",
+        )
+        scan_end_ns = _nonnegative_int(
+            getattr(result, "scan_end_monotonic_ns", None),
+            "scan_end_monotonic_ns",
+        )
+        measurement_ns = _nonnegative_int(
+            getattr(result, "measurement_monotonic_ns", None),
+            "measurement_monotonic_ns",
+        )
+        pose_reference_ns = _nonnegative_int(
+            getattr(result, "pose_reference_monotonic_ns", None),
+            "pose_reference_monotonic_ns",
+        )
+        midpoint_ns = scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+        if (
+            source_ns != scan_end_ns
+            or scan_start_ns > scan_end_ns
+            or measurement_ns != midpoint_ns
+            or pose_reference_ns != measurement_ns
+        ):
+            raise ValueError("matcher result scan/pose timing contract is invalid")
+        result_age_ns = context.monotonic_ns - captured_ns
+        measurement_age_ns = context.monotonic_ns - measurement_ns
+
+        summary = getattr(result, "summary", None)
+        if not isinstance(summary, Mapping):
+            raise TypeError("matcher result summary must be a mapping")
+        confidence = _finite(
+            summary.get("lidar_pose_confidence"),
+            "lidar_pose_confidence",
+        )
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError("lidar_pose_confidence must be within [0, 1]")
+        summary_contract_valid = (
+            summary.get("matcher_contract_id")
+            == self._config.matcher_contract_id
+            and summary.get("matcher_confidence_model")
+            == self._config.matcher_confidence_model
+            and summary.get("matcher_transport") == self._config.matcher_transport
+            and summary.get("map_frame_id") == self._config.pose_frame_id
+            and summary.get("map_frame_owner") == self._config.pose_frame_owner
+            and summary.get("yaw_convention") == self._config.pose_frame_yaw
+        )
+        timing_valid = (
+            runtime_contract_valid
+            and summary_contract_valid
+            and result_age_ns >= -self._config.maximum_future_skew_ns
+            and measurement_age_ns >= -self._config.maximum_future_skew_ns
+            and status.get("health") != "ERROR"
+        )
+        stale = (
+            timing_valid
+            and (
+                status.get("health") != "OK"
+                or measurement_age_ns > self._config.maximum_result_age_ns
+            )
+        )
+        r_scale = self._config.pose_r_scale
+        if self._config.global_backend == "slam_toolbox":
+            # L3 represents covariance with its canonical base variances and
+            # one scale/quality factor. Conservatively dominate every diagonal
+            # supplied by the SLAM edge without changing the estimator schema.
+            covariance = tuple(_finite(summary.get(key), key) for key in (
+                "variance_x_m2", "variance_y_m2", "variance_yaw_rad2"))
+            if any(value <= 0 for value in covariance):
+                raise ValueError("SLAM covariance must be positive")
+            r_scale = max(r_scale, *(value / base for value, base in zip(
+                covariance, self._config.pose_measurement_variance)))
+        pose = LidarPoseReading(
+            x_m=_finite(summary.get("lidar_pose_x"), "lidar_pose_x"),
+            y_m=_finite(summary.get("lidar_pose_y"), "lidar_pose_y"),
+            yaw_rad=_wrapped_yaw(
+                _finite(summary.get("lidar_pose_theta"), "lidar_pose_theta")
+            ),
+            r_scale=r_scale,
+        )
+        quality_value = summary.get("matcher_quality")
+        if quality_value is None:
+            quality: Mapping[str, object] = {}
+        elif isinstance(quality_value, Mapping):
+            quality = quality_value
+        else:
+            raise TypeError("matcher_quality must be a mapping or None")
+        reason = summary.get("matcher_reason", "")
+        if not isinstance(reason, str):
+            raise TypeError("matcher_reason must be a string")
+        diagnostics = LidarMatcherDiagnostics(
+            candidate_id=candidate_id,
+            source_raw_scan_id=source_scan_id,
+            source_raw_scan_timestamp_ns=source_ns,
+            scan_start_monotonic_ns=scan_start_ns,
+            scan_end_monotonic_ns=scan_end_ns,
+            measurement_monotonic_ns=measurement_ns,
+            pose_reference_monotonic_ns=pose_reference_ns,
+            scan_pose_alignment_delta_ns=pose_reference_ns - measurement_ns,
+            matcher_contract_id=summary.get("matcher_contract_id"),
+            slam_session_id=(None if summary.get("slam_session_id") is None else
+                             _nonnegative_int(summary["slam_session_id"], "slam_session_id")),
+            slam_generation=(None if summary.get("slam_generation") is None else
+                             _nonnegative_int(summary["slam_generation"], "slam_generation")),
+            slam_bridge_generation=(None if summary.get("slam_bridge_generation") is None else
+                             _nonnegative_int(summary["slam_bridge_generation"], "slam_bridge_generation")),
+            matcher_reason=reason,
+            tracking_ready=_optional_bool(
+                summary.get("tracking_ready"),
+                "tracking_ready",
+            ),
+            matcher_timed_out=_optional_bool(
+                summary.get("matcher_timed_out"),
+                "matcher_timed_out",
+            ),
+            matcher_degenerate=_optional_bool(
+                summary.get("matcher_degenerate"),
+                "matcher_degenerate",
+            ),
+            degeneracy_reasons=_string_tuple(
+                summary.get("matcher_degeneracy_reasons"),
+                "matcher_degeneracy_reasons",
+            ),
+            matcher_runtime_ms=_optional_finite(
+                summary.get("matcher_runtime_ms"),
+                "matcher_runtime_ms",
+            ),
+            matcher_queue_delay_ms=_optional_finite(
+                summary.get("matcher_queue_delay_ms"),
+                "matcher_queue_delay_ms",
+            ),
+            matcher_input_age_ns=(
+                None
+                if summary.get("matcher_input_age_ns") is None
+                else _nonnegative_int(
+                    summary.get("matcher_input_age_ns"),
+                    "matcher_input_age_ns",
+                )
+            ),
+            matcher_confidence=_optional_finite(
+                summary.get("matcher_confidence"),
+                "matcher_confidence",
+            ),
+            inlier_ratio=_optional_finite(
+                quality.get("inlier_ratio"),
+                "inlier_ratio",
+            ),
+            robust_rmse_m=_optional_finite(
+                quality.get("robust_rmse_m"),
+                "robust_rmse_m",
+            ),
+            sector_coverage=_optional_finite(
+                quality.get("sector_coverage"),
+                "sector_coverage",
+            ),
+            observability_score=_optional_finite(
+                quality.get("observability_score"),
+                "observability_score",
+            ),
+            ambiguity_margin=_optional_finite(
+                quality.get("ambiguity_margin"),
+                "ambiguity_margin",
+            ),
+            scan_to_map_seed=_optional_pose(
+                summary.get("scan_to_map_seed"),
+                "scan_to_map_seed",
+            ),
+        )
+        relative = summary.get("relative_motion")
+        relative_reading = None if relative is None else LidarRelativeMotionReading(**dict(relative))
+        return LidarHealthReading(
+            relative_motion=independent_relative or relative_reading,
+            revision=revision,
+            captured_monotonic_ns=measurement_ns,
+            measurement_age_ns=max(0, measurement_age_ns),
+            confidence=confidence,
+            stale=stale,
+            timing_valid=timing_valid,
+            pose=pose,
+            diagnostics=diagnostics,
+            scan=scan,
+        )
+
+
+__all__ = [
+    "LatestLidarBackendConfig",
+    "LatestMatcherResultPort",
+    "NativeLatestLidarBackend",
+]

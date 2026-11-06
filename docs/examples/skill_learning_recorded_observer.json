@@ -1,0 +1,34 @@
+{
+  "kind": "semantic_trace",
+  "resources": {
+    "camera.status": [
+      {
+        "camera_state": "ON",
+        "measurement_monotonic_ns": 1010000000,
+        "owner_generation": "synthetic-example-owner"
+      }
+    ]
+  },
+  "observer": {
+    "parameters": {"region": null, "object_kind": "person"},
+    "start_monotonic_ns": 1000000000,
+    "end_monotonic_ns": 1300000000,
+    "complete": true,
+    "events": [
+      {
+        "kind": "qualified_presence",
+        "sequence": 1,
+        "event_id": "synthetic-example-observer:1",
+        "observer": "synthetic-example-observer",
+        "measurement_monotonic_ns": 1020000000,
+        "source_sequence": 37,
+        "source_frame_sequence": 41,
+        "owner_generation": "synthetic-example-owner",
+        "revision": "example-detector-v1",
+        "lineage": {"message_id": "synthetic-example-message-8"}
+      }
+    ]
+  },
+  "expected_result": {"camera_state": "ON", "source_sequence": 37},
+  "expected_reports": ["observed:37"]
+}

@@ -1,0 +1,183 @@
+{
+  "acknowledged_duration_s": 120.060006447,
+  "artifacts": {
+    "path": "path.csv",
+    "projection_report": "report.json",
+    "svg": "atlas2d.svg"
+  },
+  "capture_scope": {
+    "capture_hz": 5,
+    "capture_status": "PASS",
+    "navigation_map_complete": true,
+    "navigation_map_hz": 5,
+    "navigation_map_integrity_reasons": [],
+    "navigation_map_requested": true,
+    "navigation_map_transport": {
+      "end": true,
+      "produced_count": 618,
+      "received_count": 618,
+      "superseded_count": 0,
+      "written_count": 618
+    },
+    "raw_evidence_requested": false,
+    "replay_complete": false,
+    "sample_complete": true
+  },
+  "duration_status": "PASS",
+  "evi_verify": {
+    "compiler_status": "COMPLETE",
+    "messages": 6015,
+    "quarantined": 0,
+    "source_checked": true,
+    "status": "PASS"
+  },
+  "exact_replay": "NOT_REQUESTED_5HZ_SCOPE",
+  "execution_started_ns": 4189750401469,
+  "failure": "CONTINUOUS_RECORDED_ZERO_REQUEST_HOLD",
+  "native_continuous_zero_request_hold": {
+    "duration_ns": 83521262647,
+    "end_time_ns": 4309911674282,
+    "first_cause": [
+      "NAVIGATION_HOLD",
+      "L6",
+      "/reason",
+      "PLANNER_EXECUTION_HOLD"
+    ],
+    "physical_stall_proven": false,
+    "start_time_ns": 4226390411635
+  },
+  "native_exhausted_boundary": {
+    "elapsed_execution_s": 68.660738914,
+    "evidence_ref": {
+      "field_path": "/payload/expected/layers/L6/reason",
+      "log_time_ns": 4258411140383,
+      "message_id": "msg-000000003875",
+      "source_pointer": "",
+      "tick_id": null,
+      "topic": "/r2b4/event",
+      "view": "events"
+    },
+    "layer": "L6",
+    "monotonic_ns": 4258411140383,
+    "tick_id": 2671
+  },
+  "native_first_long_hold_boundary": {
+    "elapsed_execution_s": 36.640010166,
+    "evidence_ref": {
+      "field_path": "/payload/expected/layers/L6/reason",
+      "log_time_ns": 4226390411635,
+      "message_id": "msg-000000002583",
+      "source_pointer": "",
+      "tick_id": null,
+      "topic": "/r2b4/event",
+      "view": "events"
+    },
+    "layer": "L6",
+    "monotonic_ns": 4226390411635,
+    "tick_id": 1781
+  },
+  "native_timing": {
+    "control_max_ns": 104628772,
+    "control_p99_ns": 38200000,
+    "observer_max_ns": 12632096,
+    "observer_p99_ns": 2800000,
+    "period_max_ns": 116502177,
+    "period_p99_ns": 56400000,
+    "tick_count": 5300
+  },
+  "native_zero_request_hold_ns": 84883394068,
+  "navigation_quality_status": "FAIL",
+  "physical_ground_truth": "AWAITING_OPERATOR_OBSERVATION",
+  "planner_occupancy": "NOT_RECONSTRUCTED",
+  "projection_quality": {
+    "map_events": 618,
+    "outside_recorded_pose_interval": 1,
+    "pose_continuity_boundary": 2,
+    "projected_map_samples": 615,
+    "projected_return_points": 59040,
+    "qualified_pose_rows": 624
+  },
+  "runtime_status": "PASS",
+  "sampled_performance": {
+    "actuator_saturated_observed_s": 124.19055327699998,
+    "actuator_saturated_s": 0,
+    "allowed_distance_m": 8.62733092344732,
+    "allowed_motion_s": 34.542229967,
+    "allowed_observed_s": 124.19055327699998,
+    "constraint_active_observed_s": 124.19055327699998,
+    "constraint_active_s": 25.227514075,
+    "distance_semantics": "LOCAL_ESTIMATE_CHORD_SUM_AND_PER_CONTINUOUS_SEGMENT_NET",
+    "estimated_net_displacement_m": 2.7119020994745613,
+    "estimated_path_efficiency": 0.2608201584666539,
+    "estimated_path_length_m": 10.39759394142566,
+    "requested_motion_s": 35.161726408,
+    "requested_observed_s": 124.19055327699998,
+    "safety_blocked_observed_s": 124.19055327699998,
+    "safety_blocked_s": 4.245657574000001
+  },
+  "sampled_planner_hold_markers": [
+    {
+      "capture_elapsed_s": 33.03748898,
+      "end_reason": "PLANNER_GEOMETRY_HOLD",
+      "end_tick_id": 1511,
+      "frame_id": "R2B4_ODOM_LOCAL",
+      "generation": 0,
+      "label": "H1",
+      "physical_stop_inferred": false,
+      "reason": "PLANNER_PENDING",
+      "sample_count": 2,
+      "sampled_span_s": 0.179970904,
+      "tick_id": 1502,
+      "time_ns": 4219690428651,
+      "x_m": 2.099975609716889,
+      "y_m": 1.520942380666706
+    },
+    {
+      "capture_elapsed_s": 37.218969591,
+      "end_reason": "PLANNER_PENDING",
+      "end_tick_id": 1681,
+      "frame_id": "R2B4_ODOM_LOCAL",
+      "generation": 0,
+      "label": "H2",
+      "physical_stop_inferred": false,
+      "reason": "PLANNER_PENDING",
+      "sample_count": 2,
+      "sampled_span_s": 0.181247559,
+      "tick_id": 1674,
+      "time_ns": 4223871909262,
+      "x_m": 2.15410424062602,
+      "y_m": 1.4259670093231926
+    },
+    {
+      "capture_elapsed_s": 39.817455826,
+      "end_reason": "NO_PROGRESS_EXHAUSTED_HOLD",
+      "end_tick_id": 5238,
+      "frame_id": "R2B4_ODOM_LOCAL",
+      "generation": 0,
+      "label": "H3",
+      "physical_stop_inferred": false,
+      "reason": "PLANNER_EXECUTION_HOLD",
+      "sample_count": 418,
+      "sampled_span_s": 83.400667652,
+      "tick_id": 1783,
+      "time_ns": 4226470395497,
+      "x_m": 1.990674889930258,
+      "y_m": 1.7070087065726751
+    }
+  ],
+  "sampled_tracking": {
+    "angular_rmse_rad_s": 0.11747157747578711,
+    "causal_status": "OBSERVED_RELATIONSHIP_ONLY",
+    "linear_rmse_mps": 0.04720635199965412,
+    "valid_pairs": 622
+  },
+  "schema": "R2B4_ROOM_CRUISE_OFFLINE_VALIDATION_V1",
+  "skill_requested_duration_s": 120,
+  "source": {
+    "hash_scope": "snapshot_prefix",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20261105_202225_10912_capture.mcap",
+    "sha256": "31001fbd68a268461ea7f2f4bcfed3fc03b31c7107ec73603c5d6f79937d3869",
+    "snapshot_size": 30907939
+  },
+  "termination_class": "SHUTDOWN_SAFE_LOW"
+}

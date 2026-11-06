@@ -1,0 +1,368 @@
+# Publikus robotrendszer
+
+A rendszer működési authorityja a `R2B4_SYSTEM_BEHAVIOR_CONTRACT.md`.
+Ez a dokumentum a megvalósított felszínt és annak bizonyítási határát írja le.
+
+## Tulajdonosok és adatút
+
+```text
+Human / CLI / Voice / autonomous event
+          │
+       HRI gate ── STOP ──► canonical STOP + upper revocation
+          │
+          ▼
+ PublicRobotRuntime: BrainCore + PublicWorldModel + BehaviorSystem
+          │             │
+     Agent proposal ◄── Brain goal owner
+          │             │
+          └─────► Brain admission / subtask lifecycle
+                        │
+                 RobotInterface ──────► kamera/vision owner
+          │
+          └──────────► OperatorController
+                              │
+                         CommandGateway
+                              │
+                           L0–L12
+```
+
+`v3.robot_interface.RobotInterface` a canonical host felszín. A normál
+production kompozíció ugyanahhoz a projektazonosítóhoz tartozó host ownerhez
+kapcsolja a külön CLI/voice/agent processzeket. A host owner első publikus
+world/behavior/Brain kérésre indul; ettől sem V3, sem kamera, sem motor nem indul.
+V3 nem importálja a felső owner implementációját. A régi `v3.command.explore`
+és `v3.command.follow_person` külső nevek a canonical host behaviorhoz vezetnek.
+A behavior által injektált RobotInterface a meglévő V3 execution primitive-et
+hívja, így nem jön létre rekurzív behavior-indítás.
+
+L4 továbbra is a friss operational local world és tracked entity-k ownere.
+L6 birtokolja a lokális navigationt, coverage/progress, recovery és feasibility
+döntéseket. Room Cruise hostoldali
+életciklusa és kért profilja ezen felül él; a lokális EXPLORE algoritmus
+megmarad. Follow Person ugyanezt az életciklust használja, az aktuális fizikai
+személytrack kezelése pedig V3 feladat. A szemantikus SearchPerson a publikus
+világmodellből választ következő területet, és a publikus navigációt használja.
+
+## API
+
+| Művelet | Jelentés |
+| --- | --- |
+| `capabilities()` | Statikus descriptor + aktuális availability/readiness/owner |
+| `read("robot.state")` | Közös temporal world, active behavior, mission és felső health |
+| `read("world.snapshot")` | Immutable szemantikai facts, confidence, kor, freshness, lineage |
+| `read("world.history")` | Bounded observation history; loss/eviction a snapshotban explicit |
+| `query(WorldQuery(...))` / Agent `world.query` | Exact, bounded facts/episodes lekérdezés freshness- és scope-minősítéssel |
+| `read("behavior.state")` | Canonical lifecycle, deadline, command/mission identity, reason |
+| `read("behavior.history")` | Intentek, állapotváltások, preemption, eredmény |
+| `read("brain.state")` | R2B4 identity/RUNTIME role, egy primary goal, pending és background goalok |
+| `read("brain.history")` | Bounded Brain-döntések, részfeladat-, behavior- és command lineage |
+| `execute("brain.submit", text=..., source=...)` | PENDING input HUMAN/AUTONOMOUS/SAFETY prioritással; még nincs fizikai preemption |
+| `execute("brain.adopt", goal_id=..., plan=...)` | Constraint/capability-validáció, priority/preemption és bounded terv indítása |
+| `execute("brain.fail", goal_id=..., reason=..., pending_only=True)` | Lezáratlan értelmezési input lezárása; ANSWERED válasz, egyéb ok failure |
+| `execute("brain.cancel", reason=...)` | Goal és felső intent visszavonása, canonical STOP |
+| `read("v3.status")` | Friss, élő V3 execution státusz; nem public world authority |
+| `execute("world.observe", ...)` | Explicit semantic observation, saját measurement/source/lineage |
+| `execute("person.teach", name=..., request_id=..., target_track_id=...)` | Emberi névtanítás friss, egyértelmű trackhez; a név tartós, a binding lejár |
+| `execute("spatial.load_atlas", path=...)` | Explicit, hash-ellenőrzött történeti térképreferencia betöltése; nincs aktuális alignment |
+| `execute("spatial.teach_place", entity_id=..., name=..., map_id=..., viewpoint_id=..., request_id=...)` | Emberi helynév és atlasz-viewpoint referenciájának tartós tanítása |
+| `execute("behavior.room_cruise", ...)` | Bounded host Room Cruise |
+| `execute("behavior.follow_person", ...)` | Bounded host Follow Person |
+| `execute("behavior.search_person", ...)` | Névhez/entitáshoz kötött, világmodellből dolgozó keresés |
+| `execute("behavior.search_any_person", ...)` | Friss anonim személytrack keresése, korrelált target eredménnyel |
+| `execute("behavior.start", name=..., ...)` | Telepített, regisztrált normál Python behavior indítása |
+| `execute("behavior.cancel", reason=...)` | Explicit cancellation és canonical STOP |
+| `execute("vision.observe", stream="lores")` | Kalibrált JPEG és eredeti producer metadata, V3 nélkül |
+| `stop()` | Felső revocation + prioritásos canonical STOP; késő start nem éledhet újra |
+
+Az új CLI felszín ugyanazt az API-t használja:
+
+```bash
+./r read robot.state --json
+./r read world.snapshot --json
+./r read behavior.state --json
+./r caps --json
+```
+
+Példa robotműveletet kérő használatra, kizárólag operátori mozgásengedéllyel:
+
+```bash
+./r execute behavior.room_cruise --parameters '{"max_duration_s":30}' --json
+./r execute behavior.search_person --parameters '{"entity_id":"Laci","candidate_places":["nappali","konyha"]}' --json
+./r x
+```
+
+Normál HRI-turn a Brainnél PENDING inputot hoz létre, majd az Agent publikus
+state/vision adatból action vagy bounded terv javaslatot ad. A HRI ezt a
+`brain.adopt` capabilitynek adja vissza; a Brain birtokolja a célt és Agent
+periodikus hívása nélkül lépteti a részfeladatokat. Tisztán beszélgetési turn
+nem preemptál aktív fizikai goalt. ER2 explicit triggerrel engedélyezett,
+`tools=false` reasoning specialist; normál canonical feladat nem igényli.
+Source/config/evidence fejlesztőtool csak explicit
+`python -m r2b4_voice.conversation_cli --developer-mode --text ...` módban érhető
+el. A runtime turn és a provider nem változtathatja meg ezt a módot.
+Keréksebesség-parancs nem Voice/Agent capability; az operátori CLI meglévő
+kinematikai diagnosztikája továbbra is a canonical command úton működik.
+
+A Brain a névhez kötött helycélt közvetlenül a közös memóriából oldja fel.
+A tervlépés például:
+
+```json
+{"steps":[{"action":"v3.command.navigate","target_entity_id":"konyha","parameters":{"max_v_mps":0.2}}]}
+```
+
+A `target_entity_id` kizárólag navigate tervlépésen használható, külön
+`x_m`, `y_m` vagy `frame_id` nélkül. A Brain minden ilyen részfeladat dispatchja
+előtt aktuális `room_topology/location` factet kér a futó V3 runtime scope-jában.
+A frissesség, confidence, source/lineage és frame/session kötés megmarad a
+goal `world_target` mezőjében; a canonical navigate admission ugyanabban a
+runtime- és capture-sessionben ellenőrzi a fizikai kérést. A publikus target
+evidence csak a typed locationt és eredeti provenance-t tartalmazza; a nagy
+helyleírás a world factben marad. Túl nagy lineage explicit failure, nem
+csendes truncation. Hiányzó vagy
+minősítetlen helyadat explicit failure. Leállított V3-hoz tartozó régi
+koordináta nem indít új runtime-ot vagy automatikus relokalizációt.
+
+Az Agent `world.query` toolja ugyanezen memória exact, legfeljebb 64 factből
+vagy observation episode-ból álló eredményét olvassa. A `require_current` és
+`scope` mező minősíti az aktuális használhatóságot; a history gap és truncation
+explicit marad. A lekérdezés nem indít V3-at és nem hajt végre fizikai feladatot.
+
+## Idő, bizonytalanság és memória
+
+A `PublicWorldModel.observe` érték mellett domaint, measurement/observation
+monotonic időt, confidence-et, source-t, lineage-et, opcionális producer
+sequence/revisiont és clock epochot rögzít. A publikus age a measurementtől
+számított kor. A domain policy választ KNOWN/LIKELY/STALE/UNKNOWN/CONFLICTING
+állapotot; a snapshot olvasása nem frissít adatot. Régebbi, duplikált vagy
+producer-sorrendben visszalépő observation nem írja felül az újabbat.
+
+A host status freshness-budgetje `HOST_STATUS_MAX_AGE_NS` (jelenleg 500 ms).
+A `monotonic_ns` az eredeti completed tick referenciaideje; az olvasás után
+mért host idővel a megengedett kor `[0, budget)`. A passzív status transport
+a legújabb várakozó snapshotot tartja, így lassú fájlpublikálás nem képez
+régi állapotok FIFO-backlogját. Poll/publication nem újít timestampet, és
+valódi stale/future status továbbra sem execution evidence.
+
+V3 statusból csak completed, compact estimate/mission/health és fizikai
+person observation kerül ide. A pose ideje L3 estimate referenciaidőként
+jelölt. PREDICTED/DEGRADED track nem válik új physical person observationné;
+measurement timestamp és runtime/frame lineage megmarad. Az anonim track
+entitása runtime-sessionhöz kötött; ember neve nem következik a track ID-ből.
+
+A friss person detector eredmény DEGRADED camera projection mellett is
+elérhető capability. A sample megőrzi a geometry state/reasont és minőséget;
+a Follow továbbra is L4-ben minősített bearing + friss LiDAR-range alapú
+usable tracket kér. INVALID projection, stale detectoreredmény és detectorhiba
+blokkolja a vision-függő mozgást.
+
+Facts és history külön count- és összesített JSON-byte budgetet kapnak.
+Snapshot/event értékek mélyen immutable-ek; raw kép, scan vagy tetszőleges
+Python objektum nem world fact. Az eviction és history loss explicit.
+
+A host owner saját helyi állományai: `runtime/public_world/state.json` és
+`events.ndjson`. A state bounded, atomikusan frissített snapshot/history.
+Más boot epochból visszatöltött tény STALE/CLOCK_MISMATCH marad az eredeti
+idővel; frissességet csak új megfigyelés adhat. Sérült storage esetén az owner
+DEGRADED healthöt közöl; a V3 helyi action és STOP függetlenül működik.
+Meglévő capture/log/diagnosztikai állományokat ez az út nem dolgoz fel és nem
+módosít. Evidence fájlba írás a host observation oldalon történik; STOP nem
+vár ilyen fájlírásra. A behavior world-input snapshotjai és intentjei
+revision/epoch alapján összekapcsolhatók.
+
+Brain döntés és downstream behavior/command esemény az ObservationHubon
+passzívan látható. Goal/subtask/decision/behavior/command/mission identity
+kapcsolja össze a lineage-et. Az observation sink, capture, MCAP és helyi
+evidence-írás rendelkezésre állása nem előfeltétele Brain adoptionnek,
+lifecycle-léptetésnek vagy STOP-nak. Raw kép és sensor payload nem kerül a
+Brain döntési eventjébe vagy a V3 control interpreterbe.
+
+A terminális Brain-goalok `goal:<goal_id>/outcome` factként a `task_outcome`
+domainbe kerülnek, eredeti outcome-idővel, decision/subtask/command/mission
+lineage-dzsel. A projection közvetlenül a bounded Brain historyt olvassa;
+ObservationHub- vagy journal-hiba nem teheti a command acceptance-et sikeres
+goal-eredménnyé. Projection-hiba vagy feldolgozás előtti history loss explicit
+DEGRADED diagnosztika, és nem akadályozza a független lokális executiont vagy
+STOP-ot. Az outcome enduring tudás; a bounded world fact/history budgetje
+és az epoch-szabályai erre is érvényesek.
+Restore nem új observation: a korábbi terminális outcome ideje, forrása és
+epochja megmarad. Egy korábban futó goal restart miatti INTERRUPTED állapota
+új megszakítási evidence; korábbi fizikai siker nem állítható elő újra.
+
+## Behavior és STOP
+
+A Brain egyszerre egy primary fizikai goalt birtokol. Normál prioritás
+SAFETY > HUMAN > AUTONOMOUS; háttér/maintenance metadata nem kap önálló
+fizikai dispatch authorityt. Egy terv legfeljebb 16 részfeladatból áll,
+retry legfeljebb 2; safety/stale/crash/identity failure nem retryolható
+automatikusan. Explicit időtartam nem rövidülhet csendben caller watchdogra.
+Időzített Room Cruise/Follow csak a kért időtartam bizonyított elérésével
+complete; általános hard deadline exhaustion failure marad.
+
+A relatív finite motion alap completion-toleranciája a futó navigációs
+config és a nem nulla kért távolság/szög 10%-a közül a szigorúbb; relatív
+transzlációnál további 2 cm-es felső korlát érvényes. A transzlációs
+`move_relative` az induló friss `GOOD` globális és heading minőségű pose-hoz rögzített map-frame
+NAVIGATE célt képez, és ugyanabban a korrigált frame-ben ellenőrzi az érkezést.
+Globális fix nélkül vár vagy megszakad, nem vált encoder-alapú lokális célra.
+A `turn_by` és a nulla transzlációs relatív yaw cél lokális marad. Az effektív
+`goal_tolerance_m` és `yaw_tolerance_rad` a canonical NAVIGATE mission
+constraintjeibe kerül, és a finite result megőrzi őket. A host a friss,
+azonos mission/frame/runtime provenance-ű final pose residualját is ellenőrzi:
+a `COMPLETE` jelzés tolerancián kívül nem siker. Transzlációs relatív kérésnél
+az indulási fix ismétlése nem érkezési evidence; új elfogadott globális mérés
+kell. A végső STOP után bounded, csak olvasó ellenőrzés vár egy completion
+tick utáni elfogadott fixet és az estimator policy szerinti álló állapotot.
+A STOP utáni végpont tolerancián kívül vagy bizonyíték nélkül `INTERRUPTED`,
+automatikus korrekciós mozgás nélkül. Az abszolút navigáció
+megtartja a futó config alap policyját. A 2 cm a becsült pose residualjának
+korlátja, fizikai pontosságát független méréssel kell igazolni.
+
+Az initial dispatch, a Behavior léptetése, a bounded retry és minden következő
+részfeladat ugyanazon egyetlen host Brain dispatcher szálon fut. A runtime poll
+csak coalesced előrelépést kér, így a véges fizikai actionre várás nem állítja
+meg a world projectiont, persistence-et és evidence-drain-t. Régebbi, azonos
+prioritású Agent proposal nem preemptálhat újabb adoptált goalt, annak
+befejeződése után sem. A publikus legacy operator CLI is RobotInterface-kliens;
+a canonical STOP a route journal fájlműveletei előtt elindul.
+
+`BehaviorSystem` egy aktív programot kezel. A program publikus robot/world
+interfészt kap, normál `start` és bounded `step` metódussal. Nincs DSL, behavior
+tree, event bus, új numbered layer vagy párhuzamos motorvezérlés. A véges
+idő/step budget, az ingress owner/watchdog és a canonical safety együtt
+határolja a végrehajtást. Regisztrált program hozzáadása host source- és
+tesztváltoztatás, nem V3-változtatás. Python programok megbízható, fejlesztői
+telepítések; a rendszer nem futtat runtime LLM által tetszőlegesen beküldött
+forráskódot és nem állít sandbox-garanciát tetszőleges Python importokra.
+
+Új motion kérés explicit preemptiont végez. STARTING és korábban sorba állt
+indítás is visszavonható; a generation ellenőrzés és a lezáró canonical STOP
+meggátolja a késő visszatérésből származó újraaktiválást. A physical STOP a
+host drain-várás előtt megkapja prioritását. World/capability olvasás nem
+előfeltétel. Host transport hiba esetén a saját, ellenőrzött owner leállítható;
+az autonóm command producer ezt a PID-t és saját időbudgetjét figyeli.
+
+Brain/runtime restart után a world memory visszatölthető, a korábbi aktív
+goal INTERRUPTED lesz; fizikai terv nem folytatódik automatikusan. A
+runtime owner/process és command watchdog elvesztése a canonical fail-safe
+útra vezet. A pending HRI értelmezések cancel/timeout/close esetén lezáródnak;
+késő model proposal nem adhat új fizikai authorityt.
+
+## Tartós tudás és tanulási evidence
+
+A Public World ugyanazon fact/query API mögött külön bounded keretet tart a
+gyors állapotnak, a tanított tudásnak és a feladattapasztalatnak. A snapshot és
+query `retention` mezője mutatja a kapacitást, evictiont és visszautasítást.
+Tanításkor `durability=SAVED` sikeres atomi, fsyncelt mentést jelent;
+`MEMORY_ONLY` mellett az elfogadott memóriafrissítés nem ígér crash-tartósságot.
+A fájlmentés nem tartja a STOP-hoz szükséges intent-lockot.
+Az egyetlen explicit személytanítás aktív fizikai cél mellett is elfogadható:
+megőrzi a primary goal/behavior/command identityt. A második párhuzamos
+tanítás BUSY eredményt kap. STOP, fizikai preemption vagy goal failure
+visszavonja a függő tanítás completionjét; késői storage-result passzív evidence.
+A HRI a primary és a tanítás eredményét az eredeti requesthez korrelálja.
+
+Az admission a legacy `steps` tervet is TaskGraph-fá alakítja. A
+`SUBTASK_COMPLETED` / `SUBTASK_FAILED` Brain-esemény a részfeladatot és az
+eredeti command/mission/behavior identityt az előrelépés előtt őrzi meg.
+A method/version, planning world revision és learning snapshot identity a
+graph része. Az experience összesítés a Brain saját eredményét fogyasztja,
+nem a capture/journal consumer visszajelzését. Kvalifikálatlan név szerinti
+találat, camera/identity-unavailability, NO_PATH, safety STOP és megszakítás
+nem negatív személy–hely minta. A tanult helyprior csak elegendő minősített
+mintával változtatja az implicit keresési sorrendet; explicit caller sorrend
+változatlan. A deduplication a látható bounded ledger/cursor horizontján belül
+érvényes. Sérült vagy eltérő methodverziójú összesítés alappriorra vált.
+
+Az observer/capture út a host journal új eseményeit a
+`v3.public_runtime_event` source topic alatt őrzi. Direct és process capture
+ugyanazt a payloadot viszi; EVI compilation megőrzi és indexeli a teljes
+eredeti értéket. A compilation sikeressége különbözik a capture integritytől
+és a robotfeladat sikerétől. Az 1/5/10 Hz compact capture nem exact replay.
+Új felvételnél az alapértelmezés folyamatos `full`, 5 Hz; az explicit `c alap`
+rövid triggerablakot őriz meg. A production capture sidecar 1 Hz-enként
+`v3.host_telemetry` eseményként rögzíti a CPU-frekvenciát, CPU-terhelést,
+loadot, memóriát, hőmérsékletet és saját processzének erőforrásadatait.
+A hiányzó kerneladat explicit unavailable, nem nulla terhelés. A host I/O
+nem fut a control interpreterben; az események, kommunikáció és felsőrétegű
+állapotváltások meglévő journal-útja független az 5 Hz-es tickmintavételtől.
+A public-runtime journalból a session indulása utáni események kerülnek be;
+egy korábban elindult, azóta változatlan Brain/skill működéshez nincs új
+capture-time kognitív checkpoint. A HRI út külön bounded, boot-azonos
+60 másodperces előzményt követ. Teljes munkamenethez a felvételt a feladat
+indítása előtt kell megnyitni; az új runtime `full` alapmódja ezt segíti.
+Fejlesztői ellenőrzés meglévő, explicit kiválasztott artifacttal:
+
+```bash
+./r read brain.history --json
+./r read world.snapshot --json
+./r evi CAPTURE.mcap --output /tmp/EGYEDI_EVIDENCE
+./r evi verify /tmp/EGYEDI_EVIDENCE --source CAPTURE.mcap
+./r evi query /tmp/EGYEDI_EVIDENCE --topic /r2b4/event --field '/payload/value/task_graph/method_id'
+```
+
+Az atlasz-import csak történeti geometriát és bounded viewpoint indexet tart;
+a teljes occupancy/NPZ külön asset marad. A régi artifact forrás-gauge hiányát
+explicit jelzi. Emberi helytanításból név–viewpoint kapcsolat készül, aktuális
+navigációs koordináta nem. A jelenidejű atlasz-alignment külön capability.
+Az ismételt helytanítás a megőrzött fact/history horizontján belül nem
+frissíti a measurementet és nem írja felül az újabb tanítást; eltérő
+entity vagy tartalom ugyanazzal a request ID-val konfliktus.
+
+## Személykeresés és bizonyítási határ
+
+SearchPerson a `room_topology` domainben publikált, ismert helyek `location`
+factjeit használja (`frame_id`, `x_m`, `y_m`). Régi `person_position/location`
+fact `place_id` vagy koordináta alapján csak sorrendi preferenciát adhat.
+Matching mission completion után a program vision observationt kér, majd
+bounded ideig vár friss semantic identity evidence-re és szükség esetén a
+következő területet választja. Minden mozgást a V3 realizál és helyi akadály
+esetén megtagadhat.
+
+A jelenlegi V3 frame-ek runtime-sessionhöz kötöttek. Navigálható helyhez
+`location.value.runtime_pid` is szükséges; ezt a publikus navigate admission
+az operator transition alatt ellenőrzi. A keresés örökli az aktív capture
+módot/frekvenciát és `capture=False` értéket használ, ezért nem re-armolhat
+capture-t és nem indíthat új frame epochot a kiválasztott koordináta után.
+Leállított V3 vagy régi sessionből származó helyadat esetén a keresés fail
+closed; tartós térkép és új frame közötti szemantikai relokalizáció nincs
+hozzáadva. Aktív FULL capture tovább rögzít; ALAP per-move capture trigger
+helyett a keresés host decision evidence-je áll rendelkezésre.
+
+A „megtaláltam” eredményhez a kért entitás friss, megfelelő confidence-ű,
+source/lineage-dzsel rendelkező `person_position/location` observationje kell.
+Kamerakép és név nélküli detector-track nem személyazonosítás. A detector nem
+tanulja meg automatikusan Laci arcát. A `person.teach` canonical host művelet
+explicit emberi tanítással hoz létre stabil személyt és aktuális név–track
+kapcsolatot. Kötelező az eredeti track measurement, a runtime/frame és
+localization generation, valamint a kamera-owner PID/generation és annak
+kezdési ideje. Több látható személy esetén explicit `target_track_id` kell;
+a beszélő személyazonosságát a rendszer nem feltételezi. Trackvesztés,
+kamerageneration-váltás, lejárat vagy restore után a név megmarad, a fizikai
+követéshez új társítás kell. A `require_bound_track` keresési paraméter a friss
+információs találat mellett igazolt követési célt is követel; a Brain ezt
+search→follow tervben automatikusan megköveteli.
+Keresési exhaustion, camera hiba, stale status és invalid navigation explicit
+FAILED/STOP. SearchAnyPerson friss anonim személytrackből adhat target
+identityt; név szerinti azonosságot továbbra sem bizonyít. A Brain ezt a
+runtime/sessionhez kötött targetet adja a következő follow részfeladatnak;
+idegen track nem helyettesítheti csendben. A voice a Brain teljes goal
+eredményét passzív observerrel közli. Kamera-JPEG megszerzése observation
+evidence; önmagában nem bizonyít például egy lámpa állapotára vonatkozó
+szemantikai következtetést.
+
+A task introspection kizárja az `ANSWERED` beszélgetési goalokat az előző
+robotfeladat kiválasztásából; restore után az eredeti request időrendjét
+használja. Az általános „az embert” referenciát a search/follow typed actionök
+oldják fel, név/alias csak publikált identity alapján illeszthető. A korábbi
+search target binding és a következő follow failure külön eredmény marad.
+Bejárt geometriai területek közlése nem hoz létre szemantikai szobaneveket:
+ehhez továbbra is külön, source/lineage-dzsel rendelkező semantic observation
+producer szükséges.
+
+Szoftveres evidence: idő/clock/sequence/conflict/storage bounds, facade-egység,
+preemption/STOP race, runtime/developer határ és többterületes SearchPerson
+szimuláció. Kötelező validáció: kis `./r test` gate; közös boundary-változás
+miatt `./r test release` is. Új fejlesztőtesztek a feature packben maradnak,
+a permanent manifest budgetje változatlan. Valós szemantikai azonosítás,
+élő navigáció, felső host timing és hardveres elfogadás külön evidence-et
+igényel; ebből a változtatásból önmagában nem következnek.

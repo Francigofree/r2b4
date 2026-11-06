@@ -1,0 +1,37 @@
+{
+  "kind": "scenario_suite",
+  "scenarios": [
+    {
+      "kind": "differential_drive",
+      "environment_id": "nominal",
+      "seed": 7,
+      "duration_s": 8.0,
+      "goal": {"x_m": 0.4, "y_m": 0.0},
+      "plant": {"traction": 1.0, "response_tau_s": 0.08}
+    },
+    {
+      "kind": "differential_drive",
+      "environment_id": "reduced_traction",
+      "seed": 7,
+      "duration_s": 8.0,
+      "goal": {"x_m": 0.4, "y_m": 0.0},
+      "plant": {"traction": 0.8, "response_tau_s": 0.08}
+    },
+    {
+      "kind": "differential_drive",
+      "environment_id": "slower_wheel_response",
+      "seed": 7,
+      "duration_s": 8.0,
+      "goal": {"x_m": 0.4, "y_m": 0.0},
+      "plant": {"traction": 1.0, "response_tau_s": 0.2}
+    },
+    {
+      "kind": "differential_drive",
+      "environment_id": "right_wheel_asymmetry",
+      "seed": 7,
+      "duration_s": 8.0,
+      "goal": {"x_m": 0.4, "y_m": 0.0},
+      "plant": {"traction": 1.0, "response_tau_s": 0.08, "right_gain": 1.1}
+    }
+  ]
+}

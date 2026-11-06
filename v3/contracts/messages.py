@@ -1,0 +1,1175 @@
+"""Simple immutable contracts for the V3 layer boundaries."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, fields, replace
+from enum import Enum
+
+from .localization import LocalizationQuality, LocalizationRequirement, Pose2D
+
+from .base import (
+    ContractValidationError,
+    DataField,
+    TickContext,
+    require_data_fields,
+    require_finite,
+    require_nonnegative,
+    require_token,
+    require_unit_interval,
+)
+
+
+def _require_unique(values: tuple[object, ...], keys: tuple[object, ...], name: str) -> None:
+    if len(values) != len(keys) or len(set(keys)) != len(keys):
+        raise ContractValidationError(f"{name} must not contain duplicates")
+
+
+def _require_normalized(value: float, name: str) -> None:
+    require_finite(value, name)
+    if not -1.0 <= float(value) <= 1.0:
+        raise ContractValidationError(f"{name} must be in [-1, 1]")
+
+
+def _require_optional_token(value: str | None, name: str) -> None:
+    if value is not None:
+        require_token(value, name)
+
+
+class DeviceHealthState(str, Enum):
+    OK = "OK"
+    DEGRADED = "DEGRADED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+
+
+class RejectionReason(str, Enum):
+    DUPLICATE = "DUPLICATE"
+    INVALID = "INVALID"
+    OUT_OF_ORDER = "OUT_OF_ORDER"
+    STALE = "STALE"
+    TIME_ALIGNMENT_FAILED = "TIME_ALIGNMENT_FAILED"
+    UNTRUSTED = "UNTRUSTED"
+
+
+class CommandMode(str, Enum):
+    STOP = "STOP"
+    TELEOP = "TELEOP"
+    NAVIGATE = "NAVIGATE"
+    EXPLORE = "EXPLORE"
+    FACE_PERSON = "FACE_PERSON"
+    FOLLOW_PERSON = "FOLLOW_PERSON"
+    SERVICE = "SERVICE"
+
+
+class MissionLifecycle(str, Enum):
+    IDLE = "IDLE"
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
+
+
+class LifecycleState(str, Enum):
+    BOOTING = "BOOTING"
+    IDLE = "IDLE"
+    ACTIVE = "ACTIVE"
+    DEGRADED = "DEGRADED"
+    FAULT = "FAULT"
+    SHUTDOWN = "SHUTDOWN"
+
+
+class NavigationStatus(str, Enum):
+    IDLE = "IDLE"
+    ACTIVE = "ACTIVE"
+    PENDING = "PENDING"
+    COMPLETE = "COMPLETE"
+    NO_PATH = "NO_PATH"
+    INVALIDATED = "INVALIDATED"
+
+
+class MotionObjectiveKind(str, Enum):
+    STOP = "STOP"
+    TRACK_PLAN = "TRACK_PLAN"
+    TRACK_TRAJECTORY = "TRACK_TRAJECTORY"
+    VELOCITY = "VELOCITY"
+
+
+class ConstraintCode(str, Enum):
+    ACCELERATION_LIMIT = "ACCELERATION_LIMIT"
+    CURVATURE_LIMIT = "CURVATURE_LIMIT"
+    LOCAL_CLEARANCE = "LOCAL_CLEARANCE"
+    LOCALIZATION_DEGRADED = "LOCALIZATION_DEGRADED"
+    MISSION_LIMIT = "MISSION_LIMIT"
+    SPEED_LIMIT = "SPEED_LIMIT"
+
+
+class SafetyDecision(str, Enum):
+    ALLOW = "ALLOW"
+    STOP = "STOP"
+    FAULT = "FAULT"
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceHealth:
+    device_id: str
+    state: DeviceHealthState
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        require_token(self.device_id, "DeviceHealth.device_id")
+        _require_optional_token(self.reason, "DeviceHealth.reason")
+        if self.state is not DeviceHealthState.OK and self.reason is None:
+            raise ContractValidationError("non-OK DeviceHealth requires a reason")
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceSample:
+    device_id: str
+    kind: str
+    sequence: int
+    captured_monotonic_ns: int
+    values: tuple[DataField, ...]
+
+    def __post_init__(self) -> None:
+        require_token(self.device_id, "DeviceSample.device_id")
+        require_token(self.kind, "DeviceSample.kind")
+        require_nonnegative(self.sequence, "DeviceSample.sequence")
+        require_nonnegative(self.captured_monotonic_ns, "DeviceSample.captured_monotonic_ns")
+        require_data_fields(self.values, "DeviceSample.values")
+
+
+@dataclass(frozen=True, slots=True)
+class RawDeviceBatch:
+    context: TickContext
+    samples: tuple[DeviceSample, ...]
+    device_health: tuple[DeviceHealth, ...]
+
+    def __post_init__(self) -> None:
+        sample_keys = tuple((item.device_id, item.kind, item.sequence) for item in self.samples)
+        _require_unique(self.samples, sample_keys, "RawDeviceBatch.samples")
+        health_keys = tuple(item.device_id for item in self.device_health)
+        _require_unique(self.device_health, health_keys, "RawDeviceBatch.device_health")
+
+
+@dataclass(frozen=True, slots=True)
+class AcquisitionFrame:
+    context: TickContext
+    samples: tuple[DeviceSample, ...]
+    io_health: tuple[DeviceHealth, ...]
+
+    def __post_init__(self) -> None:
+        sample_keys = tuple((item.device_id, item.kind, item.sequence) for item in self.samples)
+        _require_unique(self.samples, sample_keys, "AcquisitionFrame.samples")
+        health_keys = tuple(item.device_id for item in self.io_health)
+        _require_unique(self.io_health, health_keys, "AcquisitionFrame.io_health")
+
+
+@dataclass(frozen=True, slots=True)
+class Observation:
+    kind: str
+    source_device_id: str
+    source_sequence: int
+    captured_monotonic_ns: int
+    values: tuple[DataField, ...]
+
+    def __post_init__(self) -> None:
+        require_token(self.kind, "Observation.kind")
+        require_token(self.source_device_id, "Observation.source_device_id")
+        require_nonnegative(self.source_sequence, "Observation.source_sequence")
+        require_nonnegative(self.captured_monotonic_ns, "Observation.captured_monotonic_ns")
+        require_data_fields(self.values, "Observation.values")
+
+
+@dataclass(frozen=True, slots=True)
+class RejectedObservation:
+    source_device_id: str
+    source_sequence: int
+    reason: RejectionReason
+    age_ns: int
+
+    def __post_init__(self) -> None:
+        require_token(self.source_device_id, "RejectedObservation.source_device_id")
+        require_nonnegative(self.source_sequence, "RejectedObservation.source_sequence")
+        require_nonnegative(self.age_ns, "RejectedObservation.age_ns")
+
+
+@dataclass(frozen=True, slots=True)
+class AdmittedFrame:
+    context: TickContext
+    accepted: tuple[Observation, ...]
+    rejected: tuple[RejectedObservation, ...]
+    degraded_sources: tuple[str, ...] = ()
+    device_health: tuple[DeviceHealth, ...] = ()
+
+    def __post_init__(self) -> None:
+        accepted_keys = tuple((item.source_device_id, item.kind, item.source_sequence) for item in self.accepted)
+        _require_unique(self.accepted, accepted_keys, "AdmittedFrame.accepted")
+        # L2 coalesces diagnostics by source/revision/reason. Independent
+        # capabilities can share a revision but have different ages/rejections.
+        rejected_keys = tuple(
+            (item.source_device_id, item.source_sequence, item.reason)
+            for item in self.rejected
+        )
+        _require_unique(self.rejected, rejected_keys, "AdmittedFrame.rejected")
+        if len(set(self.degraded_sources)) != len(self.degraded_sources):
+            raise ContractValidationError("AdmittedFrame.degraded_sources must be unique")
+        for source in self.degraded_sources:
+            require_token(source, "AdmittedFrame.degraded_sources")
+        health_keys = tuple(item.device_id for item in self.device_health)
+        _require_unique(self.device_health, health_keys, "AdmittedFrame.device_health")
+
+
+@dataclass(frozen=True, slots=True)
+class RobotEstimate:
+    context: TickContext
+    frame_id: str
+    x_m: float
+    y_m: float
+    yaw_rad: float
+    v_mps: float
+    omega_rad_s: float
+    covariance_5x5: tuple[float, ...]
+    local_pose: Pose2D | None = None
+    global_pose: Pose2D | None = None
+    map_to_odom: Pose2D | None = None
+    localization_quality: LocalizationQuality = LocalizationQuality()
+    transform_revision: int = 0
+    local_v_mps: float | None = None
+    local_omega_rad_s: float | None = None
+
+    def in_local_frame(self) -> RobotEstimate:
+        if self.local_pose is None or self.frame_id == self.local_pose.frame_id:
+            return self
+        pose = self.local_pose
+        covariance = list(self.covariance_5x5)
+        covariance[0] = covariance[6] = self.localization_quality.local_sigma_m**2
+        covariance[12] = self.localization_quality.yaw_sigma_rad**2
+        return replace(self, frame_id=pose.frame_id, x_m=pose.x_m, y_m=pose.y_m,
+                       yaw_rad=pose.yaw_rad, covariance_5x5=tuple(covariance),
+                       v_mps=self.v_mps if self.local_v_mps is None else self.local_v_mps,
+                       omega_rad_s=self.omega_rad_s if self.local_omega_rad_s is None else self.local_omega_rad_s)
+
+    def __post_init__(self) -> None:
+        require_token(self.frame_id, "RobotEstimate.frame_id")
+        if not isinstance(self.localization_quality, LocalizationQuality):
+            raise ContractValidationError("typed localization quality required")
+        poses = (self.local_pose, self.global_pose, self.map_to_odom)
+        if any(pose is not None for pose in poses):
+            if not all(isinstance(pose, Pose2D) for pose in poses):
+                raise ContractValidationError("dual-frame pose contract must be complete")
+            if self.local_pose.frame_id != "R2B4_ODOM_LOCAL" or self.global_pose.frame_id != self.map_to_odom.frame_id:
+                raise ContractValidationError("dual-frame pose frames disagree")
+        require_nonnegative(self.transform_revision, "transform_revision")
+        for value in (self.local_v_mps, self.local_omega_rad_s):
+            if value is not None:
+                require_finite(value, "local twist")
+        for name in ("x_m", "y_m", "yaw_rad", "v_mps", "omega_rad_s"):
+            require_finite(getattr(self, name), f"RobotEstimate.{name}")
+        if len(self.covariance_5x5) != 25:
+            raise ContractValidationError("RobotEstimate.covariance_5x5 must contain 25 values")
+        for index, value in enumerate(self.covariance_5x5):
+            require_finite(value, f"RobotEstimate.covariance_5x5[{index}]")
+        if any(self.covariance_5x5[index * 5 + index] < 0.0 for index in range(5)):
+            raise ContractValidationError("RobotEstimate covariance diagonal cannot be negative")
+
+
+class TrackEstimateStatus(str, Enum):
+    OBSERVED = "OBSERVED"
+    PREDICTED = "PREDICTED"
+    DEGRADED = "DEGRADED"
+
+
+@dataclass(frozen=True, slots=True)
+class ObstacleTrack:
+    track_id: str
+    x_m: float
+    y_m: float
+    radius_m: float
+    vx_mps: float
+    vy_mps: float
+    confidence: float
+    estimate_status: TrackEstimateStatus = TrackEstimateStatus.OBSERVED
+    measurement_monotonic_ns: int | None = None
+    prediction_valid_until_ns: int | None = None
+
+    def __post_init__(self) -> None:
+        require_token(self.track_id, "ObstacleTrack.track_id")
+        for name in ("x_m", "y_m", "radius_m", "vx_mps", "vy_mps"):
+            require_finite(getattr(self, name), f"ObstacleTrack.{name}")
+        if self.radius_m < 0.0:
+            raise ContractValidationError("ObstacleTrack.radius_m cannot be negative")
+        require_unit_interval(self.confidence, "ObstacleTrack.confidence")
+        if not isinstance(self.estimate_status, TrackEstimateStatus):
+            raise ContractValidationError("ObstacleTrack estimate_status must be typed")
+        if (self.measurement_monotonic_ns is None) != (self.prediction_valid_until_ns is None):
+            raise ContractValidationError("track measurement time and validity must be paired")
+        if self.measurement_monotonic_ns is not None:
+            require_nonnegative(self.measurement_monotonic_ns, "track measurement time")
+            require_nonnegative(self.prediction_valid_until_ns, "track prediction expiry")
+            if self.prediction_valid_until_ns < self.measurement_monotonic_ns:
+                raise ContractValidationError("track prediction expires before measurement")
+        elif self.estimate_status is not TrackEstimateStatus.OBSERVED:
+            raise ContractValidationError("predicted/degraded track requires measurement time")
+
+    def usable_at(self, monotonic_ns: int) -> bool:
+        return self.estimate_status is not TrackEstimateStatus.DEGRADED and (
+            self.measurement_monotonic_ns is None
+            or self.measurement_monotonic_ns <= monotonic_ns <= self.prediction_valid_until_ns
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CostmapCell:
+    grid_x: int
+    grid_y: int
+    observation_count: int
+
+    def __post_init__(self) -> None:
+        for name in ("grid_x", "grid_y"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ContractValidationError(f"CostmapCell.{name} must be an integer")
+        require_nonnegative(self.observation_count, "CostmapCell.observation_count")
+        if self.observation_count == 0:
+            raise ContractValidationError("CostmapCell observation_count must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class RollingLocalCostmap:
+    frame_id: str
+    revision: int
+    resolution_m: float
+    radius_m: float
+    occupied_cells: tuple[CostmapCell, ...]
+    source_sequence: int
+    freshness_ns: int
+
+    def __post_init__(self) -> None:
+        require_token(self.frame_id, "RollingLocalCostmap.frame_id")
+        require_nonnegative(self.revision, "RollingLocalCostmap.revision")
+        for name in ("resolution_m", "radius_m"):
+            value = getattr(self, name)
+            require_finite(value, f"RollingLocalCostmap.{name}")
+            if value <= 0.0:
+                raise ContractValidationError(f"RollingLocalCostmap.{name} must be positive")
+        if not isinstance(self.occupied_cells, tuple) or any(
+            not isinstance(item, CostmapCell) for item in self.occupied_cells
+        ):
+            raise ContractValidationError("RollingLocalCostmap.occupied_cells must be an immutable tuple of CostmapCell")
+        cell_keys = tuple((item.grid_x, item.grid_y) for item in self.occupied_cells)
+        _require_unique(self.occupied_cells, cell_keys, "RollingLocalCostmap.occupied_cells")
+        require_nonnegative(self.source_sequence, "RollingLocalCostmap.source_sequence")
+        require_nonnegative(self.freshness_ns, "RollingLocalCostmap.freshness_ns")
+
+    def with_freshness_ns(self, freshness_ns: int) -> RollingLocalCostmap:
+        """Refresh scalar age without revalidating unchanged immutable geometry."""
+        require_nonnegative(freshness_ns, "RollingLocalCostmap.freshness_ns")
+        if freshness_ns == self.freshness_ns:
+            return self
+        # All other fields were validated by construction and cannot change.
+        result = object.__new__(RollingLocalCostmap)
+        for name in (
+            "frame_id", "revision", "resolution_m", "radius_m",
+            "occupied_cells", "source_sequence",
+        ):
+            object.__setattr__(result, name, getattr(self, name))
+        object.__setattr__(result, "freshness_ns", freshness_ns)
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class RobotRelativeGeometry:
+    """Fresh pose-independent LiDAR geometry lineage in the robot base frame.
+
+    The raw point cloud stays at the L2/L4 perception edge.  This compact token
+    only proves that current ROBOT_BASE geometry exists; it carries no map,
+    planning or final-safety authority.
+    """
+
+    frame_id: str
+    source_sequence: int
+    captured_monotonic_ns: int
+    point_count: int
+    freshness_ns: int
+
+    def __post_init__(self) -> None:
+        if self.frame_id != "ROBOT_BASE":
+            raise ContractValidationError(
+                "RobotRelativeGeometry must use the ROBOT_BASE frame"
+            )
+        require_nonnegative(self.source_sequence, "RobotRelativeGeometry.source_sequence")
+        require_nonnegative(
+            self.captured_monotonic_ns,
+            "RobotRelativeGeometry.captured_monotonic_ns",
+        )
+        if (
+            not isinstance(self.point_count, int)
+            or isinstance(self.point_count, bool)
+            or self.point_count < 0
+        ):
+            raise ContractValidationError(
+                "RobotRelativeGeometry.point_count must be a non-negative integer"
+            )
+        require_nonnegative(self.freshness_ns, "RobotRelativeGeometry.freshness_ns")
+
+    def with_freshness_ns(self, freshness_ns: int) -> RobotRelativeGeometry:
+        """Refresh age while reusing immutable scan lineage."""
+        require_nonnegative(freshness_ns, "RobotRelativeGeometry.freshness_ns")
+        if freshness_ns == self.freshness_ns:
+            return self
+        result = object.__new__(RobotRelativeGeometry)
+        for name in (
+            "frame_id",
+            "source_sequence",
+            "captured_monotonic_ns",
+            "point_count",
+        ):
+            object.__setattr__(result, name, getattr(self, name))
+        object.__setattr__(result, "freshness_ns", freshness_ns)
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class WorldSnapshot:
+    context: TickContext
+    frame_id: str
+    map_revision: int
+    obstacle_tracks: tuple[ObstacleTrack, ...]
+    freshness_ns: int
+    local_costmap: RollingLocalCostmap | None = None
+    global_visited_cells: tuple[tuple[int, int, int], ...] = ()
+    robot_relative_geometry: RobotRelativeGeometry | None = None
+    person_detection_state: DeviceHealthState | None = None
+
+    def __post_init__(self) -> None:
+        require_token(self.frame_id, "WorldSnapshot.frame_id")
+        require_nonnegative(self.map_revision, "WorldSnapshot.map_revision")
+        if self.person_detection_state is not None and not isinstance(
+            self.person_detection_state, DeviceHealthState
+        ):
+            raise ContractValidationError("WorldSnapshot.person_detection_state must be DeviceHealthState or None")
+        track_keys = tuple(item.track_id for item in self.obstacle_tracks)
+        _require_unique(self.obstacle_tracks, track_keys, "WorldSnapshot.obstacle_tracks")
+        require_nonnegative(self.freshness_ns, "WorldSnapshot.freshness_ns")
+        if self.local_costmap is not None:
+            if not isinstance(self.local_costmap, RollingLocalCostmap):
+                raise ContractValidationError(
+                    "WorldSnapshot.local_costmap must be RollingLocalCostmap or None"
+                )
+            if self.local_costmap.frame_id != self.frame_id:
+                raise ContractValidationError(
+                    "WorldSnapshot and local costmap must use the same frame"
+                )
+        if (
+            self.robot_relative_geometry is not None
+            and not isinstance(self.robot_relative_geometry, RobotRelativeGeometry)
+        ):
+            raise ContractValidationError(
+                "WorldSnapshot.robot_relative_geometry must be RobotRelativeGeometry or None"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class CommandRequest:
+    context: TickContext
+    command_id: str
+    mode: CommandMode
+    goal: tuple[DataField, ...]
+    expiry_tick: int
+
+    def __post_init__(self) -> None:
+        require_token(self.command_id, "CommandRequest.command_id")
+        require_data_fields(self.goal, "CommandRequest.goal")
+        require_nonnegative(self.expiry_tick, "CommandRequest.expiry_tick")
+        if self.expiry_tick < self.context.tick_id:
+            raise ContractValidationError("CommandRequest is already expired")
+
+
+@dataclass(frozen=True, slots=True)
+class Waypoint:
+    x_m: float
+    y_m: float
+    yaw_rad: float | None = None
+
+    def __post_init__(self) -> None:
+        require_finite(self.x_m, "Waypoint.x_m")
+        require_finite(self.y_m, "Waypoint.y_m")
+        if self.yaw_rad is not None:
+            require_finite(self.yaw_rad, "Waypoint.yaw_rad")
+
+
+@dataclass(frozen=True, slots=True)
+class VelocityTarget:
+    v_mps: float
+    omega_rad_s: float
+
+    def __post_init__(self) -> None:
+        require_finite(self.v_mps, "VelocityTarget.v_mps")
+        require_finite(self.omega_rad_s, "VelocityTarget.omega_rad_s")
+
+
+@dataclass(frozen=True, slots=True)
+class MissionConstraints:
+    max_v_mps: float
+    max_omega_rad_s: float
+    corridor_radius_m: float
+    goal_tolerance_m: float
+    yaw_tolerance_rad: float
+
+    def __post_init__(self) -> None:
+        for name in (
+            "max_v_mps",
+            "max_omega_rad_s",
+            "corridor_radius_m",
+            "goal_tolerance_m",
+            "yaw_tolerance_rad",
+        ):
+            value = getattr(self, name)
+            require_finite(value, f"MissionConstraints.{name}")
+            if value < 0.0:
+                raise ContractValidationError(f"MissionConstraints.{name} cannot be negative")
+        if self.max_v_mps == 0.0 or self.max_omega_rad_s == 0.0:
+            raise ContractValidationError("MissionConstraints motion limits must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorePreferences:
+    """Caller-owned EXPLORE goal preferences; no feasibility or motor authority.
+
+    All fields travel together as scalar command goal fields. An absent profile
+    preserves historical commands' captured NavigationConfig preferences.
+    """
+
+    local_goal_novelty_weight: float
+    local_goal_clearance_weight: float
+    local_goal_forward_weight: float
+    explore_local_goal_min_distance_m: float
+    explore_local_goal_max_distance_m: float
+    explore_local_goal_distance_weight: float
+
+    def __post_init__(self) -> None:
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ContractValidationError(f"ExplorePreferences.{field.name} must be numeric")
+            require_finite(value, f"ExplorePreferences.{field.name}")
+            if value < 0:
+                raise ContractValidationError(f"ExplorePreferences.{field.name} cannot be negative")
+        if not 0 < self.explore_local_goal_min_distance_m <= self.explore_local_goal_max_distance_m:
+            raise ContractValidationError("EXPLORE goal distances must satisfy 0 < min <= max")
+        weight_sum = (self.local_goal_novelty_weight + self.local_goal_clearance_weight
+                      + self.local_goal_forward_weight + self.explore_local_goal_distance_weight)
+        require_finite(weight_sum, "ExplorePreferences.weight_sum")
+        if weight_sum <= 0:
+            raise ContractValidationError("at least one EXPLORE local-goal weight must be positive")
+
+    @classmethod
+    def field_names(cls) -> frozenset[str]:
+        return frozenset(field.name for field in fields(cls))
+
+    @classmethod
+    def from_mapping(cls, values) -> ExplorePreferences:
+        if set(values) != cls.field_names():
+            raise ContractValidationError("EXPLORE preferences must contain every profile field")
+        return cls(**values)
+
+    def as_fields(self) -> tuple[DataField, ...]:
+        return tuple(DataField(field.name, getattr(self, field.name)) for field in fields(self))
+
+
+@dataclass(frozen=True, slots=True)
+class MissionIntent:
+    context: TickContext
+    mission_id: str
+    mode: CommandMode
+    target_pose: Waypoint | None
+    velocity_target: VelocityTarget | None
+    constraints: MissionConstraints
+    lifecycle: MissionLifecycle
+    stop_reason: str | None = None
+    target_frame_id: str = "R2B4_BOOT_ROBOT_MAP"
+    explore_preferences: ExplorePreferences | None = None
+    target_track_id: str | None = None
+
+    def __post_init__(self) -> None:
+        require_token(self.mission_id, "MissionIntent.mission_id")
+        if self.target_track_id is not None:
+            require_token(self.target_track_id, "MissionIntent.target_track_id")
+            if (self.mode is not CommandMode.FOLLOW_PERSON
+                    or not self.target_track_id.startswith("person-")
+                    or len(self.target_track_id) > 256):
+                raise ContractValidationError("only FOLLOW_PERSON may bind a bounded person track")
+        if self.explore_preferences is not None and (
+            self.mode is not CommandMode.EXPLORE
+            or not isinstance(self.explore_preferences, ExplorePreferences)
+        ):
+            raise ContractValidationError("only EXPLORE may carry typed exploration preferences")
+        if self.target_frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+            raise ContractValidationError("invalid mission target frame")
+        _require_optional_token(self.stop_reason, "MissionIntent.stop_reason")
+        if self.lifecycle is MissionLifecycle.ACTIVE:
+            if self.mode is CommandMode.NAVIGATE and (
+                self.target_pose is None or self.velocity_target is not None
+            ):
+                raise ContractValidationError("active NAVIGATE mission requires only target_pose")
+            if self.mode is CommandMode.TELEOP and (
+                self.velocity_target is None or self.target_pose is not None
+            ):
+                raise ContractValidationError("active TELEOP mission requires only velocity_target")
+            if self.mode in (
+                CommandMode.EXPLORE,
+                CommandMode.FACE_PERSON,
+                CommandMode.FOLLOW_PERSON,
+            ) and (
+                self.target_pose is not None or self.velocity_target is not None
+            ):
+                raise ContractValidationError(
+                    f"active {self.mode.value} mission cannot carry a fixed target"
+                )
+            if self.mode in (CommandMode.STOP, CommandMode.SERVICE):
+                raise ContractValidationError("STOP/SERVICE mission cannot be active")
+        if self.mode is CommandMode.STOP and self.stop_reason is None:
+            raise ContractValidationError("STOP MissionIntent requires a reason")
+        if self.stop_reason is not None and (
+            self.target_pose is not None or self.velocity_target is not None
+        ):
+            raise ContractValidationError("stopped MissionIntent cannot carry a motion target")
+
+
+@dataclass(frozen=True, slots=True)
+class TrajectoryPose:
+    x_m: float
+    y_m: float
+    yaw_rad: float
+    time_offset_ns: int
+
+    def __post_init__(self) -> None:
+        for name in ("x_m", "y_m", "yaw_rad"):
+            require_finite(getattr(self, name), f"TrajectoryPose.{name}")
+        require_nonnegative(self.time_offset_ns, "TrajectoryPose.time_offset_ns")
+
+
+@dataclass(frozen=True, slots=True)
+class NavigationRejectionWitness:
+    """Compact passive evidence of the first failed local geometric gate."""
+
+    candidate_id: str
+    reason: str
+    source_context: TickContext
+    geometry_revision: int
+    geometry_captured_ns: int
+    map_revision: int
+    time_offset_ns: int
+    x_m: float
+    y_m: float
+    yaw_rad: float
+    clearance_m: float
+    required_clearance_m: float
+    uncertainty_m: float
+
+    def __post_init__(self) -> None:
+        require_token(self.candidate_id, "candidate_id")
+        require_token(self.reason, "reason")
+        if not isinstance(self.source_context, TickContext):
+            raise ContractValidationError("rejection witness requires source context")
+        for name in ("geometry_revision", "geometry_captured_ns", "map_revision", "time_offset_ns"):
+            require_nonnegative(getattr(self, name), name)
+        if self.geometry_captured_ns > self.source_context.monotonic_ns:
+            raise ContractValidationError("rejection geometry cannot be from the future")
+        for name in ("x_m", "y_m", "yaw_rad", "clearance_m", "required_clearance_m", "uncertainty_m"):
+            require_finite(getattr(self, name), name)
+        if min(self.clearance_m, self.required_clearance_m, self.uncertainty_m) < 0:
+            raise ContractValidationError("rejection clearance and uncertainty cannot be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class TrajectoryEvaluation:
+    candidate_id: str
+    v_mps: float
+    omega_rad_s: float
+    horizon_ns: int
+    samples: tuple[TrajectoryPose, ...]
+    collision: bool
+    min_clearance_m: float
+    progress_score: float
+    smoothness_score: float
+    novelty_score: float
+    total_score: float
+    # L6 viability is orthogonal to weighted quality: goal distance/alignment
+    # for normal navigation; immediate clearance gain or bounded two-stage
+    # escape-unlock potential for recovery. Defaults allow decoding older
+    # captures/manual constructors without these fields.
+    progress_potential_score: float = 0.0
+    progress_viable: bool = True
+    rejection_witness: NavigationRejectionWitness | None = None
+
+    def __post_init__(self) -> None:
+        require_token(self.candidate_id, "TrajectoryEvaluation.candidate_id")
+        if self.rejection_witness is not None and not isinstance(self.rejection_witness, NavigationRejectionWitness):
+            raise ContractValidationError("trajectory rejection witness must be typed")
+        for name in (
+            "v_mps",
+            "omega_rad_s",
+            "min_clearance_m",
+            "progress_score",
+            "progress_potential_score",
+            "smoothness_score",
+            "novelty_score",
+            "total_score",
+        ):
+            require_finite(getattr(self, name), f"TrajectoryEvaluation.{name}")
+        require_nonnegative(self.horizon_ns, "TrajectoryEvaluation.horizon_ns")
+        if self.horizon_ns == 0 or not self.samples:
+            raise ContractValidationError("TrajectoryEvaluation requires a sampled horizon")
+        previous_offset_ns = 0
+        for sample in self.samples:
+            if (
+                sample.time_offset_ns <= previous_offset_ns
+                or sample.time_offset_ns > self.horizon_ns
+            ):
+                raise ContractValidationError(
+                    "TrajectoryEvaluation sample times must increase within the horizon"
+                )
+            previous_offset_ns = sample.time_offset_ns
+        if self.samples[-1].time_offset_ns != self.horizon_ns:
+            raise ContractValidationError(
+                "TrajectoryEvaluation final sample must close the horizon"
+            )
+        if type(self.collision) is not bool:
+            raise ContractValidationError("TrajectoryEvaluation.collision must be bool")
+        if self.min_clearance_m < 0.0:
+            raise ContractValidationError(
+                "TrajectoryEvaluation.min_clearance_m cannot be negative"
+            )
+        if not -1.0 <= self.progress_score <= 1.0:
+            raise ContractValidationError("progress_score must be in [-1, 1]")
+        if not -1.0 <= self.progress_potential_score <= 1.0:
+            raise ContractValidationError(
+                "progress_potential_score must be in [-1, 1]"
+            )
+        if type(self.progress_viable) is not bool:
+            raise ContractValidationError("progress_viable must be bool")
+        for name in ("smoothness_score", "novelty_score"):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ContractValidationError(f"{name} must be in [0, 1]")
+
+
+@dataclass(frozen=True, slots=True)
+class MotionValidity:
+    """Guidance lineage and inclusive monotonic expiry; recontexting cannot renew it."""
+
+    source_context: TickContext
+    valid_until_ns: int
+    frame_id: str
+    scope: str
+    localization_requirement: LocalizationRequirement = LocalizationRequirement()
+    geometry_revision: int | None = None
+    geometry_captured_ns: int | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_context, TickContext):
+            raise ContractValidationError("MotionValidity requires source context")
+        require_nonnegative(self.valid_until_ns, "MotionValidity.valid_until_ns")
+        require_token(self.frame_id, "MotionValidity.frame_id")
+        require_token(self.scope, "MotionValidity.scope")
+        if not isinstance(self.localization_requirement, LocalizationRequirement):
+            raise ContractValidationError("motion validity localization_requirement must be typed")
+        if self.valid_until_ns < self.source_context.monotonic_ns:
+            raise ContractValidationError("motion validity expires before source")
+        if (self.geometry_revision is None) != (self.geometry_captured_ns is None):
+            raise ContractValidationError("local guidance requires complete geometry lineage")
+        if self.geometry_revision is not None:
+            require_nonnegative(self.geometry_revision, "geometry_revision")
+            require_nonnegative(self.geometry_captured_ns, "geometry_captured_ns")
+            if self.geometry_captured_ns > self.source_context.monotonic_ns:
+                raise ContractValidationError("local guidance geometry cannot be from the future")
+
+    def usable_at(self, context: TickContext) -> bool:
+        return (self.source_context.tick_id <= context.tick_id
+                and self.source_context.monotonic_ns <= context.monotonic_ns <= self.valid_until_ns)
+
+
+@dataclass(frozen=True, slots=True)
+class LocalMotionProof:
+    """L6's current free-displacement or directional sweep bound, consumed by L9.
+
+    No obstacle payload or upstream control state crosses this forward edge.
+    Expiry governs admission; horizon bounds the next control-gap movement.
+    """
+
+    context: TickContext
+    frame_id: str
+    scope: str
+    geometry_revision: int
+    geometry_captured_ns: int
+    valid_until_ns: int
+    horizon_ns: int
+    max_displacement_m: float
+    # A compact velocity box proved for the whole next control gap. Unlike
+    # the free circle, it admits only the certified maneuver family.
+    maneuver_bounds: tuple[float, float, float, float] | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.context, TickContext):
+            raise ContractValidationError("local motion proof requires context")
+        require_token(self.frame_id, "proof.frame_id")
+        require_token(self.scope, "proof.scope")
+        for name in ("geometry_revision", "geometry_captured_ns", "valid_until_ns", "horizon_ns"):
+            require_nonnegative(getattr(self, name), "proof." + name)
+        require_finite(self.max_displacement_m, "proof.max_displacement_m")
+        if (self.horizon_ns <= 0 or self.max_displacement_m < 0
+                or self.geometry_captured_ns > self.context.monotonic_ns
+                or self.valid_until_ns < self.context.monotonic_ns):
+            raise ContractValidationError("invalid local motion proof bounds")
+        if self.maneuver_bounds is not None:
+            if not isinstance(self.maneuver_bounds, tuple) or len(self.maneuver_bounds) != 4:
+                raise ContractValidationError("maneuver bounds require v/omega intervals")
+            for value in self.maneuver_bounds:
+                require_finite(value, "proof.maneuver_bound")
+            low_v, high_v, low_omega, high_omega = self.maneuver_bounds
+            if not low_v <= 0.0 <= high_v or not low_omega <= 0.0 <= high_omega:
+                raise ContractValidationError("maneuver bounds must include zero")
+
+    def usable_at(self, context: TickContext, validity: MotionValidity | None) -> bool:
+        return (validity is not None and validity.usable_at(context)
+                and self.context == context
+                and self.frame_id == validity.frame_id and self.scope == validity.scope
+                and context.monotonic_ns <= self.valid_until_ns <= validity.valid_until_ns)
+
+    def covers(self, v_mps: float, omega_rad_s: float | None = None) -> bool:
+        if self.maneuver_bounds is not None:
+            if omega_rad_s is None:
+                return False
+            low_v, high_v, low_omega, high_omega = self.maneuver_bounds
+            return (low_v - 1e-12 <= v_mps <= high_v + 1e-12
+                    and low_omega - 1e-12 <= omega_rad_s <= high_omega + 1e-12)
+        # The certified robot circle permits every heading; only translation
+        # consumes its displacement radius. L9 still enforces angular caps.
+        return abs(v_mps) * self.horizon_ns / 1e9 <= self.max_displacement_m + 1e-12
+
+
+@dataclass(frozen=True, slots=True)
+class NavigationPlan:
+    context: TickContext
+    mission_id: str
+    route: tuple[Waypoint, ...]
+    velocity_target: VelocityTarget | None
+    constraints: MissionConstraints
+    corridor_radius_m: float
+    progress: float
+    status: NavigationStatus
+    reason: str | None = None
+    local_goal: Waypoint | None = None
+    trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
+    motion_validity: MotionValidity | None = None
+    geometry_proof: LocalMotionProof | None = None
+    goal_selection_reason: str | None = None
+    goal_selected_ns: int | None = None
+    rejection_witness: NavigationRejectionWitness | None = None
+
+    def __post_init__(self) -> None:
+        require_token(self.mission_id, "NavigationPlan.mission_id")
+        if self.rejection_witness is not None and not isinstance(self.rejection_witness, NavigationRejectionWitness):
+            raise ContractValidationError("plan rejection witness must be typed")
+        if self.geometry_proof is not None and not isinstance(self.geometry_proof, LocalMotionProof):
+            raise ContractValidationError("plan geometry proof must be typed")
+        _require_optional_token(self.goal_selection_reason, "goal_selection_reason")
+        if self.goal_selected_ns is not None:
+            require_nonnegative(self.goal_selected_ns, "goal_selected_ns")
+        if self.motion_validity is not None and not isinstance(self.motion_validity, MotionValidity):
+            raise ContractValidationError("NavigationPlan.motion_validity must be typed")
+        if self.status is NavigationStatus.PENDING and self.motion_validity is None:
+            raise ContractValidationError("pending plan requires current motion validity")
+        require_finite(self.corridor_radius_m, "NavigationPlan.corridor_radius_m")
+        if self.corridor_radius_m < 0.0:
+            raise ContractValidationError("NavigationPlan corridor radius cannot be negative")
+        require_unit_interval(self.progress, "NavigationPlan.progress")
+        _require_optional_token(self.reason, "NavigationPlan.reason")
+        if self.status is NavigationStatus.ACTIVE:
+            carrier_count = sum(
+                (
+                    bool(self.route),
+                    self.velocity_target is not None,
+                    bool(self.trajectory_candidates),
+                )
+            )
+            if carrier_count != 1:
+                raise ContractValidationError(
+                    "active NavigationPlan requires exactly one guidance carrier"
+                )
+        elif self.route or self.velocity_target is not None or self.trajectory_candidates:
+            raise ContractValidationError("inactive NavigationPlan cannot carry an active target")
+        if bool(self.trajectory_candidates) != (self.local_goal is not None):
+            raise ContractValidationError(
+                "trajectory candidates and local_goal must be present together"
+            )
+        candidate_keys = tuple(item.candidate_id for item in self.trajectory_candidates)
+        _require_unique(
+            self.trajectory_candidates,
+            candidate_keys,
+            "NavigationPlan.trajectory_candidates",
+        )
+        if self.status in (NavigationStatus.NO_PATH, NavigationStatus.INVALIDATED) and self.reason is None:
+            raise ContractValidationError("failed NavigationPlan requires a reason")
+
+
+@dataclass(frozen=True, slots=True)
+class MotionObjective:
+    context: TickContext
+    selected_source: str
+    kind: MotionObjectiveKind
+    priority: int
+    expiry_tick: int
+    selection_reason: str
+    target_waypoint: Waypoint | None
+    velocity_target: VelocityTarget | None
+    constraints: MissionConstraints
+    trajectory: TrajectoryEvaluation | None = None
+    validity: MotionValidity | None = None
+    transition_allowed: bool = False
+    geometry_proof: LocalMotionProof | None = None
+
+    def __post_init__(self) -> None:
+        require_token(self.selected_source, "MotionObjective.selected_source")
+        if self.geometry_proof is not None and not isinstance(self.geometry_proof, LocalMotionProof):
+            raise ContractValidationError("objective geometry proof must be typed")
+        if type(self.transition_allowed) is not bool:
+            raise ContractValidationError("objective transition_allowed must be bool")
+        if self.validity is not None and not isinstance(self.validity, MotionValidity):
+            raise ContractValidationError("MotionObjective.validity must be typed")
+        if not isinstance(self.priority, int) or isinstance(self.priority, bool):
+            raise ContractValidationError("MotionObjective.priority must be an integer")
+        require_nonnegative(self.expiry_tick, "MotionObjective.expiry_tick")
+        require_token(self.selection_reason, "MotionObjective.selection_reason")
+        if self.kind is MotionObjectiveKind.STOP:
+            if self.transition_allowed:
+                raise ContractValidationError("STOP objective cannot authorize a transition")
+            if (
+                self.target_waypoint is not None
+                or self.velocity_target is not None
+                or self.trajectory is not None
+            ):
+                raise ContractValidationError("STOP MotionObjective cannot carry a target")
+        elif self.kind is MotionObjectiveKind.TRACK_PLAN:
+            if (
+                self.target_waypoint is None
+                or self.velocity_target is not None
+                or self.trajectory is not None
+            ):
+                raise ContractValidationError("TRACK_PLAN requires only a target waypoint")
+        elif self.kind is MotionObjectiveKind.TRACK_TRAJECTORY:
+            if (
+                self.target_waypoint is not None
+                or self.velocity_target is not None
+                or self.trajectory is None
+            ):
+                raise ContractValidationError(
+                    "TRACK_TRAJECTORY requires only a trajectory"
+                )
+            if self.trajectory.collision:
+                raise ContractValidationError(
+                    "TRACK_TRAJECTORY cannot select a colliding trajectory"
+                )
+        elif (
+            self.target_waypoint is not None
+            or self.velocity_target is None
+            or self.trajectory is not None
+        ):
+            raise ContractValidationError("VELOCITY requires only a velocity target")
+
+
+@dataclass(frozen=True, slots=True)
+class MotionIntent:
+    context: TickContext
+    requested_v_mps: float
+    requested_omega_rad_s: float
+    horizon_ns: int
+    constraints: MissionConstraints
+    stop_reason: str | None = None
+    transition_allowed: bool = False
+    localization_requirement: LocalizationRequirement = LocalizationRequirement()
+    geometry_proof: LocalMotionProof | None = None
+    motion_validity: MotionValidity | None = None
+    approved_velocity: VelocityTarget | None = None
+    geometry_required: bool = False
+
+    def __post_init__(self) -> None:
+        require_finite(self.requested_v_mps, "MotionIntent.requested_v_mps")
+        if type(self.geometry_required) is not bool:
+            raise ContractValidationError("geometry_required must be bool")
+        for name, value, expected in (("geometry_proof", self.geometry_proof, LocalMotionProof),
+                                      ("motion_validity", self.motion_validity, MotionValidity),
+                                      ("approved_velocity", self.approved_velocity, VelocityTarget)):
+            if value is not None and not isinstance(value, expected):
+                raise ContractValidationError(name + " must be typed")
+        require_finite(self.requested_omega_rad_s, "MotionIntent.requested_omega_rad_s")
+        require_nonnegative(self.horizon_ns, "MotionIntent.horizon_ns")
+        _require_optional_token(self.stop_reason, "MotionIntent.stop_reason")
+        if type(self.transition_allowed) is not bool:
+            raise ContractValidationError("motion transition_allowed must be bool")
+        if not isinstance(self.localization_requirement, LocalizationRequirement):
+            raise ContractValidationError("motion localization_requirement must be typed")
+        if self.stop_reason is not None and self.transition_allowed:
+            raise ContractValidationError("stopped motion cannot authorize a transition")
+        if self.stop_reason is not None and (
+            self.requested_v_mps != 0.0 or self.requested_omega_rad_s != 0.0
+        ):
+            raise ContractValidationError("stopped MotionIntent must request zero motion")
+
+
+@dataclass(frozen=True, slots=True)
+class ConstrainedMotion:
+    context: TickContext
+    requested_v_mps: float
+    requested_omega_rad_s: float
+    allowed_v_mps: float
+    allowed_omega_rad_s: float
+    active_constraints: tuple[ConstraintCode, ...]
+    previous_velocity: VelocityTarget | None = None
+    previous_context: TickContext | None = None
+    velocity_transition_until_ns: int | None = None
+    motion_revoked: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.motion_revoked) is not bool or (self.motion_revoked and (
+                self.allowed_v_mps != 0.0 or self.allowed_omega_rad_s != 0.0)):
+            raise ContractValidationError("revoked motion must be zero")
+        if self.velocity_transition_until_ns is not None:
+            require_nonnegative(self.velocity_transition_until_ns, "velocity_transition_until_ns")
+            if self.velocity_transition_until_ns < self.context.monotonic_ns:
+                raise ContractValidationError("wheel transition already expired")
+        for name in (
+            "requested_v_mps",
+            "requested_omega_rad_s",
+            "allowed_v_mps",
+            "allowed_omega_rad_s",
+        ):
+            require_finite(getattr(self, name), f"ConstrainedMotion.{name}")
+        if len(set(self.active_constraints)) != len(self.active_constraints):
+            raise ContractValidationError("active_constraints must be unique")
+        if (self.previous_velocity is None) != (self.previous_context is None):
+            raise ContractValidationError("transition requires previous velocity and context")
+        if self.previous_context is not None:
+            if not isinstance(self.previous_velocity, VelocityTarget) or not isinstance(self.previous_context, TickContext):
+                raise ContractValidationError("transition origin must be typed")
+            if (self.previous_context.tick_id + 1 != self.context.tick_id
+                    or self.previous_context.monotonic_ns >= self.context.monotonic_ns
+                    or ConstraintCode.ACCELERATION_LIMIT not in self.active_constraints):
+                raise ContractValidationError("transition requires consecutive acceleration-limited motion")
+        for requested, allowed, name, previous in (
+            (self.requested_v_mps, self.allowed_v_mps, "linear",
+             None if self.previous_velocity is None else self.previous_velocity.v_mps),
+            (self.requested_omega_rad_s, self.allowed_omega_rad_s, "angular",
+             None if self.previous_velocity is None else self.previous_velocity.omega_rad_s),
+        ):
+            # A bounded transition can still be braking the previous command.
+            # It must retain its sign, never amplify it, and move toward the
+            # current target. Without this explicit origin the instantaneous
+            # non-amplification contract below remains unchanged.
+            if (previous is not None and previous * allowed > 0.0
+                    and abs(allowed) <= abs(previous)
+                    and abs(allowed - requested) < abs(previous - requested)):
+                continue
+            if requested == 0.0 and allowed != 0.0:
+                raise ContractValidationError(f"{name} constraint cannot create motion")
+            if requested != 0.0 and (
+                requested * allowed < 0.0 or abs(allowed) > abs(requested)
+            ):
+                raise ContractValidationError(f"{name} constraint cannot reverse or amplify motion")
+
+
+@dataclass(frozen=True, slots=True)
+class WheelVelocitySetpoint:
+    context: TickContext
+    left_mps: float
+    right_mps: float
+    velocity_transition_until_ns: int | None = None
+    motion_revoked: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.motion_revoked) is not bool or (self.motion_revoked and (
+                self.left_mps != 0.0 or self.right_mps != 0.0)):
+            raise ContractValidationError("revoked wheel motion must be zero")
+        require_finite(self.left_mps, "WheelVelocitySetpoint.left_mps")
+        require_finite(self.right_mps, "WheelVelocitySetpoint.right_mps")
+        if self.velocity_transition_until_ns is not None:
+            require_nonnegative(self.velocity_transition_until_ns, "velocity_transition_until_ns")
+            if self.velocity_transition_until_ns < self.context.monotonic_ns:
+                raise ContractValidationError("wheel transition already expired")
+
+
+@dataclass(frozen=True, slots=True)
+class ActuatorRequest:
+    context: TickContext
+    left_normalized: float
+    right_normalized: float
+    saturated: bool = False
+
+    def __post_init__(self) -> None:
+        _require_normalized(self.left_normalized, "ActuatorRequest.left_normalized")
+        _require_normalized(self.right_normalized, "ActuatorRequest.right_normalized")
+
+
+@dataclass(frozen=True, slots=True)
+class FinalActuation:
+    context: TickContext
+    left_output: float
+    right_output: float
+    enabled: bool
+    safety_decision: SafetyDecision
+    latch_state: str
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        _require_normalized(self.left_output, "FinalActuation.left_output")
+        _require_normalized(self.right_output, "FinalActuation.right_output")
+        require_token(self.latch_state, "FinalActuation.latch_state")
+        _require_optional_token(self.reason, "FinalActuation.reason")
+        if self.enabled != (self.safety_decision is SafetyDecision.ALLOW):
+            raise ContractValidationError("enabled must match the ALLOW safety decision")
+        if not self.enabled and (self.left_output != 0.0 or self.right_output != 0.0):
+            raise ContractValidationError("disabled FinalActuation must command zero output")
+        if not self.enabled and self.reason is None:
+            raise ContractValidationError("stopped FinalActuation requires a reason")
+
+
+__all__ = [
+    "AcquisitionFrame",
+    "ActuatorRequest",
+    "AdmittedFrame",
+    "CommandMode",
+    "CommandRequest",
+    "ConstrainedMotion",
+    "ConstraintCode",
+    "CostmapCell",
+    "DeviceHealth",
+    "DeviceHealthState",
+    "DeviceSample",
+    "FinalActuation",
+    "LifecycleState",
+    "MissionIntent",
+    "MissionConstraints",
+    "MissionLifecycle",
+    "MotionIntent",
+    "MotionObjective",
+    "MotionObjectiveKind",
+    "MotionValidity",
+    "TrackEstimateStatus",
+    "NavigationPlan",
+    "NavigationStatus",
+    "Observation",
+    "ObstacleTrack",
+    "RawDeviceBatch",
+    "RejectedObservation",
+    "RejectionReason",
+    "RobotEstimate",
+    "RollingLocalCostmap",
+    "SafetyDecision",
+    "TrajectoryEvaluation",
+    "NavigationRejectionWitness",
+    "TrajectoryPose",
+    "Waypoint",
+    "VelocityTarget",
+    "WheelVelocitySetpoint",
+    "WorldSnapshot",
+]

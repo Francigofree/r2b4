@@ -1,0 +1,17 @@
+[Unit]
+Description=R2B4 wake and conversation voice service
+Wants=network-online.target
+After=network-online.target sound.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/project_r2b4
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m r2b4_voice.voice_service
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target

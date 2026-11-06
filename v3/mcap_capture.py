@@ -1,0 +1,1705 @@
+"""ObservationHub -> MCAP capture consumer for R2B4 V3.
+
+Design goals:
+- passive consumer: never owns control, motor, lifecycle or safety authority;
+- RELIABLE ObservationSubscription integrity authority;
+- one-time canonical JSON encoding into bytes, then bytes-only buffering;
+- bounded pre-trigger RAM and streaming post-trigger writes;
+- MCAP-only output, indexed and CRC-protected, with atomic final rename;
+- Python stdlib only for MCAP writing (no pip, venv, ROS or Foxglove runtime);
+- source-first R2B4 payloads: current V3 encode_capture_record()/encode_value()
+  remain the data authority; MCAP is only the container.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import queue
+import resource
+import sys
+import threading
+import time
+from collections import deque
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Mapping
+
+from .capture_compaction import compact_checkpoint_row, compact_tick_row
+from .capture_rate import CONTROL_CAPTURE_HZ, validate_capture_hz
+from .capture_behavior import BehaviorCaptureRecord, encode_behavior_record, project_behavior_record
+from .capture_navigation import (
+    NAVIGATION_EVENT_TOPIC, NavigationDecisionEvent, encode_navigation_event,
+)
+from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
+from .hri_evidence import HRI_EVENT_TOPIC
+from .host_telemetry import HOST_TELEMETRY_TOPIC, HOST_TELEMETRY_SCHEMA
+from .public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
+from .navigation_map_capture import (
+    NAVIGATION_MAP_TOPIC, NAVIGATION_MAP_TRANSPORT_TOPIC, validate_navigation_map,
+)
+from .local_costmap_capture import LOCAL_COSTMAP_TOPIC, LOCAL_COSTMAP_SCHEMA, unpack_local_costmap
+from .capture_encoding import (
+    CaptureEncodingError,
+    encode_capture_record,
+    encode_raw_lidar_snapshot,
+    encode_value,
+)
+from .execution import (
+    CaptureRecord,
+    EdgeFaultRecord,
+    ExecutionRecord,
+    REPLAY_STATE_CHECKPOINT_INTERVAL_NS,
+    WriterFailureRecord,
+)
+from .mcap_writer import StdlibMcapWriter
+from .observation import (
+    DeliveryMode, ObservationClosed, ObservationFrame,
+    ObservationIntegrityError, ObservationSubscription,
+)
+
+CAPTURE_FORMAT_VERSION = "R2B4_MCAP_CAPTURE_V1"
+CLOCK_EPOCH = "linux_monotonic_boot"
+
+TICK_TOPIC = "/r2b4/tick"
+RAW_LIDAR_TOPIC = "/r2b4/raw_lidar"
+CHECKPOINT_TOPIC = "/r2b4/checkpoint"
+EVENT_TOPIC = "/r2b4/event"
+RUNTIME_TOPIC = "/r2b4/runtime"
+
+# R2B4_HRI_P0_V1
+
+TERMINAL_STATUSES = frozenset(("PASS", "FAIL", "FAULT"))
+_MAX_TICK_GAP_EXAMPLES = 64
+_SESSION_FINALIZATION_RESERVE_BYTES = 64 * 1024
+# Message, per-message index and worst-case one-message chunk/summary framing.
+_SESSION_MESSAGE_OVERHEAD_BYTES = 512
+
+
+class CaptureState(str, Enum):
+    ARMED = "ARMED"
+    TRIGGERED = "TRIGGERED"
+    FINALIZING = "FINALIZING"
+    FINISHED = "FINISHED"
+    INTEGRITY_FAILED = "INTEGRITY_FAILED"
+
+
+@dataclass(frozen=True, slots=True)
+class McapCaptureConfig:
+    """Hard bounds and writer settings for the passive capture consumer."""
+
+    pre_event_ns: int = 8_000_000_000
+    post_event_ns: int = 2_000_000_000
+    max_tick_count: int = 768
+    max_raw_lidar_scans: int = 128
+    max_byte_capacity: int = 64 * 1024 * 1024
+    max_raw_lidar_points_per_scan: int = 4_096
+    chunk_target_bytes: int = 1 * 1024 * 1024
+    checkpoint_context_ns: int = REPLAY_STATE_CHECKPOINT_INTERVAL_NS
+    mode: str = "triggered"
+    max_session_records: int = 1_000_000
+    max_session_bytes: int = 4 * 1024 * 1024 * 1024
+    max_record_bytes: int = 16 * 1024 * 1024
+    max_referenced_revisions_per_tick: int = 16
+    max_raw_lidar_missing_fraction: float = 0.05
+    max_consecutive_raw_lidar_missing: int = 2
+    require_raw_lidar_transport_end: bool = False
+    tick_sample_hz: int = CONTROL_CAPTURE_HZ
+    navigation_map_hz: int = 0
+
+    @property
+    def sensor_debug(self) -> bool:
+        """Full sensor/replay evidence is requested only by 50 Hz capture."""
+        return self.tick_sample_hz == CONTROL_CAPTURE_HZ
+
+    def __post_init__(self) -> None:
+        for name in (
+            "pre_event_ns",
+            "post_event_ns",
+            "checkpoint_context_ns",
+            "max_consecutive_raw_lidar_missing",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        for name in (
+            "max_tick_count",
+            "max_raw_lidar_scans",
+            "max_byte_capacity",
+            "max_raw_lidar_points_per_scan",
+            "chunk_target_bytes",
+            "max_session_records",
+            "max_session_bytes",
+            "max_record_bytes",
+            "max_referenced_revisions_per_tick",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        missing_fraction = self.max_raw_lidar_missing_fraction
+        if (
+            not isinstance(missing_fraction, (int, float))
+            or isinstance(missing_fraction, bool)
+            or not 0.0 <= float(missing_fraction) <= 1.0
+        ):
+            raise ValueError("max_raw_lidar_missing_fraction must be in [0.0, 1.0]")
+
+        if type(self.require_raw_lidar_transport_end) is not bool:
+            raise TypeError("require_raw_lidar_transport_end must be bool")
+        validate_capture_hz(self.tick_sample_hz)
+        if self.require_raw_lidar_transport_end and not self.sensor_debug:
+            raise ValueError("raw LiDAR transport requires 50 Hz sensor-debug capture")
+        if (type(self.navigation_map_hz) is not int or not 0 <= self.navigation_map_hz <= 5
+                or self.sensor_debug and self.navigation_map_hz):
+            raise ValueError("navigation_map_hz must be 0..5, and zero for sensor debug")
+
+        if self.mode not in {"triggered", "append_only"}:
+            raise ValueError("mode must be triggered or append_only")
+
+
+@dataclass(frozen=True, slots=True)
+class EncodedRecord:
+    """Small ring entry: payload data is already immutable bytes."""
+
+    hub_sequence: int
+    source_topic: str
+    mcap_topic: str
+    monotonic_ns: int
+    sequence: int
+    payload: bytes
+    tick_id: int | None = None
+    raw_lidar_revision: int | None = None
+    referenced_lidar_revisions: tuple[int, ...] = ()
+    is_checkpoint: bool = False
+    source_point_count: int | None = None
+    points_truncated: bool = False
+    published_monotonic_ns: int | None = None
+    local_costmap_available: bool = False
+
+    @property
+    def size_bytes(self) -> int:
+        # Charge object/tuple/reference overhead as well as encoded bytes.
+        return (sys.getsizeof(self) + sys.getsizeof(self.payload)
+                + sys.getsizeof(self.referenced_lidar_revisions)
+                + sum(sys.getsizeof(v) for v in self.referenced_lidar_revisions) + 256)
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureResult:
+    path: Path
+    state: CaptureState
+    status: str
+    complete: bool
+    message_stream_sha256: str
+    ingress_drop_count: int
+    hub_sequence_gap_count: int
+    tick_sequence_gap_count: int
+    raw_lidar_missing_revisions: tuple[int, ...]
+    replay_complete: bool
+    raw_evidence_complete: bool
+
+
+class _BoundedCaptureFile:
+    """Enforce the disk quota even if final metadata outgrows its reserve."""
+
+    def __init__(self, handle, max_bytes: int) -> None:
+        self._handle = handle
+        self._max_bytes = max_bytes
+
+    def write(self, data: bytes) -> int:
+        if self.tell() + len(data) > self._max_bytes:
+            raise CaptureEncodingError("SESSION_BYTE_LIMIT: MCAP disk quota exhausted")
+        return self._handle.write(data)
+
+    def tell(self) -> int:
+        return self._handle.tell()
+
+    def flush(self) -> None:
+        self._handle.flush()
+
+    def fileno(self) -> int:
+        return self._handle.fileno()
+
+    def close(self) -> None:
+        self._handle.close()
+
+
+class McapCaptureConsumer:
+    """Bounded, threaded MCAP capture consumer for ObservationHub.
+
+    The worker consumes the sole RELIABLE mailbox directly. Call finish only
+    after all publishers have stopped and the hub has closed; accepted frames
+    are drained before subscription integrity is checked and the file finalized.
+    """
+
+    __slots__ = (
+        "_capture_id",
+        "_configuration",
+        "_metadata",
+        "_output_path",
+        "_config",
+        "_subscription",
+        "_control",
+        "_seen_records",
+        "_session_records_dropped",
+        "_last_dropped_hub_sequence",
+        "_first_dropped_ns",
+        "_last_dropped_ns",
+        "_session_bytes_upper_bound",
+        "_started_ns",
+        "_write_duration_ns",
+        "_cpu_started_ns",
+        "_timing",
+        "_thread",
+        "_started",
+        "_finished",
+        "_finish_requested",
+        "_state",
+        "_lock",
+        "_error",
+        "_partial_path",
+        "_result",
+        "_ring",
+        "_ring_bytes",
+        "_ring_tick_count",
+        "_ring_raw_count",
+        "_capacity_eviction_count",
+        "_latest_capacity_eviction_ns",
+        "_raw_capacity_eviction_count",
+        "_core_capacity_eviction_count",
+        "_latest_raw_capacity_eviction_ns",
+        "_first_seen_ns",
+        "_last_seen_ns",
+        "_captured_tick_gaps",
+        "_captured_tick_gap_count",
+        "_sampled_tick_skip_count",
+        "_captured_last_tick_id",
+        "_trigger_ns",
+        "_trigger_reason",
+        "_post_window_complete",
+        "_fault_observed",
+        "_integrity_reasons",
+        "_navigation_map_integrity",
+        "_local_costmap_count",
+        "_local_costmap_available_count",
+        "_writer",
+        "_handle",
+        "_channels",
+        "_message_digest",
+        "_written_raw_revisions",
+        "_referenced_raw_revisions",
+        "_raw_duplicate_count",
+        "_raw_out_of_order_count",
+        "_raw_revision_gaps",
+        "_raw_truncated_count",
+        "_last_raw_revision",
+        "_raw_transport_end",
+        "_raw_transport_produced_count",
+        "_raw_transport_superseded_count",
+        "_captured_tick_count",
+        "_captured_raw_count",
+        "_captured_checkpoint_count",
+        "_captured_event_count",
+        "_emergency_trigger",
+    )
+
+    def __init__(
+        self,
+        capture_id: str,
+        output_path: str | Path,
+        *,
+        subscription: ObservationSubscription,
+        configuration: Mapping[str, object],
+        metadata: Mapping[str, object] | None = None,
+        config: McapCaptureConfig | None = None,
+    ) -> None:
+        identifier = str(capture_id or "").strip()
+        if not identifier:
+            raise ValueError("capture_id must be non-empty")
+        path = Path(output_path)
+        if not path.is_absolute():
+            raise ValueError("MCAP output path must be absolute")
+        if path.suffix.lower() != ".mcap":
+            raise ValueError("MCAP output path must end in .mcap")
+        settings = config or McapCaptureConfig()
+        if not isinstance(settings, McapCaptureConfig):
+            raise TypeError("config must be McapCaptureConfig")
+
+        encoded_configuration = encode_value(configuration)
+        encoded_metadata = encode_value(metadata or {})
+        if isinstance(encoded_metadata, dict):
+            encoded_metadata = {**encoded_metadata, "capture_policy": encode_value(settings)}
+        if not isinstance(encoded_configuration, dict) or not isinstance(encoded_metadata, dict):
+            raise TypeError("configuration and metadata must encode as mappings")
+
+        self._capture_id = identifier
+        self._configuration = encoded_configuration
+        self._metadata = encoded_metadata
+        self._output_path = path
+        self._config = settings
+        if not isinstance(subscription, ObservationSubscription):
+            raise TypeError("subscription must be ObservationSubscription")
+        if subscription.config.mode is not DeliveryMode.RELIABLE or not subscription.config.required:
+            raise ValueError("capture requires a required RELIABLE subscription")
+        self._subscription = subscription
+        self._control = threading.Event()
+        self._seen_records = 0
+        self._session_records_dropped = 0
+        self._last_dropped_hub_sequence: int | None = None
+        self._first_dropped_ns: int | None = None
+        self._last_dropped_ns: int | None = None
+        self._session_bytes_upper_bound = 0
+        self._started_ns = 0
+        self._write_duration_ns = 0
+        self._cpu_started_ns = 0
+        self._timing = {"tick_count": 0, "period_count": 0, "period_sum_ns": 0,
+                        "period_max_ns": 0, "completion_latency_sum_ns": 0,
+                        "completion_latency_max_ns": 0}
+        self._thread = threading.Thread(
+            target=self._run,
+            name="v3-mcap-capture-consumer",
+            daemon=True,
+        )
+        self._started = False
+        self._finished = False
+        self._finish_requested: tuple[str, bool] | None = None
+        self._state = CaptureState.ARMED
+        self._lock = threading.Lock()
+        self._error: BaseException | None = None
+        self._partial_path: Path | None = None
+        self._result: CaptureResult | None = None
+
+        self._ring: deque[EncodedRecord] = deque()
+        self._ring_bytes = 0
+        self._ring_tick_count = 0
+        self._ring_raw_count = 0
+        self._capacity_eviction_count = 0
+        self._latest_capacity_eviction_ns: int | None = None
+        self._raw_capacity_eviction_count = 0
+        self._core_capacity_eviction_count = 0
+        self._latest_raw_capacity_eviction_ns: int | None = None
+
+        self._first_seen_ns: int | None = None
+        self._last_seen_ns: int | None = None
+        self._captured_tick_gaps: list[tuple[int, int]] = []
+        self._captured_tick_gap_count = 0
+        self._sampled_tick_skip_count = 0
+        self._captured_last_tick_id: int | None = None
+
+        self._trigger_ns: int | None = None
+        self._trigger_reason: str | None = None
+        self._post_window_complete = False
+        self._fault_observed = False
+        self._integrity_reasons: set[str] = set()
+        self._navigation_map_integrity = {"received_count": 0, "written_count": 0, "end": False,
+                                          "produced_count": 0, "superseded_count": 0}
+        self._local_costmap_count = 0
+        self._local_costmap_available_count = 0
+
+        self._writer: StdlibMcapWriter | None = None
+        self._handle = None
+        self._channels: dict[str, int] = {}
+        self._message_digest = hashlib.sha256()
+
+        self._written_raw_revisions: set[int] = set()
+        self._referenced_raw_revisions: set[int] = set()
+        self._raw_duplicate_count = 0
+        self._raw_out_of_order_count = 0
+        self._raw_revision_gaps: list[tuple[int, int]] = []
+        self._raw_truncated_count = 0
+        self._last_raw_revision: int | None = None
+        self._raw_transport_end = False
+        self._raw_transport_produced_count = 0
+        self._raw_transport_superseded_count = 0
+
+        self._captured_tick_count = 0
+        self._captured_raw_count = 0
+        self._captured_checkpoint_count = 0
+        self._captured_event_count = 0
+        self._emergency_trigger: tuple[int | None, str] | None = None
+
+    @property
+    def state(self) -> CaptureState:
+        return self._state
+
+    @property
+    def failed(self) -> bool:
+        return self._error is not None
+
+    @property
+    def partial_path(self) -> Path | None:
+        return self._partial_path
+
+    @property
+    def result(self) -> CaptureResult | None:
+        return self._result
+
+    def start(self) -> None:
+        if self._started:
+            return
+        if self._finished:
+            raise RuntimeError("capture consumer is already finished")
+        self._started = True
+        self._started_ns = time.monotonic_ns()
+        self._cpu_started_ns = time.process_time_ns()
+        self._thread.start()
+
+    def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
+        normalized = str(reason or "").strip()
+        if not normalized:
+            raise ValueError("trigger reason must be non-empty")
+        if monotonic_ns is not None and (
+            not isinstance(monotonic_ns, int)
+            or isinstance(monotonic_ns, bool)
+            or monotonic_ns < 0
+        ):
+            raise ValueError("trigger monotonic_ns must be non-negative or None")
+        if not self._started:
+            self.start()
+        if self._finished:
+            return
+        with self._lock:
+            if self._emergency_trigger is None:
+                self._emergency_trigger = (monotonic_ns, normalized)
+        self._control.set()
+
+    def finish(self, status: str = "PASS", *, terminal: bool = True) -> CaptureResult | None:
+        terminal_status = str(status or "").upper()
+        if terminal_status not in TERMINAL_STATUSES:
+            raise ValueError("status must be PASS, FAIL or FAULT")
+        if not self._started:
+            self.start()
+        if self._finished:
+            if self._error is not None:
+                raise RuntimeError(
+                    f"MCAP capture failed; partial file kept at {self._partial_path}"
+                ) from self._error
+            return self._result
+
+        if not self._subscription.snapshot().closed:
+            raise RuntimeError("stop publishers and close ObservationHub before capture finish")
+        with self._lock:
+            self._finish_requested = (terminal_status, bool(terminal))
+        self._control.set()
+        self._thread.join()
+        self._finished = True
+        if self._error is not None:
+            raise RuntimeError(
+                f"MCAP capture failed; partial file kept at {self._partial_path}"
+            ) from self._error
+        return self._result
+
+    def _run(self) -> None:
+        try:
+            while True:
+                self._consume_emergency_trigger()
+                try:
+                    frame = self._subscription.get(timeout=0.01)
+                except queue.Empty:
+                    continue
+                except ObservationClosed:
+                    # A closed mailbox raises only after its complete backlog drains.
+                    with self._lock:
+                        finish = self._finish_requested
+                    if finish is None:
+                        self._control.wait(0.01)
+                        self._control.clear()
+                        continue
+                    try:
+                        self._subscription.assert_integrity()
+                    except ObservationIntegrityError:
+                        self._integrity_reasons.add("OBSERVATION_RELIABLE_LOSS")
+                    self._consume_emergency_trigger()
+                    if self._integrity_reasons and self._trigger_ns is None:
+                        self._activate_trigger(self._last_seen_ns, "CAPTURE_INTEGRITY_FAILURE")
+                    if self._writer is not None:
+                        self._finalize(finish[0], terminal=finish[1])
+                    elif self._integrity_reasons:
+                        raise CaptureEncodingError("capture lost all tick evidence")
+                    return
+                self._consume_observation(frame)
+                self._consume_emergency_trigger()
+        except BaseException as exc:
+            self._integrity_reasons.add("CAPTURE_WORKER_EXCEPTION")
+            self._state = CaptureState.INTEGRITY_FAILED
+            self._error = exc
+            handle = self._handle
+            if handle is not None:
+                try:
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                except Exception:
+                    pass
+                try:
+                    handle.close()
+                except Exception:
+                    pass
+                self._handle = None
+
+    def _consume_emergency_trigger(self) -> None:
+        with self._lock:
+            pending = self._emergency_trigger
+            self._emergency_trigger = None
+        if pending is not None:
+            self._activate_trigger(pending[0], pending[1])
+
+    def _consume_observation(self, item: ObservationFrame) -> None:
+        self._seen_records += 1
+        # Transport loss remains authoritative even after the storage quota is
+        # exhausted: final drain must not hide its explicit end/loss markers.
+        self._consume_transport_integrity(item)
+        if self._seen_records > self._config.max_session_records:
+            self._integrity_reasons.add("SESSION_RECORD_LIMIT")
+            self._record_session_drop(item.sequence, item.published_monotonic_ns)
+            return
+        if "SESSION_BYTE_LIMIT" in self._integrity_reasons:
+            self._record_session_drop(item.sequence, item.published_monotonic_ns)
+            return
+        encoded = self._encode_observation(item)
+        for record in encoded:
+            if len(record.payload) > self._config.max_record_bytes:
+                raise CaptureEncodingError("encoded record exceeds max_record_bytes")
+            if record.mcap_topic == TICK_TOPIC:
+                timing = self._timing
+                timing["tick_count"] += 1
+                latency = max(0, item.published_monotonic_ns - record.monotonic_ns)
+                timing["completion_latency_sum_ns"] += latency
+                timing["completion_latency_max_ns"] = max(timing["completion_latency_max_ns"], latency)
+                if self._last_seen_ns is not None:
+                    period = record.monotonic_ns - self._last_seen_ns
+                    timing["period_count"] += 1
+                    timing["period_sum_ns"] += period
+                    timing["period_max_ns"] = max(timing["period_max_ns"], period)
+                if self._first_seen_ns is None:
+                    self._first_seen_ns = record.monotonic_ns
+                self._last_seen_ns = record.monotonic_ns
+            if self._config.mode == "append_only":
+                if self._writer is None:
+                    self._open_writer(first_time_ns=record.monotonic_ns)
+                    self._state = CaptureState.TRIGGERED
+                    self._trigger_reason = "APPEND_ONLY"
+                self._write_encoded_record(record)
+            elif self._trigger_ns is None:
+                self._append_ring(record)
+                if self._last_seen_ns is not None:
+                    self._trim_untriggered_ring(self._last_seen_ns)
+            else:
+                upper = self._trigger_ns + self._config.post_event_ns
+                if record.source_topic == HRI_EVENT_TOPIC or record.monotonic_ns <= upper:
+                    # HRI rows are imported by the passive sidecar at finalize. Their
+                    # original monotonic time remains inside the payload; allow the
+                    # late evidence message itself to be appended after post-window.
+                    self._write_encoded_record(record)
+                if record.mcap_topic == TICK_TOPIC and record.monotonic_ns >= upper:
+                    self._post_window_complete = True
+
+        if _payload_triggers_capture(item.payload):
+            self._fault_observed = True
+            trigger_time = (item.payload.context.monotonic_ns
+                            if isinstance(item.payload, NavigationDecisionEvent)
+                            else self._last_seen_ns)
+            self._activate_trigger(
+                trigger_time, _payload_trigger_reason(item.payload),
+                completed_event=isinstance(item.payload, NavigationDecisionEvent),
+            )
+
+    def _record_session_drop(self, hub_sequence: int, monotonic_ns: int) -> None:
+        # A sensor-debug observation may encode both a tick and a checkpoint.
+        # Count that source observation only once if both records are dropped.
+        if hub_sequence != self._last_dropped_hub_sequence:
+            self._session_records_dropped += 1
+            self._last_dropped_hub_sequence = hub_sequence
+        if self._first_dropped_ns is None:
+            self._first_dropped_ns = monotonic_ns
+        self._last_dropped_ns = monotonic_ns
+
+    def _consume_transport_integrity(self, item: ObservationFrame) -> None:
+        payload = item.payload
+        if item.topic == NAVIGATION_MAP_TRANSPORT_TOPIC and self._config.navigation_map_hz:
+            if (not isinstance(payload, Mapping) or payload.get("event_type") != "navigation_map_transport_end"
+                    or any(type(payload.get(key)) is not int or payload[key] < 0
+                           for key in ("produced_count", "superseded_count", "last_revision"))):
+                self._integrity_reasons.add("NAVIGATION_MAP_TRANSPORT_INVALID")
+            else:
+                self._navigation_map_integrity.update(end=True,
+                    produced_count=payload["produced_count"], superseded_count=payload["superseded_count"])
+            return
+        if _looks_like_capture_transport_topic(item.topic):
+            if isinstance(payload, Mapping):
+                drops = payload.get("drop_count", 0)
+                if isinstance(drops, int) and not isinstance(drops, bool) and drops > 0:
+                    reason = payload.get("integrity_reason")
+                    self._integrity_reasons.add(
+                        reason if isinstance(reason, str) and reason.startswith(("PUBLIC_RUNTIME_", "HRI_"))
+                        else "CORE_TRANSPORT_LOSS"
+                    )
+            return
+        if not _looks_like_raw_lidar_transport_topic(item.topic):
+            return
+        if not self._config.sensor_debug:
+            return
+        if not isinstance(payload, Mapping):
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_INVALID")
+            return
+        if payload.get("event_type") != "raw_lidar_transport_end":
+            return
+        self._raw_transport_end = True
+        produced = payload.get("produced_count", 0)
+        superseded = payload.get("superseded_count", 0)
+        if isinstance(produced, int) and not isinstance(produced, bool) and produced >= 0:
+            self._raw_transport_produced_count = produced
+        else:
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_INVALID")
+        if isinstance(superseded, int) and not isinstance(superseded, bool) and superseded >= 0:
+            self._raw_transport_superseded_count = superseded
+            if superseded:
+                self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_SUPERSEDE")
+        else:
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_INVALID")
+
+    def _encode_observation(self, item: ObservationFrame) -> tuple[EncodedRecord, ...]:
+        payload = item.payload
+        if item.topic == LOCAL_COSTMAP_TOPIC:
+            # Cell unpacking/JSON belongs to this passive consumer. The
+            # production publisher supplied only a bounded C-packed buffer.
+            payload = unpack_local_costmap(payload)
+        checkpoint: object | None = None
+        if isinstance(payload, BehaviorCaptureRecord):
+            row = encode_behavior_record(payload)
+        elif item.topic == "v3.capture_record" and isinstance(payload, Mapping):
+            row = dict(payload)
+            checkpoint = row.pop(IPC_CHECKPOINT_KEY, None)
+            row.pop(IPC_TRIGGER_REASON_KEY, None)
+        elif isinstance(payload, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
+            row = (encode_capture_record(payload) if self._config.sensor_debug
+                   else encode_behavior_record(project_behavior_record(payload)))
+            if self._config.sensor_debug and isinstance(payload, ExecutionRecord) and payload.state_checkpoint_after is not None:
+                checkpoint = encode_value(payload.state_checkpoint_after)
+        else:
+            row = None
+
+        if row is not None:
+            tick_id = _non_negative_int(row.get("tick_id"), "tick_id")
+            monotonic_ns = _non_negative_int(row.get("monotonic_ns"), "monotonic_ns")
+            referenced = tuple(sorted(_referenced_lidar_revisions(row))) if self._config.sensor_debug else ()
+            if not self._config.sensor_debug:
+                checkpoint = None
+            if len(referenced) > self._config.max_referenced_revisions_per_tick:
+                raise CaptureEncodingError("tick exceeds referenced LiDAR revision bound")
+            stored_row = compact_tick_row(row)
+            tick = EncodedRecord(
+                hub_sequence=item.sequence,
+                published_monotonic_ns=item.published_monotonic_ns,
+                source_topic=item.topic,
+                mcap_topic=TICK_TOPIC,
+                monotonic_ns=monotonic_ns,
+                sequence=tick_id,
+                payload=_json_bytes(stored_row),
+                tick_id=tick_id,
+                referenced_lidar_revisions=referenced,
+            )
+            records: list[EncodedRecord] = [tick]
+            if checkpoint is not None:
+                if not isinstance(checkpoint, dict):
+                    raise CaptureEncodingError("state checkpoint must encode as an object")
+                checkpoint_row = {
+                    "tick_id": tick_id,
+                    "monotonic_ns": monotonic_ns,
+                    "state": checkpoint,
+                }
+                records.append(
+                    EncodedRecord(
+                        hub_sequence=item.sequence,
+                        published_monotonic_ns=item.published_monotonic_ns,
+                        source_topic=item.topic,
+                        mcap_topic=CHECKPOINT_TOPIC,
+                        monotonic_ns=monotonic_ns,
+                        sequence=tick_id,
+                        payload=_json_bytes(compact_checkpoint_row(checkpoint_row)),
+                        tick_id=tick_id,
+                        is_checkpoint=True,
+                    )
+                )
+            return tuple(records)
+
+        if _looks_like_raw_lidar_topic(item.topic):
+            if not self._config.sensor_debug:
+                return ()
+            row = encode_raw_lidar_snapshot(
+                payload,
+                self._config.max_raw_lidar_points_per_scan,
+            )
+            revision = _non_negative_int(row.get("revision"), "raw lidar revision")
+            if revision <= 0:
+                raise CaptureEncodingError("raw lidar revision must be positive")
+            previous = self._last_raw_revision
+            if previous is not None:
+                if revision == previous:
+                    self._raw_duplicate_count += 1
+                    return ()
+                if revision < previous:
+                    self._raw_out_of_order_count += 1
+                    self._integrity_reasons.add("RAW_LIDAR_REVISION_OUT_OF_ORDER")
+                elif revision > previous + 1:
+                    self._raw_revision_gaps.append((previous, revision))
+                    self._integrity_reasons.add("RAW_LIDAR_REVISION_GAP")
+            self._last_raw_revision = max(previous or revision, revision)
+            truncated = bool(row.get("points_truncated"))
+            if truncated:
+                self._raw_truncated_count += 1
+                self._integrity_reasons.add("RAW_LIDAR_POINTS_TRUNCATED")
+            return (
+                EncodedRecord(
+                    hub_sequence=item.sequence,
+                    published_monotonic_ns=item.published_monotonic_ns,
+                    source_topic=item.topic,
+                    mcap_topic=RAW_LIDAR_TOPIC,
+                    monotonic_ns=_non_negative_int(
+                        row.get("measurement_monotonic_ns"),
+                        "raw lidar measurement_monotonic_ns",
+                    ),
+                    sequence=revision,
+                    payload=_json_bytes(row),
+                    raw_lidar_revision=revision,
+                    source_point_count=int(row.get("source_point_count", 0)),
+                    points_truncated=truncated,
+                ),
+            )
+
+        if _looks_like_checkpoint_topic(item.topic):
+            if not self._config.sensor_debug:
+                return ()
+            checkpoint = encode_value(payload)
+            return (
+                EncodedRecord(
+                    hub_sequence=item.sequence,
+                    published_monotonic_ns=item.published_monotonic_ns,
+                    source_topic=item.topic,
+                    mcap_topic=CHECKPOINT_TOPIC,
+                    monotonic_ns=item.published_monotonic_ns,
+                    sequence=item.sequence,
+                    payload=_json_bytes(
+                        {
+                            "monotonic_ns": item.published_monotonic_ns,
+                            "state": checkpoint,
+                        }
+                    ),
+                    is_checkpoint=True,
+                ),
+            )
+
+        event = (encode_navigation_event(payload) if isinstance(payload, NavigationDecisionEvent)
+                 else encode_value(payload))
+        event_time = item.published_monotonic_ns
+        event_sequence = item.sequence
+        if item.topic == NAVIGATION_EVENT_TOPIC and isinstance(payload, NavigationDecisionEvent):
+            event_time = payload.context.monotonic_ns
+            event_sequence = payload.event_sequence
+        elif item.topic == PUBLIC_RUNTIME_EVENT_TOPIC and isinstance(payload, Mapping):
+            event_time = _non_negative_int(payload.get("publication_time_ns"), "public event publication_time_ns")
+            event_sequence = _non_negative_int(payload.get("event_sequence"), "public event sequence")
+        elif item.topic == HRI_EVENT_TOPIC and isinstance(payload, Mapping):
+            event_time = _non_negative_int(payload.get("monotonic_ns"), "HRI event monotonic_ns")
+        elif item.topic == HOST_TELEMETRY_TOPIC and isinstance(payload, Mapping):
+            event_time = _non_negative_int(payload.get("measurement_monotonic_ns"), "host measurement time")
+            event_sequence = _non_negative_int(payload.get("sample_sequence"), "host sample sequence")
+        elif item.topic == NAVIGATION_MAP_TOPIC:
+            validate_navigation_map(payload)
+            event_time = payload["measurement_monotonic_ns"]
+            event_sequence = payload["source_sequence"]
+            self._navigation_map_integrity["received_count"] += 1
+        elif item.topic == LOCAL_COSTMAP_TOPIC:
+            event_time = payload["monotonic_ns"]
+            event_sequence = payload["tick_id"]
+        return (
+            EncodedRecord(
+                hub_sequence=item.sequence,
+                published_monotonic_ns=item.published_monotonic_ns,
+                source_topic=item.topic,
+                mcap_topic=EVENT_TOPIC,
+                monotonic_ns=event_time,
+                sequence=event_sequence,
+                local_costmap_available=(
+                    item.topic == LOCAL_COSTMAP_TOPIC and payload["available"]),
+                payload=_json_bytes(
+                    {
+                        "source_topic": item.topic,
+                        "monotonic_ns": event_time,
+                        "hub_sequence": item.sequence,
+                        "published_monotonic_ns": item.published_monotonic_ns,
+                        "payload": event,
+                    }
+                ),
+            ),
+        )
+
+    def _append_ring(self, item: EncodedRecord) -> None:
+        self._ring.append(item)
+        self._ring_bytes += item.size_bytes
+        if item.mcap_topic == TICK_TOPIC:
+            self._ring_tick_count += 1
+        elif item.mcap_topic == RAW_LIDAR_TOPIC:
+            self._ring_raw_count += 1
+        self._enforce_capacities()
+
+    def _trim_untriggered_ring(self, newest_ns: int) -> None:
+        lower = newest_ns - self._config.pre_event_ns - self._config.checkpoint_context_ns
+        while self._ring and self._ring[0].monotonic_ns < lower:
+            self._drop_oldest(capacity=False)
+        self._enforce_capacities()
+
+    def _enforce_capacities(self) -> None:
+        while self._ring_tick_count > self._config.max_tick_count:
+            self._drop_oldest_matching(TICK_TOPIC, capacity=True)
+        while self._ring_raw_count > self._config.max_raw_lidar_scans:
+            self._drop_oldest_matching(RAW_LIDAR_TOPIC, capacity=True)
+        while self._ring_bytes > self._config.max_byte_capacity:
+            if self._ring_raw_count:
+                self._drop_oldest_matching(RAW_LIDAR_TOPIC, capacity=True)
+            else:
+                self._drop_oldest(capacity=True)
+
+    def _drop_oldest_matching(self, topic: str, *, capacity: bool = False) -> None:
+        # Count limits are per stream. Do not evict unrelated tick evidence just
+        # because the raw-LiDAR stream reached its own count bound (or vice versa).
+        for index, item in enumerate(self._ring):
+            if item.mcap_topic != topic:
+                continue
+            del self._ring[index]
+            self._ring_bytes -= item.size_bytes
+            if topic == TICK_TOPIC:
+                self._ring_tick_count -= 1
+            elif topic == RAW_LIDAR_TOPIC:
+                self._ring_raw_count -= 1
+            if capacity:
+                self._capacity_eviction_count += 1
+                if topic == RAW_LIDAR_TOPIC:
+                    self._raw_capacity_eviction_count += 1
+                    self._latest_raw_capacity_eviction_ns = item.monotonic_ns
+                else:
+                    self._core_capacity_eviction_count += 1
+                    self._latest_capacity_eviction_ns = item.monotonic_ns
+            return
+        raise RuntimeError(f"ring count inconsistent for {topic}")
+
+    def _drop_oldest(self, *, capacity: bool) -> None:
+        if not self._ring:
+            return
+        item = self._ring.popleft()
+        self._ring_bytes -= item.size_bytes
+        if item.mcap_topic == TICK_TOPIC:
+            self._ring_tick_count -= 1
+        elif item.mcap_topic == RAW_LIDAR_TOPIC:
+            self._ring_raw_count -= 1
+        if capacity:
+            self._capacity_eviction_count += 1
+            if item.mcap_topic == RAW_LIDAR_TOPIC:
+                self._raw_capacity_eviction_count += 1
+                self._latest_raw_capacity_eviction_ns = item.monotonic_ns
+            else:
+                self._core_capacity_eviction_count += 1
+                self._latest_capacity_eviction_ns = item.monotonic_ns
+
+    def _activate_trigger(self, requested_ns: object, reason: str, *, completed_event: bool = False) -> None:
+        if self._trigger_ns is not None or self._config.mode == "append_only":
+            return
+        if self._ring_tick_count == 0:
+            with self._lock:
+                self._emergency_trigger = (requested_ns, reason)
+            return
+        if requested_ns is None:
+            requested_ns = self._last_seen_ns
+        if (not completed_event and requested_ns is not None
+                and self._last_seen_ns is not None and requested_ns > self._last_seen_ns):
+            with self._lock:
+                self._emergency_trigger = (requested_ns, reason)
+            return
+        if requested_ns is None:
+            with self._lock:
+                self._emergency_trigger = (None, reason)
+            return
+        trigger_ns = _non_negative_int(requested_ns, "trigger monotonic_ns")
+        self._trigger_ns = trigger_ns
+        self._trigger_reason = reason
+        self._state = CaptureState.TRIGGERED
+
+        lower = trigger_ns - self._config.pre_event_ns
+        retained = tuple(self._ring)
+        checkpoint_index: int | None = None
+        for index, item in enumerate(retained):
+            if item.monotonic_ns < lower and item.is_checkpoint:
+                checkpoint_index = index
+
+        if checkpoint_index is None:
+            selected = tuple(item for item in retained if item.monotonic_ns >= lower)
+        else:
+            # The checkpoint represents state after its associated tick. Keep all
+            # following observations so replay/debug tooling can warm up exactly.
+            selected = retained[checkpoint_index:]
+
+        if not any(item.mcap_topic == TICK_TOPIC for item in selected):
+            # Explicit early timestamps anchor to the first available completed tick.
+            self._trigger_ns = None
+            self._activate_trigger(self._last_seen_ns, reason)
+            return
+
+        needed_raw = {revision for item in selected for revision in item.referenced_lidar_revisions}
+        selected_ids = {id(item) for item in selected}
+        selected = tuple(item for item in retained if id(item) in selected_ids or item.raw_lidar_revision in needed_raw)
+        self._open_writer(first_time_ns=min(item.monotonic_ns for item in selected))
+        for item in selected:
+            self._write_encoded_record(item)
+        self._clear_ring()
+
+        self._write_event(
+            trigger_ns,
+            {
+                "event_type": "capture_trigger",
+                "capture_id": self._capture_id,
+                "reason": reason,
+                "trigger_monotonic_ns": trigger_ns,
+            },
+        )
+
+        if self._config.post_event_ns == 0 or (
+            self._last_seen_ns is not None
+            and self._last_seen_ns >= trigger_ns + self._config.post_event_ns
+        ):
+            self._post_window_complete = True
+
+    def _clear_ring(self) -> None:
+        self._ring.clear()
+        self._ring_bytes = 0
+        self._ring_tick_count = 0
+        self._ring_raw_count = 0
+
+    def _open_writer(self, *, first_time_ns: int) -> None:
+        if self._writer is not None:
+            return
+        self._output_path.parent.mkdir(parents=True, exist_ok=True)
+        self._partial_path = self._output_path.with_name(
+            f".{self._output_path.name}.{os.getpid()}.{time.monotonic_ns()}.partial"
+        )
+        handle = _BoundedCaptureFile(
+            self._partial_path.open("xb"), self._config.max_session_bytes)
+        # Keep the file available to exception cleanup even if opening metadata
+        # itself cannot fit in a deliberately small quota.
+        self._handle = handle
+        os.chmod(self._partial_path, 0o600)
+        writer = StdlibMcapWriter(
+            handle,
+            chunk_target_bytes=self._config.chunk_target_bytes,
+        )
+        writer.start(profile="r2b4-v3", library="R2B4 McapCaptureConsumer stdlib/1")
+        channel_metadata = {
+            "clock_epoch": CLOCK_EPOCH,
+            "capture_format_version": CAPTURE_FORMAT_VERSION,
+        }
+        self._channels = {
+            TICK_TOPIC: writer.register_channel(
+                TICK_TOPIC, message_encoding="json", metadata=channel_metadata
+            ),
+            RAW_LIDAR_TOPIC: writer.register_channel(
+                RAW_LIDAR_TOPIC, message_encoding="json", metadata=channel_metadata
+            ),
+            CHECKPOINT_TOPIC: writer.register_channel(
+                CHECKPOINT_TOPIC, message_encoding="json", metadata=channel_metadata
+            ),
+            EVENT_TOPIC: writer.register_channel(
+                EVENT_TOPIC, message_encoding="json", metadata=channel_metadata
+            ),
+            RUNTIME_TOPIC: writer.register_channel(
+                RUNTIME_TOPIC, message_encoding="json", metadata=channel_metadata
+            ),
+        }
+        writer.add_metadata(
+            "r2b4.capture",
+            {
+                "capture_id": self._capture_id,
+                "capture_format_version": CAPTURE_FORMAT_VERSION,
+                "clock_epoch": CLOCK_EPOCH,
+                "container": "MCAP v0",
+                "message_encoding": "json",
+                "compression": "none",
+                "tick_sample_hz": str(self._config.tick_sample_hz),
+                "observation_scope": "sensor_debug" if self._config.sensor_debug else "system_behavior",
+                "raw_evidence_requested": str(self._config.sensor_debug).lower(),
+                "navigation_map_hz": str(self._config.navigation_map_hz),
+                "navigation_map_requested": str(bool(self._config.navigation_map_hz)).lower(),
+                "navigation_event_schema": "R2B4_NAVIGATION_DECISION_V1",
+                "local_costmap_requested": str(bool(self._config.navigation_map_hz)).lower(),
+                "local_costmap_schema": LOCAL_COSTMAP_SCHEMA,
+                "host_telemetry_schema": HOST_TELEMETRY_SCHEMA,
+            },
+        )
+        self._writer = writer
+        self._handle = handle
+        self._session_bytes_upper_bound = writer.tell()
+        self._write_message(
+            RUNTIME_TOPIC,
+            first_time_ns,
+            0,
+            _json_bytes(
+                {
+                    "capture_id": self._capture_id,
+                    "capture_format_version": CAPTURE_FORMAT_VERSION,
+                    "clock_epoch": CLOCK_EPOCH,
+                    "configuration": self._configuration,
+                    "metadata": self._metadata,
+                }
+            ),
+        )
+
+    def _write_encoded_record(self, item: EncodedRecord) -> None:
+        if self._writer is None:
+            raise RuntimeError("MCAP writer is not open")
+
+        if (
+            self._session_bytes_upper_bound + len(item.payload) + _SESSION_MESSAGE_OVERHEAD_BYTES
+            > self._config.max_session_bytes - _SESSION_FINALIZATION_RESERVE_BYTES
+        ):
+            self._integrity_reasons.add("SESSION_BYTE_LIMIT")
+            self._record_session_drop(
+                item.hub_sequence,
+                item.monotonic_ns if item.published_monotonic_ns is None
+                else item.published_monotonic_ns)
+            return
+
+        if item.mcap_topic == TICK_TOPIC:
+            tick_id = int(item.tick_id or 0)
+            previous = self._captured_last_tick_id
+            if previous is not None and tick_id <= previous:
+                self._record_tick_gap(previous, tick_id)
+                self._integrity_reasons.add("CAPTURED_TICK_SEQUENCE_NON_MONOTONIC")
+            elif previous is not None and tick_id != previous + 1:
+                if self._config.tick_sample_hz == CONTROL_CAPTURE_HZ:
+                    self._record_tick_gap(previous, tick_id)
+                    self._integrity_reasons.add("CAPTURED_TICK_SEQUENCE_GAP")
+                else:
+                    # Sampling is time based and may include forced fault ticks.
+                    # Missing control IDs cannot diagnose delivery loss here.
+                    self._sampled_tick_skip_count += tick_id - previous - 1
+            self._captured_last_tick_id = tick_id
+            self._captured_tick_count += 1
+            self._referenced_raw_revisions.update(item.referenced_lidar_revisions)
+        elif item.mcap_topic == RAW_LIDAR_TOPIC:
+            if item.raw_lidar_revision is not None:
+                if item.raw_lidar_revision in self._written_raw_revisions:
+                    self._raw_duplicate_count += 1
+                    return
+                self._written_raw_revisions.add(item.raw_lidar_revision)
+            self._captured_raw_count += 1
+        elif item.mcap_topic == CHECKPOINT_TOPIC:
+            self._captured_checkpoint_count += 1
+        message_sequence = item.sequence
+        if item.mcap_topic == EVENT_TOPIC:
+            self._captured_event_count += 1
+            message_sequence = self._captured_event_count
+
+        self._write_message(
+            item.mcap_topic,
+            item.monotonic_ns,
+            message_sequence,
+            item.payload,
+            published_monotonic_ns=item.published_monotonic_ns,
+        )
+        if item.source_topic == NAVIGATION_MAP_TOPIC:
+            self._navigation_map_integrity["written_count"] += 1
+        elif item.source_topic == LOCAL_COSTMAP_TOPIC:
+            self._local_costmap_count += 1
+            self._local_costmap_available_count += int(item.local_costmap_available)
+
+    def _record_tick_gap(self, previous: int, current: int) -> None:
+        self._captured_tick_gap_count += 1
+        if len(self._captured_tick_gaps) < _MAX_TICK_GAP_EXAMPLES:
+            self._captured_tick_gaps.append((previous, current))
+
+    def _write_message(
+        self,
+        topic: str,
+        monotonic_ns: int,
+        sequence: int,
+        payload: bytes,
+        *,
+        include_in_digest: bool = True,
+        published_monotonic_ns: int | None = None,
+    ) -> None:
+        writer = self._writer
+        if writer is None:
+            raise RuntimeError("MCAP writer is not open")
+        channel_id = self._channels[topic]
+        write_started = time.monotonic_ns()
+        writer.add_message(
+            channel_id,
+            log_time_ns=monotonic_ns,
+            publish_time_ns=monotonic_ns if published_monotonic_ns is None else published_monotonic_ns,
+            sequence=sequence,
+            data=payload,
+        )
+        self._session_bytes_upper_bound += len(payload) + _SESSION_MESSAGE_OVERHEAD_BYTES
+        self._write_duration_ns += time.monotonic_ns() - write_started
+        if include_in_digest:
+            topic_bytes = topic.encode("utf-8")
+            self._message_digest.update(len(topic_bytes).to_bytes(4, "little"))
+            self._message_digest.update(topic_bytes)
+            self._message_digest.update((sequence & 0xFFFFFFFF).to_bytes(4, "little"))
+            self._message_digest.update(monotonic_ns.to_bytes(8, "little"))
+            self._message_digest.update(len(payload).to_bytes(8, "little"))
+            self._message_digest.update(payload)
+
+    def _write_event(self, monotonic_ns: int, payload: Mapping[str, object]) -> None:
+        self._captured_event_count += 1
+        self._write_message(
+            EVENT_TOPIC,
+            monotonic_ns,
+            self._captured_event_count,
+            _json_bytes(payload),
+        )
+
+    def _automatic_status(self) -> str:
+        if self._fault_observed:
+            return "FAULT"
+        if self._integrity_reasons:
+            return "FAIL"
+        return "PASS"
+
+    def _finalize(self, status: str, *, terminal: bool) -> None:
+        if self._result is not None:
+            return
+        writer = self._writer
+        handle = self._handle
+        if writer is None or handle is None or self._partial_path is None:
+            raise RuntimeError("cannot finalize unopened MCAP capture")
+
+        self._state = CaptureState.FINALIZING
+        status = str(status).upper()
+        if status not in TERMINAL_STATUSES:
+            raise ValueError("status must be PASS, FAIL or FAULT")
+
+        terminal_fault = terminal and (
+            status == "FAULT" or self._fault_observed
+        )
+
+        upper = int(self._trigger_ns or 0) + self._config.post_event_ns
+        post_complete = self._post_window_complete
+        if terminal and self._last_seen_ns is not None and self._last_seen_ns < upper:
+            post_complete = False
+
+        terminal_short_post_window = bool(
+            terminal_fault
+            and not post_complete
+            and self._last_seen_ns is not None
+        )
+
+        lower = int(self._trigger_ns or 0) - self._config.pre_event_ns
+        capacity_missing = bool(
+            self._latest_capacity_eviction_ns is not None
+            and self._latest_capacity_eviction_ns >= lower
+        )
+        if capacity_missing:
+            self._integrity_reasons.add("PRE_TRIGGER_CAPACITY_EVICTION")
+
+        pre_complete = bool(
+            self._config.pre_event_ns == 0
+            or (
+                self._first_seen_ns is not None
+                and self._first_seen_ns <= lower
+                and not capacity_missing
+            )
+        )
+
+        session_start_short_pre_window = bool(
+            terminal_fault
+            and not pre_complete
+            and self._first_seen_ns is not None
+            and self._first_seen_ns > lower
+            and not capacity_missing
+        )
+
+        if self._config.mode == "append_only":
+            pre_complete = post_complete = self._captured_tick_count > 0
+            session_start_short_pre_window = False
+            terminal_short_post_window = False
+
+        if not pre_complete and not session_start_short_pre_window:
+            self._integrity_reasons.add("PRE_WINDOW_INCOMPLETE")
+
+        subscription = self._subscription.snapshot()
+        ingress_drops = subscription.lost_count
+        if ingress_drops:
+            self._integrity_reasons.add("OBSERVATION_RELIABLE_LOSS")
+
+        if not post_complete and not terminal_short_post_window:
+            self._integrity_reasons.add("POST_WINDOW_INCOMPLETE")
+
+        missing_raw = tuple(sorted(self._referenced_raw_revisions - self._written_raw_revisions))
+        gap_missing_raw = _captured_gap_missing_revisions(
+            self._raw_revision_gaps,
+            self._written_raw_revisions,
+        )
+        loss_missing_raw = tuple(sorted(set(missing_raw).union(gap_missing_raw)))
+        raw_lidar_missing_count = len(loss_missing_raw)
+        raw_lidar_expected_scan_count = self._captured_raw_count + raw_lidar_missing_count
+        raw_lidar_loss_fraction = (
+            raw_lidar_missing_count / raw_lidar_expected_scan_count
+            if raw_lidar_expected_scan_count
+            else 0.0
+        )
+        raw_lidar_max_consecutive_missing = _max_consecutive_revision_run(loss_missing_raw)
+        raw_lidar_loss_within_tolerance = bool(
+            not raw_lidar_missing_count
+            or (
+                raw_lidar_loss_fraction <= float(self._config.max_raw_lidar_missing_fraction)
+                and raw_lidar_max_consecutive_missing
+                <= self._config.max_consecutive_raw_lidar_missing
+            )
+        )
+        integrity_warnings: list[str] = []
+
+        # A raw-LiDAR revision gap is observed immediately so triggered capture can
+        # still retain evidence. Final severity is decided only for the revisions
+        # that are actually part of the captured evidence window.
+        self._integrity_reasons.discard("RAW_LIDAR_REVISION_GAP")
+        self._integrity_reasons.discard("REFERENCED_RAW_LIDAR_MISSING")
+        if raw_lidar_missing_count:
+            self._integrity_reasons.add("RAW_LIDAR_EVIDENCE_INCOMPLETE")
+            if raw_lidar_loss_within_tolerance:
+                integrity_warnings.append("RAW_LIDAR_SPARSE_LOSS_TOLERATED")
+            if gap_missing_raw:
+                self._integrity_reasons.add("RAW_LIDAR_REVISION_GAP")
+            if missing_raw:
+                self._integrity_reasons.add("REFERENCED_RAW_LIDAR_MISSING")
+
+        if self._config.require_raw_lidar_transport_end and not self._raw_transport_end:
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_END_MISSING")
+        raw_capacity_missing = bool(
+            self._latest_raw_capacity_eviction_ns is not None
+            and self._latest_raw_capacity_eviction_ns >= lower
+        )
+        if raw_capacity_missing:
+            self._integrity_reasons.add("RAW_LIDAR_CAPACITY_EVICTION")
+
+        map_integrity = self._navigation_map_integrity
+        if self._config.navigation_map_hz:
+            if not map_integrity["end"]:
+                self._integrity_reasons.add("NAVIGATION_MAP_TRANSPORT_END_MISSING")
+            if (map_integrity["superseded_count"]
+                    or map_integrity["produced_count"] != map_integrity["received_count"]):
+                self._integrity_reasons.add("NAVIGATION_MAP_TRANSPORT_LOSS")
+            if not map_integrity["written_count"]:
+                self._integrity_reasons.add("NAVIGATION_MAP_OBSERVATIONS_MISSING")
+            if not self._local_costmap_count:
+                self._integrity_reasons.add("LOCAL_COSTMAP_SNAPSHOTS_MISSING")
+        map_integrity_reasons = sorted(reason for reason in self._integrity_reasons
+                                       if reason.startswith(("NAVIGATION_MAP_", "LOCAL_COSTMAP_")))
+        navigation_map_complete = bool(self._config.navigation_map_hz and not map_integrity_reasons)
+        raw_integrity_reasons = sorted(
+            reason for reason in self._integrity_reasons if _is_raw_integrity_reason(reason)
+        )
+        replay_integrity_reasons = sorted(
+            reason for reason in self._integrity_reasons if not _is_raw_integrity_reason(reason)
+            and not reason.startswith(("NAVIGATION_MAP_", "LOCAL_COSTMAP_"))
+        )
+        sample_complete = not replay_integrity_reasons
+        sampled_tick_stream = self._config.tick_sample_hz != CONTROL_CAPTURE_HZ
+        replay_complete = sample_complete and not sampled_tick_stream
+        raw_evidence_complete = self._config.sensor_debug and not raw_integrity_reasons
+        complete = (sample_complete and (not self._config.sensor_debug or raw_evidence_complete)
+                    and (not self._config.navigation_map_hz or navigation_map_complete))
+        if sampled_tick_stream:
+            integrity_warnings.append("TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE")
+        if self._fault_observed and status == "PASS":
+            status = "FAULT"
+        if not complete and status == "PASS":
+            status = "FAIL"
+        digest = self._message_digest.hexdigest()
+        final_time = max(
+            int(self._last_seen_ns or self._trigger_ns or 0),
+            int(self._trigger_ns or 0),
+        )
+        integrity = {
+            "complete": complete,
+            "raw_evidence_requested": self._config.sensor_debug,
+            "navigation_map_requested": bool(self._config.navigation_map_hz),
+            "navigation_map_hz": self._config.navigation_map_hz,
+            "navigation_map_complete": navigation_map_complete,
+            "navigation_map_integrity_reasons": map_integrity_reasons,
+            "navigation_map_transport": dict(map_integrity),
+            "local_costmap_requested": bool(self._config.navigation_map_hz),
+            "local_costmap_snapshot_count": self._local_costmap_count,
+            "local_costmap_available_count": self._local_costmap_available_count,
+            "sample_complete": sample_complete,
+            "tick_sample_hz": self._config.tick_sample_hz,
+            "replay_complete": replay_complete,
+            "raw_evidence_complete": raw_evidence_complete,
+            "replay_integrity_reasons": replay_integrity_reasons,
+            "raw_integrity_reasons": raw_integrity_reasons,
+            "integrity_reasons": sorted(self._integrity_reasons),
+            "integrity_warnings": integrity_warnings,
+            "ingress_drop_count": ingress_drops,
+            "observation_subscription": encode_value(subscription),
+            "captured_tick_sequence_gaps": [
+                {"after": before, "before": after}
+                for before, after in self._captured_tick_gaps
+            ],
+            "captured_tick_sequence_gap_count": self._captured_tick_gap_count,
+            "captured_tick_sequence_gap_details_truncated": (
+                self._captured_tick_gap_count > len(self._captured_tick_gaps)),
+            "sampled_tick_skip_count": self._sampled_tick_skip_count,
+            "session_record_limit": self._config.max_session_records,
+            "session_byte_limit": self._config.max_session_bytes,
+            "session_records_seen": self._seen_records,
+            "session_records_dropped": self._session_records_dropped,
+            "first_dropped_monotonic_ns": self._first_dropped_ns,
+            "last_dropped_monotonic_ns": self._last_dropped_ns,
+            "capacity_eviction_count": self._capacity_eviction_count,
+            "core_capacity_eviction_count": self._core_capacity_eviction_count,
+            "raw_capacity_eviction_count": self._raw_capacity_eviction_count,
+            "raw_transport_end": self._raw_transport_end,
+            "raw_transport_produced_count": self._raw_transport_produced_count,
+            "raw_transport_superseded_count": self._raw_transport_superseded_count,
+            "raw_lidar_missing_revisions": list(missing_raw),
+            "raw_lidar_gap_missing_revisions": list(gap_missing_raw),
+            "raw_lidar_loss_missing_revisions": list(loss_missing_raw),
+            "raw_lidar_missing_count": raw_lidar_missing_count,
+            "raw_lidar_expected_scan_count": raw_lidar_expected_scan_count,
+            "raw_lidar_loss_fraction": raw_lidar_loss_fraction,
+            "raw_lidar_loss_tolerance_fraction": float(
+                self._config.max_raw_lidar_missing_fraction
+            ),
+            "raw_lidar_max_consecutive_missing": raw_lidar_max_consecutive_missing,
+            "raw_lidar_max_consecutive_missing_allowed": (
+                self._config.max_consecutive_raw_lidar_missing
+            ),
+            "raw_lidar_loss_within_tolerance": raw_lidar_loss_within_tolerance,
+            "raw_lidar_duplicate_count": self._raw_duplicate_count,
+            "raw_lidar_out_of_order_count": self._raw_out_of_order_count,
+            "raw_lidar_revision_gaps": [
+                {"after": before, "before": after}
+                for before, after in self._raw_revision_gaps
+            ],
+            "raw_lidar_truncated_count": self._raw_truncated_count,
+            "pre_window_complete": pre_complete,
+            "session_start_short_pre_window": session_start_short_pre_window,
+            "post_window_complete": post_complete,
+            "terminal_short_post_window": terminal_short_post_window,
+            "message_stream_sha256": digest,
+            "digest_scope": "all MCAP messages before capture_finalized event",
+        }
+        final_event = {
+            "event_type": "capture_finalized",
+            "capture_id": self._capture_id,
+            "status": status,
+            "trigger_reason": self._trigger_reason,
+            "trigger_monotonic_ns": self._trigger_ns,
+            "captured_tick_count": self._captured_tick_count,
+            "captured_raw_lidar_count": self._captured_raw_count,
+            "captured_checkpoint_count": self._captured_checkpoint_count,
+            "captured_event_count_before_final": self._captured_event_count,
+            "integrity": integrity,
+            "capture_mode": self._config.mode,
+            "capture_hz": self._config.tick_sample_hz,
+            "metrics": {
+                "subscription_high_water_mark": subscription.high_water_mark,
+                "write_duration_ns": self._write_duration_ns,
+                "bytes_before_finalization": writer.tell(),
+                "elapsed_ns": time.monotonic_ns() - self._started_ns,
+                "process_cpu_ns": time.process_time_ns() - self._cpu_started_ns,
+                "process_max_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
+                "runtime_tick_timing": dict(self._timing),
+            },
+        }
+        self._captured_event_count += 1
+        self._write_message(
+            EVENT_TOPIC,
+            final_time,
+            self._captured_event_count,
+            _json_bytes(final_event),
+            include_in_digest=False,
+        )
+        writer.add_metadata(
+            "r2b4.capture.final",
+            {
+                "capture_id": self._capture_id,
+                "status": status,
+                "trigger_reason": str(self._trigger_reason or ""),
+                "trigger_monotonic_ns": str(self._trigger_ns or 0),
+                "complete": "true" if complete else "false",
+                "sample_complete": "true" if sample_complete else "false",
+                "raw_evidence_requested": str(self._config.sensor_debug).lower(),
+                "navigation_map_requested": str(bool(self._config.navigation_map_hz)).lower(),
+                "local_costmap_requested": str(bool(self._config.navigation_map_hz)).lower(),
+                "local_costmap_schema": LOCAL_COSTMAP_SCHEMA,
+                "navigation_map_complete": str(navigation_map_complete).lower(),
+                "local_costmap_snapshot_count": str(self._local_costmap_count),
+                "tick_sample_hz": str(self._config.tick_sample_hz),
+                "replay_complete": "true" if replay_complete else "false",
+                "raw_evidence_complete": "true" if raw_evidence_complete else "false",
+                "message_stream_sha256": digest,
+                "integrity_reasons": json.dumps(sorted(self._integrity_reasons), separators=(",", ":")),
+                "tick_count": str(self._captured_tick_count),
+                "raw_lidar_count": str(self._captured_raw_count),
+                "checkpoint_count": str(self._captured_checkpoint_count),
+            },
+        )
+        writer.finish()
+        handle.flush()
+        os.fsync(handle.fileno())
+        handle.close()
+        self._handle = None
+
+        # link is an atomic no-clobber final publication on the same filesystem.
+        os.link(self._partial_path, self._output_path)
+        self._partial_path.unlink()
+        self._partial_path = None
+        os.chmod(self._output_path, 0o600)
+        _fsync_directory(self._output_path.parent)
+
+        final_state = CaptureState.FINISHED if complete else CaptureState.INTEGRITY_FAILED
+        self._state = final_state
+        self._result = CaptureResult(
+            path=self._output_path,
+            state=final_state,
+            status=status,
+            complete=complete,
+            message_stream_sha256=digest,
+            ingress_drop_count=ingress_drops,
+            hub_sequence_gap_count=0,
+            tick_sequence_gap_count=self._captured_tick_gap_count,
+            raw_lidar_missing_revisions=missing_raw,
+            replay_complete=replay_complete,
+            raw_evidence_complete=raw_evidence_complete,
+        )
+
+
+def conservative_ram_budget(config: McapCaptureConfig, *, mailbox_capacity: int,
+                            max_retained_observation_bytes: int,
+                            max_encoding_working_bytes: int) -> dict[str, int]:
+    """Conditional capacity budget, including CPython bookkeeping and peak copies.
+
+    The caller must bound the *whole retained typed graph* and encoder working
+    graph, including checkpoints. Encoded JSON length is not such a bound.
+    These assumptions cannot be enforced by the data-blind producer. This is
+    not an RSS guarantee: interpreter, layers, drivers and allocator are extra.
+    Session byte and record quotas bound writer indexes. Sampled capture has
+    only bounded gap examples; sensor-debug additionally retains revision sets.
+    """
+    if min(mailbox_capacity, max_retained_observation_bytes, max_encoding_working_bytes) <= 0:
+        raise ValueError("RAM budget assumptions must be positive")
+    chunk = max(config.chunk_target_bytes, config.max_record_bytes + 64)
+    # Two adjacent flushed chunks contain at least one chunk target of data;
+    # a large incoming message can leave the preceding chunk almost empty.
+    max_chunks = min(
+        2 * config.max_session_records + 4,
+        2 * (config.max_session_bytes // config.chunk_target_bytes + 2),
+    )
+    parts = {
+        "mailbox_and_active_payloads": (mailbox_capacity + 1) * (max_retained_observation_bytes + 512),
+        "ring_with_entry_overhead": config.max_byte_capacity + 2 * (config.max_record_bytes + 1024),
+        "encoder_working_graph_and_json": max_encoding_working_bytes + 8 * config.max_record_bytes,
+        "writer_chunk_copies_and_message_indexes": 8 * chunk + (chunk // 31 + 1) * 256,
+        "session_indexes_and_diagnostics": (
+            max_chunks * 8192 + _MAX_TICK_GAP_EXAMPLES * 256
+            + (config.max_session_records * (
+                512 + 128 * config.max_referenced_revisions_per_tick)
+                if config.sensor_debug else 0)),
+    }
+    parts["total_bytes"] = sum(parts.values())
+    return parts
+
+
+def _json_bytes(value: object) -> bytes:
+    try:
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise CaptureEncodingError("capture value is not canonical JSON") from exc
+
+
+def _non_negative_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise CaptureEncodingError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _captured_gap_missing_revisions(
+    gaps: list[tuple[int, int]],
+    written_revisions: set[int],
+) -> tuple[int, ...]:
+    if not written_revisions:
+        return ()
+    first = min(written_revisions)
+    last = max(written_revisions)
+    missing: set[int] = set()
+    for before, after in gaps:
+        start = max(before + 1, first)
+        stop = min(after, last + 1)
+        if start < stop:
+            missing.update(range(start, stop))
+    missing.difference_update(written_revisions)
+    return tuple(sorted(missing))
+
+
+def _max_consecutive_revision_run(revisions: tuple[int, ...]) -> int:
+    if not revisions:
+        return 0
+    maximum = current = 1
+    previous = revisions[0]
+    for revision in revisions[1:]:
+        if revision == previous + 1:
+            current += 1
+            maximum = max(maximum, current)
+        else:
+            current = 1
+        previous = revision
+    return maximum
+
+
+def _looks_like_capture_transport_topic(topic: str) -> bool:
+    return topic.strip().lower().replace("-", "_") in {"v3.capture_transport", "capture_transport"}
+
+
+def _looks_like_raw_lidar_transport_topic(topic: str) -> bool:
+    return topic.strip().lower().replace("-", "_") in {"v3.raw_lidar_transport", "raw_lidar_transport"}
+
+
+def _is_raw_integrity_reason(reason: str) -> bool:
+    return reason.startswith("RAW_LIDAR_") or reason == "REFERENCED_RAW_LIDAR_MISSING"
+
+
+def _looks_like_raw_lidar_topic(topic: str) -> bool:
+    normalized = topic.strip().lower().replace("-", "_")
+    return normalized in {
+        RAW_LIDAR_TOPIC,
+        "raw_lidar",
+        "v3.raw_lidar",
+        "lidar_raw",
+        "observation.raw_lidar",
+        "observation/raw_lidar",
+    }
+
+
+def _looks_like_checkpoint_topic(topic: str) -> bool:
+    normalized = topic.strip().lower().replace("-", "_")
+    return normalized in {
+        CHECKPOINT_TOPIC,
+        "checkpoint",
+        "state_checkpoint",
+        "observation.checkpoint",
+        "observation/checkpoint",
+    }
+
+
+def _payload_triggers_capture(payload: object) -> bool:
+    if isinstance(payload, NavigationDecisionEvent):
+        return payload.snapshot.trigger_reason is not None
+    if isinstance(payload, BehaviorCaptureRecord):
+        return payload.trigger_reason is not None
+    if isinstance(payload, Mapping):
+        reason = payload.get(IPC_TRIGGER_REASON_KEY)
+        return isinstance(reason, str) and bool(reason.strip())
+    if isinstance(payload, (EdgeFaultRecord, WriterFailureRecord)):
+        return True
+    if not isinstance(payload, ExecutionRecord):
+        return False
+    return bool(
+        payload.result.trace.fault_layer is not None
+        or payload.result.final_actuation.safety_decision.value == "FAULT"
+    )
+
+
+def _payload_trigger_reason(payload: object) -> str:
+    if isinstance(payload, NavigationDecisionEvent):
+        return payload.snapshot.trigger_reason or "CAPTURE_TRIGGER"
+    if isinstance(payload, BehaviorCaptureRecord):
+        return payload.trigger_reason or "CAPTURE_TRIGGER"
+    if isinstance(payload, Mapping):
+        reason = payload.get(IPC_TRIGGER_REASON_KEY)
+        if isinstance(reason, str) and reason.strip():
+            return reason
+    if isinstance(payload, (EdgeFaultRecord, WriterFailureRecord)):
+        return payload.reason
+    if isinstance(payload, ExecutionRecord):
+        return (
+            payload.result.final_actuation.reason
+            or payload.result.trace.fault_layer
+            or "FAULT"
+        )
+    return "CAPTURE_TRIGGER"
+
+
+def _referenced_lidar_revisions(tick: Mapping[str, object]) -> set[int]:
+    revisions: set[int] = set()
+    physical_kinds = {
+        "lidar_health",
+        "lidar_safety_clearance",
+        "lidar_local_points",
+    }
+    raw: object | None = None
+    inputs = tick.get("inputs")
+    if isinstance(inputs, Mapping):
+        raw = inputs.get("raw_devices")
+    else:
+        edge = tick.get("edge_fault")
+        if isinstance(edge, Mapping):
+            raw = edge.get("raw_devices")
+    if not isinstance(raw, Mapping):
+        return revisions
+    samples = raw.get("samples")
+    if isinstance(samples, (str, bytes)) or not isinstance(samples, (list, tuple)):
+        return revisions
+    for sample in samples:
+        if not isinstance(sample, Mapping):
+            continue
+        kind = sample.get("kind")
+        sequence = sample.get("sequence")
+        if kind in physical_kinds and isinstance(sequence, int) and sequence > 0:
+            revisions.add(sequence)
+        if kind != "lidar_matcher_diagnostics":
+            continue
+        values = sample.get("values")
+        if isinstance(values, (str, bytes)) or not isinstance(values, (list, tuple)):
+            continue
+        for field in values:
+            if (
+                isinstance(field, Mapping)
+                and field.get("key") == "source_raw_scan_id"
+                and isinstance(field.get("value"), int)
+                and int(field["value"]) > 0
+            ):
+                revisions.add(int(field["value"]))
+    return revisions
+
+
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    fd = os.open(path, flags)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+__all__ = [
+    "CAPTURE_FORMAT_VERSION",
+    "CHECKPOINT_TOPIC",
+    "CLOCK_EPOCH",
+    "CaptureResult",
+    "CaptureState",
+    "EVENT_TOPIC",
+    "McapCaptureConfig",
+    "McapCaptureConsumer",
+    "conservative_ram_budget",
+    "RAW_LIDAR_TOPIC",
+    "RUNTIME_TOPIC",
+    "TICK_TOPIC",
+]

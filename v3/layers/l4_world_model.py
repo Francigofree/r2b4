@@ -1,0 +1,1230 @@
+# R2B4_FOLLOW_PERSON_P0_V2_20260923
+"""L4 deterministic temporal realtime world model.
+
+Tracks expose measurement lineage and bounded prediction quality separately
+from navigation behavior. Structural memory uses dynamic masking and
+measurement-time quality.
+Fresh measurement-time-aligned LiDAR evidence always outranks remembered
+geometry; no navigation, persistence or I/O authority is added to L4.
+
+Snapshot/projection/freshness/continuity run at control rate. Map integration
+runs on new scans; maintenance is driven by expiry or rolling-window changes.
+Unchanged geometry is read from an immutable revision cache, including on
+checkpoint restore. No wall clock, worker or separate layer authority is used.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+
+from v3.contracts import (
+    AdmittedFrame,
+    CostmapCell,
+    DataField,
+    DeviceHealthState,
+    ObstacleTrack,
+    Observation,
+    RobotEstimate,
+    RobotRelativeGeometry,
+    QualityState,
+    RollingLocalCostmap,
+    WorldSnapshot,
+)
+from v3.layers.l4_structural_memory import (
+    StructuralMemoryCheckpoint,
+    StructuralMemoryGrid,
+)
+from v3.layers.l4_temporal_history import (
+    LidarScanSnapshot,
+    PoseHistory,
+    PoseHistoryCheckpoint,
+    PoseSample,
+    ScanHistory,
+    ScanHistoryCheckpoint,
+)
+from v3.layers.l4_temporal_occupancy import (
+    ScanCellEvidence,
+    TemporalOccupancyCheckpoint,
+    TemporalOccupancyGrid,
+)
+from v3.layers.l4_temporal_tracking import (
+    PersonImageRegion,
+    PersonMeasurement,
+    TemporalTrackCheckpoint,
+    TemporalTrackStore,
+)
+
+
+def _values(observation: Observation) -> dict[str, object]:
+    return {field.key: field.value for field in observation.values}
+
+
+def _number(values: dict[str, object], key: str) -> float:
+    value = values.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"world-model field {key} must be numeric")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"world-model field {key} must be finite")
+    return result
+
+
+def _integer(values: dict[str, object], key: str) -> int:
+    value = values.get(key)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"world-model field {key} must be a non-negative integer")
+    return value
+
+
+def _boolean(values: dict[str, object], key: str) -> bool:
+    value = values.get(key)
+    if type(value) is not bool:
+        raise ValueError(f"world-model field {key} must be bool")
+    return value
+
+
+def _unit_number(values: dict[str, object], key: str) -> float:
+    result = _number(values, key)
+    if not 0.0 <= result <= 1.0:
+        raise ValueError(f"world-model field {key} must be in [0, 1]")
+    return result
+
+
+def _wrapped_angle(value: float) -> float:
+    return math.atan2(math.sin(value), math.cos(value))
+
+
+@dataclass(frozen=True, slots=True)
+class WorldModelConfig:
+    # Existing fields stay first and in their original order for compatibility.
+    max_track_age_ns: int
+    local_costmap_resolution_m: float
+    local_costmap_radius_m: float
+    local_costmap_max_cell_age_ns: int
+    local_costmap_max_cells: int
+    local_costmap_max_points_per_scan: int
+    person_tracking_enabled: bool
+    # Compatibility-only fallback for historical captures that predate projected
+    # person bearings. New live observations receive geometry from the vision owner.
+    person_camera_horizontal_fov_rad: float | None
+    person_camera_yaw_offset_rad: float | None
+    person_lidar_max_skew_ns: int
+    person_lidar_angular_margin_rad: float
+    person_lidar_cluster_depth_m: float
+    person_lidar_min_points: int
+    person_track_max_association_distance_m: float
+    person_track_max_speed_mps: float
+    person_track_radius_m: float
+    person_track_max_age_ns: int
+    person_track_reacquire_max_age_ns: int
+
+    # TEMPORAL-1 private implementation bounds. No public contract changes.
+    pose_history_max_age_ns: int
+    pose_history_max_samples: int
+    pose_lookup_max_skew_ns: int
+    scan_history_max_age_ns: int
+    scan_history_max_scans: int
+    occupancy_hit_increment: int
+    occupancy_free_decrement: int
+    occupancy_max_score: int
+    person_track_alpha: float
+    person_track_beta: float
+    person_track_prediction_max_age_ns: int
+
+    # TEMPORAL-2 structural local-memory bounds. Still L4-private.
+    structural_memory_enabled: bool
+    structural_max_age_ns: int
+    structural_max_cells: int
+    structural_hit_increment: int
+    structural_free_decrement: int
+    structural_max_score: int
+    structural_confirm_score: int
+    structural_deconfirm_score: int | None
+    structural_confirm_min_hits: int
+    structural_confirm_min_span_ns: int
+    structural_clear_score: int
+    structural_dynamic_mask_margin_m: float
+    structural_dynamic_mask_min_speed_mps: float
+    structural_dynamic_mask_max_tracks: int
+    structural_max_position_variance: float
+    global_coverage_resolution_m: float
+    global_coverage_max_cells: int
+    structural_max_yaw_variance: float
+    continuity_translation_base_m: float
+    continuity_translation_rate_mps: float
+    continuity_yaw_base_rad: float
+    continuity_yaw_rate_rad_s: float
+
+    def __post_init__(self) -> None:
+        for name in (
+            "max_track_age_ns",
+            "local_costmap_max_cell_age_ns",
+            "person_lidar_max_skew_ns",
+            "person_track_max_age_ns",
+            "person_track_reacquire_max_age_ns",
+            "pose_history_max_age_ns",
+            "scan_history_max_age_ns",
+            "structural_max_age_ns",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.person_track_reacquire_max_age_ns <= self.person_track_max_age_ns:
+            raise ValueError("person_track_reacquire_max_age_ns must exceed active track max age")
+        for name in ("pose_lookup_max_skew_ns", "person_track_prediction_max_age_ns", "structural_confirm_min_span_ns"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        for name in (
+            "local_costmap_resolution_m",
+            "local_costmap_radius_m",
+            "person_lidar_cluster_depth_m",
+            "person_track_max_association_distance_m",
+            "person_track_max_speed_mps",
+            "person_track_radius_m",
+            "structural_max_position_variance",
+            "global_coverage_resolution_m",
+            "structural_max_yaw_variance",
+            "structural_dynamic_mask_margin_m",
+            "structural_dynamic_mask_min_speed_mps",
+            "continuity_translation_base_m",
+            "continuity_translation_rate_mps",
+            "continuity_yaw_base_rad",
+            "continuity_yaw_rate_rad_s",
+        ):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value <= 0.0
+            ):
+                raise ValueError(f"{name} must be finite and positive")
+        for name in (
+            "local_costmap_max_cells",
+            "local_costmap_max_points_per_scan",
+            "person_lidar_min_points",
+            "pose_history_max_samples",
+            "global_coverage_max_cells",
+            "scan_history_max_scans",
+            "occupancy_hit_increment",
+            "occupancy_free_decrement",
+            "occupancy_max_score",
+            "structural_max_cells",
+            "structural_hit_increment",
+            "structural_free_decrement",
+            "structural_max_score",
+            "structural_confirm_score",
+            "structural_confirm_min_hits",
+            "structural_dynamic_mask_max_tracks",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if (
+            not isinstance(self.structural_clear_score, int)
+            or isinstance(self.structural_clear_score, bool)
+            or self.structural_clear_score < 0
+        ):
+            raise ValueError("structural_clear_score must be a non-negative integer")
+        if self.structural_confirm_score > self.structural_max_score:
+            raise ValueError("structural_confirm_score cannot exceed structural_max_score")
+        if self.structural_deconfirm_score is not None and (
+            not isinstance(self.structural_deconfirm_score, int)
+            or isinstance(self.structural_deconfirm_score, bool)
+        ):
+            raise ValueError("structural_deconfirm_score must be an integer or None")
+        effective_deconfirm_score = (
+            max(
+                self.structural_clear_score,
+                (self.structural_clear_score + self.structural_confirm_score) // 2,
+            )
+            if self.structural_deconfirm_score is None
+            else self.structural_deconfirm_score
+        )
+        if not (
+            self.structural_clear_score
+            <= effective_deconfirm_score
+            < self.structural_confirm_score
+        ):
+            raise ValueError(
+                "structural scores must satisfy clear <= deconfirm < confirm"
+            )
+        if type(self.person_tracking_enabled) is not bool:
+            raise TypeError("person_tracking_enabled must be bool")
+        if type(self.structural_memory_enabled) is not bool:
+            raise TypeError("structural_memory_enabled must be bool")
+        if self.person_tracking_enabled and (
+            self.person_camera_horizontal_fov_rad is None
+            or self.person_camera_yaw_offset_rad is None
+        ):
+            raise ValueError("person tracking requires legacy camera projection fallback")
+        if self.person_camera_horizontal_fov_rad is not None and (
+            not math.isfinite(self.person_camera_horizontal_fov_rad)
+            or not 0.0 < self.person_camera_horizontal_fov_rad < math.pi
+        ):
+            raise ValueError("person_camera_horizontal_fov_rad must be in (0, pi) or None")
+        if self.person_camera_yaw_offset_rad is not None and not math.isfinite(
+            self.person_camera_yaw_offset_rad
+        ):
+            raise ValueError("person_camera_yaw_offset_rad must be finite or None")
+        if (
+            not math.isfinite(self.person_lidar_angular_margin_rad)
+            or not 0.0 <= self.person_lidar_angular_margin_rad < math.pi / 2.0
+        ):
+            raise ValueError("person_lidar_angular_margin_rad is outside its valid range")
+        for name in ("person_track_alpha", "person_track_beta"):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or not 0.0 < float(value) <= 1.0
+            ):
+                raise ValueError(f"{name} must be in (0, 1]")
+
+
+@dataclass(frozen=True, slots=True)
+class WorldModelStateCheckpoint:
+    last_lidar_measurement_ns: int | None
+    last_lidar_sequence: int | None
+    map_revision: int
+    tracks: TemporalTrackCheckpoint
+    last_local_measurement_ns: int | None
+    last_local_sequence: int | None
+    last_local_values: tuple[DataField, ...] | None
+    costmap_revision: int
+    cells: TemporalOccupancyCheckpoint
+    pose_history: PoseHistoryCheckpoint
+    scan_history: ScanHistoryCheckpoint
+    structural_memory: StructuralMemoryCheckpoint | None = None
+    last_continuity_pose: PoseSample | None = None
+    structural_recall_ready: bool = False
+    cached_costmap: RollingLocalCostmap | None = None
+    costmap_window: tuple[float, float, float] | None = None
+    structural_active: bool = False
+    global_visited_cells: tuple[tuple[int, int, int], ...] = ()
+    last_global_visit: tuple[int, int] | None = None
+    robot_relative_geometry: RobotRelativeGeometry | None = None
+    last_robot_relative_values: tuple[DataField, ...] | None = None
+    pending_local_scan: Observation | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PersonImageDetection:
+    confidence: float
+    xmin: float
+    xmax: float
+    ymin: float | None = None
+    ymax: float | None = None
+    left_bearing_rad: float | None = None
+    right_bearing_rad: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PersonSpatialMeasurement:
+    confidence: float
+    x_m: float
+    y_m: float
+    image_region: PersonImageRegion | None = None
+
+
+class ShadowWorldModel:
+    """Own one bounded temporal world model and emit the unchanged WorldSnapshot."""
+
+    __slots__ = (
+        "_global_visited_cells", "_last_global_visit",
+        "_config",
+        "_costmap_revision",
+        "_cached_costmap",
+        "_costmap_window",
+        "_last_continuity_pose",
+        "_last_lidar_measurement_ns",
+        "_last_lidar_sequence",
+        "_last_local_measurement_ns",
+        "_last_local_sequence",
+        "_last_local_values",
+        "_robot_relative_geometry",
+        "_last_robot_relative_values",
+        "_pending_local_scan",
+        "_map_revision",
+        "_occupancy",
+        "_pose_history",
+        "_scan_history",
+        "_structural_memory",
+        "_structural_recall_ready",
+        "_structural_active",
+        "_track_store",
+    )
+
+    def __init__(self, config: WorldModelConfig) -> None:
+        self._global_visited_cells = ()
+        self._last_global_visit = None
+        self._config = config
+        self._last_lidar_measurement_ns: int | None = None
+        self._last_lidar_sequence: int | None = None
+        self._map_revision = 0
+        self._last_local_measurement_ns: int | None = None
+        self._last_local_sequence: int | None = None
+        self._last_local_values: tuple[DataField, ...] | None = None
+        self._robot_relative_geometry: RobotRelativeGeometry | None = None
+        self._last_robot_relative_values: tuple[DataField, ...] | None = None
+        self._pending_local_scan: Observation | None = None
+        self._costmap_revision = 0
+        self._cached_costmap: RollingLocalCostmap | None = None
+        self._costmap_window: tuple[float, float, float] | None = None
+        self._last_continuity_pose: PoseSample | None = None
+        self._structural_recall_ready = False
+        self._structural_active = False
+        self._pose_history = PoseHistory(
+            config.pose_history_max_age_ns,
+            config.pose_history_max_samples,
+            config.pose_lookup_max_skew_ns,
+        )
+        self._scan_history = ScanHistory(
+            config.scan_history_max_age_ns,
+            config.scan_history_max_scans,
+        )
+        self._occupancy = TemporalOccupancyGrid(
+            resolution_m=config.local_costmap_resolution_m,
+            radius_m=config.local_costmap_radius_m,
+            max_age_ns=config.local_costmap_max_cell_age_ns,
+            max_cells=config.local_costmap_max_cells,
+            hit_increment=config.occupancy_hit_increment,
+            free_decrement=config.occupancy_free_decrement,
+            max_score=config.occupancy_max_score,
+        )
+        self._structural_memory = StructuralMemoryGrid(
+            resolution_m=config.local_costmap_resolution_m,
+            max_age_ns=config.structural_max_age_ns,
+            max_cells=config.structural_max_cells,
+            hit_increment=config.structural_hit_increment,
+            free_decrement=config.structural_free_decrement,
+            max_score=config.structural_max_score,
+            confirm_score=config.structural_confirm_score,
+            deconfirm_score=config.structural_deconfirm_score,
+            confirm_min_hits=config.structural_confirm_min_hits,
+            confirm_min_span_ns=config.structural_confirm_min_span_ns,
+            clear_score=config.structural_clear_score,
+        )
+        self._track_store = TemporalTrackStore(
+            alpha=config.person_track_alpha,
+            beta=config.person_track_beta,
+            prediction_max_age_ns=config.person_track_prediction_max_age_ns,
+            max_speed_mps=config.person_track_max_speed_mps,
+            person_reacquire_max_age_ns=config.person_track_reacquire_max_age_ns,
+        )
+
+    def checkpoint(self) -> WorldModelStateCheckpoint:
+        return WorldModelStateCheckpoint(
+            self._last_lidar_measurement_ns,
+            self._last_lidar_sequence,
+            self._map_revision,
+            self._track_store.checkpoint(),
+            self._last_local_measurement_ns,
+            self._last_local_sequence,
+            self._last_local_values,
+            self._costmap_revision,
+            self._occupancy.checkpoint(),
+            self._pose_history.checkpoint(),
+            self._scan_history.checkpoint(),
+            self._structural_memory.checkpoint(),
+            self._last_continuity_pose,
+            self._structural_recall_ready,
+            self._cached_costmap,
+            self._costmap_window,
+            self._structural_active,
+            self._global_visited_cells, self._last_global_visit,
+            self._robot_relative_geometry, self._last_robot_relative_values,
+            self._pending_local_scan,
+        )
+
+    def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
+        if not isinstance(checkpoint, WorldModelStateCheckpoint):
+            raise TypeError("checkpoint must be WorldModelStateCheckpoint")
+        self._last_lidar_measurement_ns = checkpoint.last_lidar_measurement_ns
+        self._last_lidar_sequence = checkpoint.last_lidar_sequence
+        self._map_revision = checkpoint.map_revision
+        self._track_store.restore(checkpoint.tracks)
+        self._last_local_measurement_ns = checkpoint.last_local_measurement_ns
+        self._last_local_sequence = checkpoint.last_local_sequence
+        self._last_local_values = checkpoint.last_local_values
+        self._costmap_revision = checkpoint.costmap_revision
+        self._occupancy.restore(checkpoint.cells)
+        self._pose_history.restore(checkpoint.pose_history)
+        self._scan_history.restore(checkpoint.scan_history)
+        if checkpoint.structural_memory is None:
+            self._structural_memory.clear()
+        else:
+            self._structural_memory.restore(checkpoint.structural_memory)
+        self._last_continuity_pose = checkpoint.last_continuity_pose
+        self._structural_recall_ready = checkpoint.structural_recall_ready
+        self._cached_costmap = checkpoint.cached_costmap
+        self._costmap_window = checkpoint.costmap_window
+        self._structural_active = checkpoint.structural_active
+        self._global_visited_cells = checkpoint.global_visited_cells
+        self._last_global_visit = checkpoint.last_global_visit
+        self._robot_relative_geometry = checkpoint.robot_relative_geometry
+        self._last_robot_relative_values = checkpoint.last_robot_relative_values
+        self._pending_local_scan = checkpoint.pending_local_scan
+
+    def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
+        if frame.context == estimate.context and estimate.localization_quality.global_position is QualityState.GOOD:
+            self._update_global_coverage(estimate)
+        estimate = estimate.in_local_frame()
+        if frame.context != estimate.context:
+            raise ValueError("L4 inputs must use the same tick context")
+
+        continuity_broken = self._pose_discontinuity(estimate) or estimate.localization_quality.pose_discontinuity
+        if continuity_broken:
+            self._pose_history.clear()
+        frame_changed = self._pose_history.add(estimate)
+        if frame_changed or continuity_broken:
+            self._reset_spatial_state()
+        self._last_continuity_pose = PoseSample(
+            estimate.frame_id,
+            estimate.context.monotonic_ns,
+            estimate.x_m,
+            estimate.y_m,
+            estimate.yaw_rad,
+            estimate.covariance_5x5[0],
+            estimate.covariance_5x5[6],
+            estimate.covariance_5x5[12],
+        )
+
+        self._update_lidar_health(frame)
+        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
+        if len(local) > 1:
+            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
+        local_observation = local[0] if local else None
+        # Pose-independent scan lineage must continue through localization loss.
+        # Only the pose-aligned occupancy path below is allowed to freeze.
+        local_points = self._update_robot_relative_geometry(local_observation)
+
+        changed_tracks = False
+        for observation in frame.accepted:
+            if observation.kind != "obstacle_track":
+                continue
+            values = _values(observation)
+            track_id = values.get("track_id")
+            if not isinstance(track_id, str) or not track_id:
+                raise ValueError("obstacle_track.track_id must be a non-empty string")
+            changed_tracks = self._track_store.upsert_external(
+                ObstacleTrack(
+                    track_id=track_id,
+                    x_m=_number(values, "x_m"),
+                    y_m=_number(values, "y_m"),
+                    radius_m=_number(values, "radius_m"),
+                    vx_mps=_number(values, "vx_mps"),
+                    vy_mps=_number(values, "vy_mps"),
+                    confidence=_number(values, "confidence"),
+                ),
+                observation.captured_monotonic_ns,
+                observed_ns=frame.context.monotonic_ns,
+            ) or changed_tracks
+
+        costmap_changed = self._update_local_scan(
+            frame, estimate, local_observation, local_points,
+        )
+        if estimate.localization_quality.accumulated_translation_bias_warning:
+            # Interval-local motion can remain trustworthy while older scans
+            # no longer share a reliable odometry alignment. Retire that longer
+            # memory immediately, including a cached snapshot with no new scan.
+            # The fresh temporal grid and robot-relative sensing stay intact.
+            self._structural_recall_ready = False
+            costmap_changed = self._structural_memory.clear() or costmap_changed
+
+        if self._config.person_tracking_enabled and estimate.localization_quality.local_translation is not QualityState.LOST:
+            person_observations = tuple(
+                item for item in frame.accepted if item.kind == "person_detection"
+            )
+            if len(person_observations) > 1:
+                raise ValueError("L4 accepts at most one person_detection observation per tick")
+            if person_observations:
+                changed_tracks = self._update_person_tracks(person_observations[0], estimate) or changed_tracks
+
+        expired_tracks = self._track_store.expire(
+            frame.context.monotonic_ns,
+            person_max_age_ns=self._config.person_track_max_age_ns,
+            other_max_age_ns=self._config.max_track_age_ns,
+        )
+        if changed_tracks or expired_tracks:
+            self._map_revision += 1
+
+        now_ns = frame.context.monotonic_ns
+        window_changed = self._window_may_change(estimate)
+        occupancy_expiry = self._occupancy.next_expiry_ns
+        if costmap_changed or window_changed or (
+            occupancy_expiry is not None and now_ns >= occupancy_expiry
+        ):
+            costmap_changed = self._occupancy.prune(
+                now_ns=now_ns,
+                center_x_m=estimate.x_m,
+                center_y_m=estimate.y_m,
+            ) or costmap_changed
+        structural_expiry = self._structural_memory.next_expiry_ns
+        if structural_expiry is not None and now_ns >= structural_expiry:
+            costmap_changed = self._structural_memory.prune(now_ns=now_ns) or costmap_changed
+        structural_active = (
+            self._config.structural_memory_enabled
+            and self._structural_recall_ready
+            and self._structural_quality_ok(estimate)
+        )
+        if window_changed or (
+            self._cached_costmap is not None and structural_active != self._structural_active
+        ):
+            costmap_changed = True
+        self._structural_active = structural_active
+        if costmap_changed:
+            self._costmap_revision += 1
+            self._map_revision += 1
+
+        if self._last_lidar_measurement_ns is None:
+            raise ValueError("L4 requires an admitted lidar_health observation before output")
+        freshness_ns = max(0, frame.context.monotonic_ns - self._last_lidar_measurement_ns)
+        tracks = self._track_store.projected_tracks(frame.context.monotonic_ns)
+        local_costmap = None
+        if self._last_local_measurement_ns is not None and self._last_local_sequence is not None:
+            if self._cached_costmap is None or self._cached_costmap.revision != self._costmap_revision:
+                self._cached_costmap = RollingLocalCostmap(
+                    frame_id=estimate.frame_id,
+                    revision=self._costmap_revision,
+                    resolution_m=self._config.local_costmap_resolution_m,
+                    radius_m=self._config.local_costmap_radius_m,
+                    occupied_cells=tuple(
+                        CostmapCell(grid_x, grid_y, count)
+                        for grid_x, grid_y, count in self._assembled_occupied_cells(estimate)
+                    ),
+                    source_sequence=self._last_local_sequence,
+                    freshness_ns=max(0, now_ns - self._last_local_measurement_ns),
+                )
+                self._remember_costmap_window(estimate)
+            local_costmap = self._cached_costmap.with_freshness_ns(
+                max(0, now_ns - self._last_local_measurement_ns)
+            )
+        robot_relative_geometry = self._robot_relative_geometry
+        if robot_relative_geometry is not None:
+            robot_relative_geometry = robot_relative_geometry.with_freshness_ns(
+                max(0, now_ns - robot_relative_geometry.captured_monotonic_ns)
+            )
+        return WorldSnapshot(
+            frame.context,
+            frame_id=estimate.frame_id,
+            map_revision=self._map_revision,
+            obstacle_tracks=tracks,
+            freshness_ns=freshness_ns,
+            local_costmap=local_costmap,
+            global_visited_cells=self._global_visited_cells,
+            robot_relative_geometry=robot_relative_geometry,
+            person_detection_state=next(
+                (DeviceHealthState.DEGRADED
+                 if health.state is DeviceHealthState.OK and health.device_id in frame.degraded_sources
+                 else health.state for health in frame.device_health
+                 if health.device_id == "PERSON_DETECTOR_FRONT"),
+                None,
+            ),
+        )
+
+    def _reset_spatial_state(self) -> None:
+        self._pending_local_scan = None
+        self._scan_history.clear()
+        had_occupancy = self._occupancy.clear()
+        had_structural = self._structural_memory.clear()
+        had_tracks = self._track_store.clear()
+        self._last_local_measurement_ns = None
+        self._last_local_sequence = None
+        self._last_local_values = None
+        self._structural_recall_ready = False
+        self._structural_active = False
+        self._cached_costmap = None
+        self._costmap_window = None
+        if had_occupancy or had_structural or had_tracks:
+            self._costmap_revision += 1
+        self._map_revision += 1
+
+    def _update_global_coverage(self, estimate: RobotEstimate) -> None:
+        pose = estimate.global_pose
+        if pose is None:
+            return
+        size = self._config.global_coverage_resolution_m
+        key = (math.floor(pose.x_m/size), math.floor(pose.y_m/size))
+        if key == self._last_global_visit:
+            return
+        self._last_global_visit = key
+        visits = 1 + next((count for x, y, count in self._global_visited_cells if (x, y) == key), 0)
+        retained = tuple(cell for cell in self._global_visited_cells if cell[:2] != key)
+        self._global_visited_cells = (retained + ((*key, visits),))[-self._config.global_coverage_max_cells:]
+
+    def _window_may_change(self, estimate: RobotEstimate) -> bool:
+        if self._costmap_window is None:
+            return False
+        center_x, center_y, margin_m = self._costmap_window
+        distance_m = math.hypot(estimate.x_m - center_x, estimate.y_m - center_y)
+        # Triangle inequality guarantees that no cell can cross the radius
+        # inside this margin. Stationary and yaw-only ticks need no traversal.
+        return distance_m > 0.0 and distance_m >= max(0.0, margin_m - 1e-12)
+
+    def _remember_costmap_window(self, estimate: RobotEstimate) -> None:
+        margin_m = self._occupancy.window_margin_m(
+            center_x_m=estimate.x_m, center_y_m=estimate.y_m,
+        )
+        if self._structural_active:
+            margin_m = min(margin_m, self._structural_memory.window_margin_m(
+                center_x_m=estimate.x_m, center_y_m=estimate.y_m,
+                radius_m=self._config.local_costmap_radius_m,
+            ))
+        self._costmap_window = (estimate.x_m, estimate.y_m, margin_m)
+
+    def _pose_discontinuity(self, estimate: RobotEstimate) -> bool:
+        previous = self._last_continuity_pose
+        if previous is None or previous.frame_id != estimate.frame_id:
+            return False
+        elapsed_ns = estimate.context.monotonic_ns - previous.monotonic_ns
+        if elapsed_ns <= 0:
+            return False
+        dt_s = elapsed_ns / 1_000_000_000.0
+        translation_limit = (
+            self._config.continuity_translation_base_m
+            + self._config.continuity_translation_rate_mps * dt_s
+        )
+        yaw_limit = (
+            self._config.continuity_yaw_base_rad
+            + self._config.continuity_yaw_rate_rad_s * dt_s
+        )
+        translation = math.hypot(estimate.x_m - previous.x_m, estimate.y_m - previous.y_m)
+        yaw_delta = abs(_wrapped_angle(estimate.yaw_rad - previous.yaw_rad))
+        return translation > translation_limit or yaw_delta > yaw_limit
+
+    def _structural_quality_ok(self, estimate: RobotEstimate) -> bool:
+        covariance = estimate.covariance_5x5
+        quality = estimate.localization_quality
+        return (quality.local_translation is QualityState.GOOD
+                and quality.heading is QualityState.GOOD
+                and not quality.accumulated_translation_bias_warning
+                and quality.local_pose_continuous and not quality.pose_discontinuity
+                and self._structural_variance_ok(covariance[0], covariance[6], covariance[12]))
+
+    def _structural_pose_quality_ok(self, pose: PoseSample) -> bool:
+        return self._structural_variance_ok(
+            pose.position_variance_x,
+            pose.position_variance_y,
+            pose.yaw_variance,
+        )
+
+    def _structural_variance_ok(self, x_variance: float, y_variance: float, yaw_variance: float) -> bool:
+        return (
+            x_variance <= self._config.structural_max_position_variance
+            and y_variance <= self._config.structural_max_position_variance
+            and yaw_variance <= self._config.structural_max_yaw_variance
+        )
+
+    def _dynamic_structural_hit_keys(
+        self,
+        frame: AdmittedFrame,
+        *,
+        captured_ns: int,
+        evidence: ScanCellEvidence,
+    ) -> frozenset[tuple[int, int]]:
+        if not evidence.hit_keys:
+            return frozenset()
+
+        projection_limit_ns = self._config.person_track_prediction_max_age_ns
+        tracks: dict[str, ObstacleTrack] = {}
+        for state in self._track_store.checkpoint().states:
+            if (
+                not state.track.track_id.startswith("person-")
+                or state.captured_ns > captured_ns
+            ):
+                continue
+            projected_ns = min(captured_ns - state.captured_ns, projection_limit_ns)
+            dt_s = projected_ns / 1_000_000_000.0
+            track = state.track
+            tracks[track.track_id] = ObstacleTrack(
+                track_id=track.track_id,
+                x_m=track.x_m + track.vx_mps * dt_s,
+                y_m=track.y_m + track.vy_mps * dt_s,
+                radius_m=track.radius_m,
+                vx_mps=track.vx_mps,
+                vy_mps=track.vy_mps,
+                confidence=track.confidence,
+            )
+        for observation in frame.accepted:
+            if observation.kind != "obstacle_track" or observation.captured_monotonic_ns > captured_ns:
+                continue
+            values = _values(observation)
+            track_id = values.get("track_id")
+            if not isinstance(track_id, str) or not track_id:
+                raise ValueError("obstacle_track.track_id must be a non-empty string")
+            vx_mps = _number(values, "vx_mps")
+            vy_mps = _number(values, "vy_mps")
+            speed_mps = math.hypot(vx_mps, vy_mps)
+            if (
+                not track_id.startswith("person-")
+                and speed_mps < self._config.structural_dynamic_mask_min_speed_mps
+            ):
+                continue
+            dt_ns = min(captured_ns - observation.captured_monotonic_ns, projection_limit_ns)
+            dt_s = dt_ns / 1_000_000_000.0
+            tracks[track_id] = ObstacleTrack(
+                track_id=track_id,
+                x_m=_number(values, "x_m") + vx_mps * dt_s,
+                y_m=_number(values, "y_m") + vy_mps * dt_s,
+                radius_m=_number(values, "radius_m"),
+                vx_mps=vx_mps,
+                vy_mps=vy_mps,
+                confidence=_number(values, "confidence"),
+            )
+
+        ordered_tracks = tuple(tracks[key] for key in sorted(tracks))[
+            : self._config.structural_dynamic_mask_max_tracks
+        ]
+        if not ordered_tracks:
+            return frozenset()
+
+        resolution_m = self._config.local_costmap_resolution_m
+        cell_radius_m = resolution_m / math.sqrt(2.0)
+        ignored: set[tuple[int, int]] = set()
+        for key in evidence.hit_keys:
+            cell_x = (key[0] + 0.5) * resolution_m
+            cell_y = (key[1] + 0.5) * resolution_m
+            if any(
+                math.hypot(cell_x - track.x_m, cell_y - track.y_m)
+                <= track.radius_m + self._config.structural_dynamic_mask_margin_m + cell_radius_m
+                for track in ordered_tracks
+            ):
+                ignored.add(key)
+        return frozenset(ignored)
+
+    def _assembled_occupied_cells(self, estimate: RobotEstimate) -> tuple[tuple[int, int, int], ...]:
+        fast_all = self._occupancy.occupied_cells()
+        if not self._structural_active:
+            return fast_all[: self._config.local_costmap_max_cells]
+
+        # A trustworthy current ray that traverses a cell is stronger evidence
+        # than either the short temporal accumulator or the long memory. Keep
+        # the internal scores for hysteresis, but do not expose that cell as an
+        # obstacle in the current planner snapshot.
+        current_free = frozenset(self._structural_memory.current_free_keys)
+        fast = tuple(
+            cell for cell in fast_all if (cell[0], cell[1]) not in current_free
+        )
+        if len(fast) >= self._config.local_costmap_max_cells:
+            return fast[: self._config.local_costmap_max_cells]
+
+        result = list(fast)
+        used = {(grid_x, grid_y) for grid_x, grid_y, _ in fast}
+        excluded = frozenset((*used, *current_free))
+        remembered = self._structural_memory.confirmed_cells(
+            center_x_m=estimate.x_m,
+            center_y_m=estimate.y_m,
+            radius_m=self._config.local_costmap_radius_m,
+            excluded_keys=excluded,
+        )
+        remaining = self._config.local_costmap_max_cells - len(result)
+        result.extend(remembered[:remaining])
+        return tuple(result)
+
+    def _update_lidar_health(self, frame: AdmittedFrame) -> None:
+        lidar = tuple(item for item in frame.accepted if item.kind == "lidar_health")
+        if len(lidar) > 1:
+            raise ValueError("L4 accepts at most one lidar_health observation per tick")
+        if not lidar:
+            return
+        observation = lidar[0]
+        values = _values(observation)
+        age_ns = _number(values, "age_ns")
+        if "point_count" in values:
+            point_count = _number(values, "point_count")
+            quality_valid = point_count >= 0.0
+            measurement_ns = observation.captured_monotonic_ns
+        else:
+            confidence = _number(values, "confidence")
+            quality_valid = 0.0 <= confidence <= 1.0
+            measurement_ns = max(0, observation.captured_monotonic_ns - int(round(age_ns)))
+        if age_ns < 0.0 or not quality_valid:
+            raise ValueError("lidar health values are outside their physical range")
+        if self._last_lidar_sequence is not None and observation.source_sequence < self._last_lidar_sequence:
+            raise ValueError("L4 lidar sequence must not move backwards")
+        if self._last_lidar_measurement_ns is not None and measurement_ns < self._last_lidar_measurement_ns:
+            raise ValueError("L4 lidar measurement time must not move backwards")
+        if self._last_lidar_sequence is None or observation.source_sequence > self._last_lidar_sequence:
+            self._map_revision += 1
+            self._last_lidar_sequence = observation.source_sequence
+            self._last_lidar_measurement_ns = measurement_ns
+
+    def _local_scan_points(self, observation: Observation) -> tuple[tuple[float, float], ...]:
+        """Validate one bounded immutable scan and parse its robot-frame points."""
+        values = _values(observation)
+        if values.get("frame_id") != "ROBOT_BASE":
+            raise ValueError("lidar local points must use the ROBOT_BASE frame")
+        point_count = _integer(values, "point_count")
+        if point_count > self._config.local_costmap_max_points_per_scan:
+            raise ValueError("lidar local point_count exceeds the configured bound")
+        expected_keys = {"frame_id", "point_count"}
+        expected_keys.update(
+            f"point_{index:03d}_{suffix}"
+            for index in range(point_count)
+            for suffix in ("x_m", "y_m", "quality")
+        )
+        if set(values) != expected_keys:
+            raise ValueError("lidar local point fields do not match point_count")
+        points: list[tuple[float, float]] = []
+        for index in range(point_count):
+            local_x = _number(values, f"point_{index:03d}_x_m")
+            local_y = _number(values, f"point_{index:03d}_y_m")
+            _integer(values, f"point_{index:03d}_quality")
+            points.append((local_x, local_y))
+        return tuple(points)
+
+    def _update_robot_relative_geometry(
+        self, observation: Observation | None,
+    ) -> tuple[tuple[float, float], ...] | None:
+        """Track fresh ROBOT_BASE geometry independently of localization quality.
+
+        This intentionally does not integrate, transform or persist obstacle
+        geometry.  It only carries scan lineage/freshness so recovery can keep
+        observing while pose-aligned mapping remains fail-closed.
+        """
+        if observation is None:
+            return None
+
+        previous = self._robot_relative_geometry
+        if previous is not None:
+            if observation.source_sequence < previous.source_sequence:
+                raise ValueError("L4 robot-relative perception sequence must not move backwards")
+            if observation.captured_monotonic_ns < previous.captured_monotonic_ns:
+                raise ValueError("L4 robot-relative perception time must not move backwards")
+            if observation.source_sequence == previous.source_sequence:
+                if (
+                    observation.captured_monotonic_ns != previous.captured_monotonic_ns
+                    or observation.values != self._last_robot_relative_values
+                ):
+                    raise ValueError("L4 robot-relative perception sequence was rewritten")
+                if observation.values is not self._last_robot_relative_values:
+                    # Scalar equality alone treats True and 1.0 as integer 1.
+                    # A reconstructed duplicate still needs the integer header
+                    # check; the original immutable tuple already passed it.
+                    _integer(_values(observation), "point_count")
+                # Equal sequence, time and immutable values were already fully
+                # validated. Do not rebuild point keys or parse at control rate.
+                return None
+
+        points = self._local_scan_points(observation)
+
+        self._robot_relative_geometry = RobotRelativeGeometry(
+            frame_id="ROBOT_BASE",
+            source_sequence=observation.source_sequence,
+            captured_monotonic_ns=observation.captured_monotonic_ns,
+            point_count=len(points),
+            freshness_ns=0,
+        )
+        self._last_robot_relative_values = observation.values
+        return points
+
+    def _update_local_scan(
+        self,
+        frame: AdmittedFrame,
+        estimate: RobotEstimate,
+        local_observation: Observation | None,
+        local_points: tuple[tuple[float, float], ...] | None,
+    ) -> bool:
+        if local_observation is not None:
+            self._pending_local_scan = local_observation
+        if (estimate.localization_quality.local_translation is QualityState.LOST
+                or estimate.localization_quality.heading is QualityState.LOST):
+            self._structural_recall_ready = False
+            return False
+        observation = self._pending_local_scan
+        if observation is None:
+            return False
+        # Retry only an already admitted immutable scan. Its original sequence
+        # and time remain authoritative; downstream freshness is not renewed.
+        self._pending_local_scan = None
+        if self._last_local_sequence is not None and observation.source_sequence < self._last_local_sequence:
+            raise ValueError("L4 local perception sequence must not move backwards")
+        if (
+            self._last_local_measurement_ns is not None
+            and observation.captured_monotonic_ns < self._last_local_measurement_ns
+        ):
+            raise ValueError("L4 local perception time must not move backwards")
+        repeated_sequence = observation.source_sequence == self._last_local_sequence
+        if repeated_sequence and (
+            observation.captured_monotonic_ns != self._last_local_measurement_ns
+            or observation.values != self._last_local_values
+        ):
+            raise ValueError("L4 local perception sequence was rewritten")
+        if repeated_sequence:
+            return False
+
+        pose = self._pose_history.lookup(observation.captured_monotonic_ns, estimate.frame_id)
+        if pose is None:
+            # An admitted scan may predate the bounded pose history (startup,
+            # frame reset or delayed delivery). Only pose-aligned mapping is
+            # unavailable; the fresh robot-relative evidence remains valid.
+            # Keep the prior map's measurement time, or publish no map at all.
+            return False
+        if not pose.local_geometry_usable:
+            return False
+        if local_points is None:
+            # A later eligible tick retries the admitted scan, including after
+            # checkpoint restore. No new persistent parsed-payload state is needed.
+            local_points = self._local_scan_points(observation)
+        yaw_cos = math.cos(pose.yaw_rad)
+        yaw_sin = math.sin(pose.yaw_rad)
+        endpoints: list[tuple[float, float]] = []
+        for local_x, local_y in local_points:
+            if math.hypot(local_x, local_y) > self._config.local_costmap_radius_m:
+                continue
+            endpoints.append(
+                (
+                    pose.x_m + yaw_cos * local_x - yaw_sin * local_y,
+                    pose.y_m + yaw_sin * local_x + yaw_cos * local_y,
+                )
+            )
+        evidence = self._occupancy.integrate_scan(
+            origin_x_m=pose.x_m,
+            origin_y_m=pose.y_m,
+            endpoints=tuple(endpoints),
+            captured_ns=observation.captured_monotonic_ns,
+        )
+        if self._config.structural_memory_enabled:
+            if self._structural_quality_ok(estimate) and self._structural_pose_quality_ok(pose):
+                ignored_hit_keys = self._dynamic_structural_hit_keys(
+                    frame,
+                    captured_ns=observation.captured_monotonic_ns,
+                    evidence=evidence,
+                )
+                self._structural_memory.integrate(
+                    evidence,
+                    captured_ns=observation.captured_monotonic_ns,
+                    ignored_hit_keys=ignored_hit_keys,
+                )
+                # The current snapshot already gives these trusted free rays
+                # veto authority. Retire their temporal residue as well, so a
+                # subsequent scan elsewhere cannot resurrect old occupancy.
+                self._occupancy.clear_free_cells(evidence)
+                self._structural_recall_ready = True
+            else:
+                # Do not learn or clear long-lived geometry from a spatially
+                # uncertain scan. Recall remains disabled until the next good
+                # local scan closes a trustworthy structural observation.
+                self._structural_recall_ready = False
+        self._scan_history.add(
+            LidarScanSnapshot(
+                observation.source_sequence,
+                observation.captured_monotonic_ns,
+                estimate.frame_id,
+                observation.values,
+                pose,
+            )
+        )
+        self._last_local_sequence = observation.source_sequence
+        self._last_local_measurement_ns = observation.captured_monotonic_ns
+        self._last_local_values = observation.values
+        # Preserve the historic revision meaning: every accepted new local scan
+        # advances the local costmap revision even when it contains zero hits.
+        return True
+
+    def _update_person_tracks(self, observation: Observation, estimate: RobotEstimate) -> bool:
+        scan = self._scan_history.nearest(
+            observation.captured_monotonic_ns,
+            self._config.person_lidar_max_skew_ns,
+            estimate.frame_id,
+        )
+        if scan is None:
+            return False
+        detection_pose = self._pose_history.lookup(
+            observation.captured_monotonic_ns,
+            estimate.frame_id,
+        )
+        if detection_pose is None:
+            return False
+        image_detections = self._person_image_detections(observation)
+        if not image_detections:
+            return False
+        spatial = self._localize_people(image_detections, scan, detection_pose)
+        if not spatial:
+            return False
+        return self._track_store.associate_people(
+            tuple(PersonMeasurement(item.confidence, item.x_m, item.y_m, item.image_region)
+                  for item in spatial),
+            captured_ns=observation.captured_monotonic_ns,
+            radius_m=self._config.person_track_radius_m,
+            max_association_distance_m=self._config.person_track_max_association_distance_m,
+            observed_ns=estimate.context.monotonic_ns,
+        )
+
+    def _person_image_detections(self, observation: Observation) -> tuple[_PersonImageDetection, ...]:
+        values = _values(observation)
+        detected = _boolean(values, "person_detected")
+        if not detected:
+            return ()
+        projection_state = values.get("geometry_projection_state")
+        if projection_state is not None:
+            if projection_state not in {"VALID", "DEGRADED", "INVALID"}:
+                raise ValueError("person detection geometry_projection_state is invalid")
+            if projection_state == "INVALID":
+                # Preserve 2D detection capability, but fail closed for spatial fusion.
+                return ()
+        emitted = values.get("emitted_person_count")
+        if emitted is None:
+            confidence = _unit_number(values, "primary_confidence")
+            xmin = _unit_number(values, "primary_xmin")
+            xmax = _unit_number(values, "primary_xmax")
+            if xmax <= xmin:
+                raise ValueError("person detection bounding box must have positive width")
+            ymin, ymax = self._person_vertical_extent(values, "primary")
+            left, right = self._person_projected_bearings(values, "primary", projection_state)
+            return (_PersonImageDetection(confidence, xmin, xmax, ymin, ymax, left, right),)
+        count = _integer(values, "emitted_person_count")
+        detections: list[_PersonImageDetection] = []
+        for index in range(count):
+            prefix = f"person_{index:03d}"
+            confidence = _unit_number(values, f"{prefix}_confidence")
+            xmin = _unit_number(values, f"{prefix}_xmin")
+            xmax = _unit_number(values, f"{prefix}_xmax")
+            if xmax <= xmin:
+                raise ValueError("person detection bounding box must have positive width")
+            ymin, ymax = self._person_vertical_extent(values, prefix)
+            left, right = self._person_projected_bearings(values, prefix, projection_state)
+            detections.append(
+                _PersonImageDetection(confidence, xmin, xmax, ymin, ymax, left, right)
+            )
+        return tuple(detections)
+
+    @staticmethod
+    def _person_projected_bearings(
+        values: dict[str, object],
+        prefix: str,
+        projection_state: object,
+    ) -> tuple[float | None, float | None]:
+        left_key = f"{prefix}_bearing_left_rad"
+        right_key = f"{prefix}_bearing_right_rad"
+        has_left = left_key in values
+        has_right = right_key in values
+        if projection_state is None:
+            if has_left or has_right:
+                raise ValueError("legacy person detection must not carry partial projected bearings")
+            return None, None
+        if projection_state == "INVALID":
+            return None, None
+        if not has_left or not has_right:
+            raise ValueError("projected person detection is missing bearing bounds")
+        return _wrapped_angle(_number(values, left_key)), _wrapped_angle(_number(values, right_key))
+
+    @staticmethod
+    def _person_vertical_extent(
+        values: dict[str, object], prefix: str,
+    ) -> tuple[float | None, float | None]:
+        # Older observations only carried horizontal bounds.
+        if f"{prefix}_ymin" not in values and f"{prefix}_ymax" not in values:
+            return None, None
+        ymin = _unit_number(values, f"{prefix}_ymin")
+        ymax = _unit_number(values, f"{prefix}_ymax")
+        if ymax <= ymin:
+            raise ValueError("person detection bounding box must have positive height")
+        return ymin, ymax
+
+    def _localize_people(
+        self,
+        detections: tuple[_PersonImageDetection, ...],
+        scan: LidarScanSnapshot,
+        detection_pose: PoseSample,
+    ) -> tuple[_PersonSpatialMeasurement, ...]:
+        values = {field.key: field.value for field in scan.values}
+        point_count = _integer(values, "point_count")
+        scan_cos = math.cos(scan.pose.yaw_rad)
+        scan_sin = math.sin(scan.pose.yaw_rad)
+        lidar_points: list[tuple[int, float, float, float, float]] = []
+        for index in range(point_count):
+            local_x = _number(values, f"point_{index:03d}_x_m")
+            local_y = _number(values, f"point_{index:03d}_y_m")
+            _integer(values, f"point_{index:03d}_quality")
+            world_x = scan.pose.x_m + scan_cos * local_x - scan_sin * local_y
+            world_y = scan.pose.y_m + scan_sin * local_x + scan_cos * local_y
+            dx = world_x - detection_pose.x_m
+            dy = world_y - detection_pose.y_m
+            range_m = math.hypot(dx, dy)
+            if range_m <= 0.0:
+                continue
+            bearing = _wrapped_angle(math.atan2(dy, dx) - detection_pose.yaw_rad)
+            lidar_points.append((index, world_x, world_y, range_m, bearing))
+
+        used_points: set[int] = set()
+        result: list[_PersonSpatialMeasurement] = []
+        for detection in detections:
+            if detection.left_bearing_rad is None:
+                left = self._legacy_pixel_bearing(detection.xmin)
+                right = self._legacy_pixel_bearing(detection.xmax)
+            else:
+                if detection.right_bearing_rad is None:
+                    raise ValueError("projected person detection has incomplete bearing bounds")
+                left = detection.left_bearing_rad
+                right = detection.right_bearing_rad
+            lower = min(left, right) - self._config.person_lidar_angular_margin_rad
+            upper = max(left, right) + self._config.person_lidar_angular_margin_rad
+            candidates = [
+                point
+                for point in lidar_points
+                if point[0] not in used_points and lower <= point[4] <= upper
+            ]
+            if not candidates:
+                continue
+            candidates.sort(key=lambda item: (item[3], item[1], item[2], item[0]))
+            nearest = candidates[0][3]
+            cluster = tuple(
+                point
+                for point in candidates
+                if point[3] <= nearest + self._config.person_lidar_cluster_depth_m
+            )
+            if len(cluster) < self._config.person_lidar_min_points:
+                continue
+            for point in cluster:
+                used_points.add(point[0])
+            world_x = sum(point[1] for point in cluster) / len(cluster)
+            world_y = sum(point[2] for point in cluster) / len(cluster)
+            region = None
+            if detection.ymin is not None and detection.ymax is not None:
+                region = PersonImageRegion(
+                    _wrapped_angle(detection_pose.yaw_rad + (left + right) / 2),
+                    abs(left - right), detection.ymin, detection.ymax,
+                )
+            result.append(_PersonSpatialMeasurement(
+                detection.confidence, world_x, world_y, region,
+            ))
+        return tuple(result)
+
+    def _legacy_pixel_bearing(self, normalized_x: float) -> float:
+        # Historical replay fallback only. Live detections carry geometry-owner bearings.
+        fov = self._config.person_camera_horizontal_fov_rad
+        yaw = self._config.person_camera_yaw_offset_rad
+        if fov is None or yaw is None:
+            raise ValueError("legacy person bearing fallback is unavailable")
+        focal = 0.5 / math.tan(fov * 0.5)
+        return yaw + math.atan2(0.5 - normalized_x, focal)
+
+    # Kept as compatibility helpers for tests/tools that may inspect L4 directly.
+    def _grid_key(self, x_m: float, y_m: float) -> tuple[int, int]:
+        return self._occupancy.grid_key(x_m, y_m)
+
+    def _cell_distance_m(self, key: tuple[int, int], x_m: float, y_m: float) -> float:
+        return self._occupancy.cell_distance_m(key, x_m, y_m)
+
+
+def build_empty_world(frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
+    return WorldSnapshot(
+        frame.context,
+        frame_id=estimate.frame_id,
+        map_revision=0,
+        obstacle_tracks=(),
+        freshness_ns=0,
+    )
+
+
+__all__ = [
+    "ShadowWorldModel",
+    "WorldModelConfig",
+    "WorldModelStateCheckpoint",
+    "build_empty_world",
+]

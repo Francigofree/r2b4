@@ -1,0 +1,845 @@
+"""Finite native V3 owner for RPLIDAR acquisition and scan matching."""
+
+from __future__ import annotations
+
+import math
+import multiprocessing
+import os
+import queue
+import threading
+import time
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Protocol
+
+from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_affinity
+from v3.lidar_config import LidarMatcherConfig
+from v3.lidar_matcher_process import matcher_process_main, put_latest
+from .live_lidar import LidarRelativeMotionReading
+
+from .latest_lidar import (
+    MATCHER_CONFIDENCE_MODEL,
+    MATCHER_CONTRACT_ID,
+    MATCHER_TRANSPORT,
+    POSE_FRAME_ID,
+    POSE_FRAME_OWNER,
+    POSE_FRAME_YAW,
+)
+from .rplidar_c1 import (
+    NativeRplidarC1,
+    RplidarC1Config,
+    RplidarPoint,
+    RplidarScan,
+    RplidarSerialFactory,
+)
+
+
+MATCHER_START_METHOD = "spawn"
+MATCHER_QUEUE_CAPACITY = 1
+MATCHER_MAX_AGE_NS = 250_000_000
+
+
+class NativeScanDriver(Protocol):
+    config: RplidarC1Config
+
+    def start(self) -> bool: ...
+
+    def stop(self) -> None: ...
+
+    def get_latest_scan(self) -> RplidarScan | None: ...
+
+    def get_runtime_status(self) -> Mapping[str, object]: ...
+
+
+def _positive_float(value: object, name: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0.0
+    ):
+        raise ValueError(f"{name} must be finite and positive")
+    return float(value)
+
+
+def _positive_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
+def _nonnegative_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _mapping(value: object, name: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be an object")
+    return value
+
+
+def _optional_string(value: object, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty string or null")
+    return value.strip()
+
+
+@dataclass(frozen=True, slots=True)
+class NativeLidarPortConfig:
+    """Closed acquisition, worker and freshness configuration."""
+
+    driver: RplidarC1Config
+    danger_zone_m: float
+    matcher: LidarMatcherConfig
+    poll_interval_s: float = 1.0 / 120.0
+    process_ready_timeout_s: float = 8.0
+    process_stop_timeout_s: float = 1.0
+    maximum_input_age_ns: int = MATCHER_MAX_AGE_NS
+    maximum_result_age_ns: int = MATCHER_MAX_AGE_NS
+    matcher_start_method: str = MATCHER_START_METHOD
+    input_queue_capacity: int = MATCHER_QUEUE_CAPACITY
+    result_queue_capacity: int = MATCHER_QUEUE_CAPACITY
+    global_backend: str = "native"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.driver, RplidarC1Config):
+            raise TypeError("driver must be RplidarC1Config")
+        _positive_float(self.danger_zone_m, "danger_zone_m")
+        for value, name in (
+            (self.poll_interval_s, "poll_interval_s"),
+            (self.process_ready_timeout_s, "process_ready_timeout_s"),
+            (self.process_stop_timeout_s, "process_stop_timeout_s"),
+        ):
+            _positive_float(value, name)
+        for value, name in (
+            (self.maximum_input_age_ns, "maximum_input_age_ns"),
+            (self.maximum_result_age_ns, "maximum_result_age_ns"),
+        ):
+            _positive_int(value, name)
+        expected = {
+            "matcher_start_method": MATCHER_START_METHOD,
+            "input_queue_capacity": MATCHER_QUEUE_CAPACITY,
+            "result_queue_capacity": MATCHER_QUEUE_CAPACITY,
+        }
+        for name, value in expected.items():
+            if getattr(self, name) != value:
+                raise ValueError(f"{name} must be {value}")
+        if not isinstance(self.matcher, LidarMatcherConfig):
+            raise TypeError("matcher must be LidarMatcherConfig")
+        if self.global_backend not in {"native", "slam_toolbox"}:
+            raise ValueError("global_backend must be native or slam_toolbox")
+
+    @property
+    def matcher_config(self) -> dict[str, object]:
+        return self.matcher.as_mapping()
+
+
+def load_native_lidar_port_config(hardware_path, control_path, *, danger_zone_m):
+    """Compatibility entrypoint delegated to the sole resolver."""
+    from v3.config import ConfigResolver
+    control = Path(control_path)
+    resolved = ConfigResolver(hardware_path, control.with_name("fizika.json"), control.with_name("speed_map.json"), control).resolve()
+    if danger_zone_m != resolved.lidar.danger_zone_m:
+        raise ValueError("LiDAR danger zone conflicts with resolved config")
+    return resolved.lidar
+
+
+def _freeze(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class NativeRawLidarSnapshot:
+    """Latest physical scan; ``raw_scan_timestamp`` is completion time."""
+
+    raw_scan_id: int
+    raw_scan_timestamp: float
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    health: str
+    raw_scan: tuple[RplidarPoint, ...]
+    summary: Mapping[str, object]
+    observed_monotonic_ns: int | None = None
+
+    def __post_init__(self) -> None:
+        _positive_int(self.raw_scan_id, "raw_scan_id")
+        if (
+            isinstance(self.raw_scan_timestamp, bool)
+            or not isinstance(self.raw_scan_timestamp, (int, float))
+            or not math.isfinite(self.raw_scan_timestamp)
+            or self.raw_scan_timestamp < 0.0
+        ):
+            raise ValueError("raw_scan_timestamp must be finite and non-negative")
+        completion_ns = int(round(float(self.raw_scan_timestamp) * 1e9))
+        for value, name in (
+            (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
+            (self.scan_end_monotonic_ns, "scan_end_monotonic_ns"),
+            (self.measurement_monotonic_ns, "measurement_monotonic_ns"),
+        ):
+            _nonnegative_int(value, name)
+        if completion_ns != self.scan_end_monotonic_ns:
+            raise ValueError("raw_scan_timestamp must equal scan completion")
+        midpoint_ns = self.scan_start_monotonic_ns + (
+            self.scan_end_monotonic_ns - self.scan_start_monotonic_ns
+        ) // 2
+        if (
+            self.scan_start_monotonic_ns > self.scan_end_monotonic_ns
+            or self.measurement_monotonic_ns != midpoint_ns
+        ):
+            raise ValueError("raw scan timing must contain its exact midpoint")
+        if self.health not in {"OK", "STALE", "ERROR"}:
+            raise ValueError("health must be OK, STALE or ERROR")
+        if not isinstance(self.raw_scan, tuple) or any(
+            not isinstance(point, RplidarPoint) for point in self.raw_scan
+        ):
+            raise ValueError("raw_scan must be a tuple of RplidarPoint")
+        if not isinstance(self.summary, Mapping):
+            raise ValueError("summary must be a mapping")
+        if self.observed_monotonic_ns is not None:
+            _nonnegative_int(self.observed_monotonic_ns, "observed_monotonic_ns")
+
+
+@dataclass(frozen=True, slots=True)
+class TimedPoseReference:
+    """One immutable pose at an exact monotonic measurement timestamp."""
+
+    monotonic_ns: int
+    x_m: float
+    y_m: float
+    yaw_rad: float
+
+    def __post_init__(self) -> None:
+        _nonnegative_int(self.monotonic_ns, "monotonic_ns")
+        for value, name in (
+            (self.x_m, "x_m"),
+            (self.y_m, "y_m"),
+            (self.yaw_rad, "yaw_rad"),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"{name} must be finite numeric")
+
+    @property
+    def pose(self) -> tuple[float, float, float]:
+        return (float(self.x_m), float(self.y_m), float(self.yaw_rad))
+
+
+@dataclass(frozen=True, slots=True)
+class NativeMatcherResult:
+    matcher_result_id: int
+    candidate_id: int
+    source_raw_scan_id: int
+    source_raw_scan_timestamp: float
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    pose_reference_monotonic_ns: int
+    timestamp: float
+    summary: Mapping[str, object]
+
+
+def _sector_summary(scan: RplidarScan) -> Mapping[str, object]:
+    sectors: dict[str, list[RplidarPoint]] = {
+        "front": [],
+        "rear": [],
+        "left": [],
+        "right": [],
+    }
+    for point in scan.points:
+        angle = point.angle_deg
+        if angle < 45.0 or angle > 315.0:
+            sectors["front"].append(point)
+        if 135.0 < angle < 225.0:
+            sectors["rear"].append(point)
+        if 225.0 <= angle <= 315.0:
+            sectors["left"].append(point)
+        if 45.0 <= angle <= 135.0:
+            sectors["right"].append(point)
+
+    def minimum(name: str) -> float:
+        values = sectors[name]
+        return min((item.distance_m for item in values), default=0.0)
+
+    front = minimum("front")
+    rear = minimum("rear")
+    left = minimum("left")
+    right = minimum("right")
+    global_minimum = min((point.distance_m for point in scan.points), default=0.0)
+    return _freeze(
+        {
+            "safety_contract": "R2B4_V3_LIDAR_SECTOR_CLEARANCE_V1",
+            "raw_scan_id": scan.revision,
+            # Compatibility timestamp: this is scan completion, not measurement.
+            "raw_scan_timestamp": scan.captured_monotonic_ns / 1_000_000_000.0,
+            "scan_start_monotonic_ns": scan.scan_start_monotonic_ns,
+            "scan_end_monotonic_ns": scan.scan_end_monotonic_ns,
+            "measurement_monotonic_ns": scan.measurement_monotonic_ns,
+            "raw_safety_raw_scan_id": scan.revision,
+            "raw_safety_raw_scan_timestamp": (
+                scan.captured_monotonic_ns / 1_000_000_000.0
+            ),
+            "raw_safety_scan_point_count": len(scan.points),
+            "raw_safety_valid_point_count": len(scan.points),
+            "minimum_clearance_m": global_minimum,
+            "front_clearance_m": front,
+            "rear_clearance_m": rear,
+            "left_clearance_m": left,
+            "right_clearance_m": right,
+            "front_observation_count": len(sectors["front"]),
+            "rear_observation_count": len(sectors["rear"]),
+            "left_observation_count": len(sectors["left"]),
+            "right_observation_count": len(sectors["right"]),
+        }
+    )  # type: ignore[return-value]
+
+
+class NativeLidarPort:
+    """Own one driver, one latest-only matcher process and one pump thread."""
+
+    def __init__(
+        self,
+        config: NativeLidarPortConfig,
+        pose_provider: Callable[[int], TimedPoseReference | None],
+        *,
+        driver: NativeScanDriver,
+        process_context: Any | None = None,
+        matcher_cpus: CpuSet | None = None,
+        strict_affinity: bool = False,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        if not isinstance(config, NativeLidarPortConfig):
+            raise TypeError("config must be NativeLidarPortConfig")
+        for callback, name in (
+            (pose_provider, "pose_provider"),
+            (monotonic_ns, "monotonic_ns"),
+            (sleep, "sleep"),
+        ):
+            if not callable(callback):
+                raise TypeError(f"{name} must be callable")
+        self._config = config
+        self._pose_provider = pose_provider
+        self._driver = driver
+        for name in ("start", "stop", "get_latest_scan", "get_runtime_status"):
+            if not callable(getattr(self._driver, name, None)):
+                raise TypeError(f"driver must provide callable {name}")
+        self._matcher_cpus = normalize_cpus(matcher_cpus) if matcher_cpus is not None else None
+        self._strict_affinity = strict_affinity
+        self._process_context = process_context
+        self._monotonic_ns = monotonic_ns
+        self._sleep = sleep
+        self._lock = threading.Lock()
+        self._running = False
+        self._thread: threading.Thread | None = None
+        self._process: Any | None = None
+        self._input_queue: Any | None = None
+        self._result_queue: Any | None = None
+        self._stop_event: Any | None = None
+        self._raw_snapshot: NativeRawLidarSnapshot | None = None
+        self._matcher_result: NativeMatcherResult | None = None
+        self._relative_result: LidarRelativeMotionReading | None = None
+        self._last_relative_scan_revision = 0
+        self._last_queued_scan_revision = 0
+        self._last_matched_scan_revision = 0
+        self._matcher_result_revision = 0
+        self._queue_drops = 0
+        self._result_drops = 0
+        self._matcher_errors = 0
+        self._last_matcher_reason = ""
+        self._matcher_error = ""
+        self._fatal_error = ""
+
+    @property
+    def config(self) -> NativeLidarPortConfig:
+        return self._config
+
+    def start(self) -> bool:
+        with self._lock:
+            if self._running:
+                return True
+        context = self._process_context or multiprocessing.get_context(
+            self._config.matcher_start_method
+        )
+        input_queue = context.Queue(maxsize=self._config.input_queue_capacity)
+        result_queue = context.Queue(maxsize=self._config.result_queue_capacity)
+        stop_event = context.Event()
+        ready_event = context.Event()
+        process = context.Process(
+            target=matcher_process_main,
+            args=(input_queue, result_queue, stop_event, ready_event,
+                  self._matcher_cpus, self._strict_affinity, os.getpid()),
+            name="v3-lidar-matcher",
+            daemon=False,
+        )
+        with temporary_current_affinity(self._matcher_cpus, role="lidar-matcher",
+                                        strict=self._strict_affinity):
+            process.start()
+        if not ready_event.wait(timeout=self._config.process_ready_timeout_s):
+            self._stop_process(process, input_queue, result_queue, stop_event)
+            return False
+        if not process.is_alive():
+            self._stop_process(process, input_queue, result_queue, stop_event)
+            return False
+        try:
+            driver_started = self._driver.start()
+        except Exception:
+            try:
+                self._driver.stop()
+            except Exception:
+                pass
+            self._stop_process(process, input_queue, result_queue, stop_event)
+            raise
+        if driver_started is not True:
+            try:
+                self._driver.stop()
+            finally:
+                self._stop_process(process, input_queue, result_queue, stop_event)
+            return False
+        with self._lock:
+            self._process = process
+            self._input_queue = input_queue
+            self._result_queue = result_queue
+            self._stop_event = stop_event
+            # A fresh worker owns fresh queues and source history. No cached
+            # completion from the previous process lifetime can resume motion.
+            self._raw_snapshot = None
+            self._matcher_result = None
+            self._relative_result = None
+            self._last_queued_scan_revision = 0
+            self._last_matched_scan_revision = 0
+            self._last_relative_scan_revision = 0
+            self._matcher_result_revision = 0
+            self._matcher_error = ""
+            self._fatal_error = ""
+            self._running = True
+        self._thread = threading.Thread(
+            target=self._run,
+            name="v3-lidar-owner",
+            daemon=False,
+        )
+        self._thread.start()
+        return True
+
+    def stop(self) -> None:
+        with self._lock:
+            self._running = False
+            process = self._process
+            input_queue = self._input_queue
+            stop_event = self._stop_event
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=self._config.process_stop_timeout_s)
+            if thread.is_alive():
+                raise RuntimeError("native LiDAR owner thread did not stop")
+        self._thread = None
+        first_error: Exception | None = None
+        try:
+            self._driver.stop()
+        except Exception as exc:
+            first_error = exc
+        if process is not None and input_queue is not None and stop_event is not None:
+            self._stop_process(process, input_queue, self._result_queue, stop_event)
+        with self._lock:
+            self._process = None
+            self._input_queue = None
+            self._result_queue = None
+            self._stop_event = None
+        if first_error is not None:
+            raise first_error
+
+    def get_raw_scan_snapshot(self) -> NativeRawLidarSnapshot | None:
+        with self._lock:
+            snapshot = self._raw_snapshot
+        if snapshot is None:
+            return None
+        health = self._physical_health()
+        observed_monotonic_ns = self._checked_clock()
+        return replace(
+            snapshot,
+            health=health,
+            observed_monotonic_ns=observed_monotonic_ns,
+        )
+
+    def get_matcher_result(self) -> NativeMatcherResult | None:
+        with self._lock:
+            return self._matcher_result
+
+    def get_relative_result(self) -> LidarRelativeMotionReading | None:
+        with self._lock:
+            return self._relative_result
+
+    def get_runtime_status(self) -> dict[str, object]:
+        driver_status = dict(self._driver.get_runtime_status())
+        health = self._physical_health(driver_status)
+        with self._lock:
+            process = self._process
+            return {
+                "matcher_contract_id": MATCHER_CONTRACT_ID,
+                "matcher_confidence_model": MATCHER_CONFIDENCE_MODEL,
+                "matcher_transport": MATCHER_TRANSPORT,
+                "matcher_process_start_method": MATCHER_START_METHOD,
+                "running": self._running,
+                "matcher_process_alive": bool(
+                    process is not None and process.is_alive()
+                ),
+                "driver_connected": bool(driver_status.get("connected", False)),
+                "health": health,
+                "raw_scan_revision": (
+                    self._raw_snapshot.raw_scan_id
+                    if self._raw_snapshot is not None
+                    else 0
+                ),
+                "matcher_result_revision": self._matcher_result_revision,
+                "queue_drops": self._queue_drops,
+                "result_drops": self._result_drops,
+                "matcher_errors": self._matcher_errors,
+                "matcher_error": self._matcher_error,
+                "last_matcher_reason": self._last_matcher_reason,
+                "fatal_error": self._fatal_error,
+            }
+
+    def poll_once_for_test(self) -> None:
+        """Run the exact production pump body with injected finite ports."""
+
+        self._poll_once()
+
+    def _checked_clock(self) -> int:
+        value = self._monotonic_ns()
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("monotonic_ns must return a non-negative integer")
+        return value
+
+    def _physical_health(
+        self,
+        driver_status: Mapping[str, object] | None = None,
+    ) -> str:
+        status = (
+            dict(driver_status)
+            if driver_status is not None
+            else dict(self._driver.get_runtime_status())
+        )
+        with self._lock:
+            running = self._running
+            snapshot = self._raw_snapshot
+        if not running or not bool(status.get("connected", False)):
+            return "ERROR"
+        if snapshot is None:
+            return "STALE"
+        age_ns = self._checked_clock() - snapshot.measurement_monotonic_ns
+        if age_ns < 0 or age_ns > int(self._config.driver.stale_timeout_s * 1e9):
+            return "STALE"
+        return "OK"
+
+    def _run(self) -> None:
+        while True:
+            with self._lock:
+                if not self._running:
+                    return
+            try:
+                self._poll_once()
+            except Exception as exc:
+                with self._lock:
+                    self._fatal_error = f"{type(exc).__name__}:{exc}"
+                    self._running = False
+                return
+            self._sleep(self._config.poll_interval_s)
+
+    def _poll_once(self) -> None:
+        scan = self._driver.get_latest_scan()
+        if scan is not None and scan.revision > self._last_queued_scan_revision:
+            with self._lock:
+                observed_revision = (
+                    self._raw_snapshot.raw_scan_id
+                    if self._raw_snapshot is not None
+                    else 0
+                )
+            if scan.revision > observed_revision:
+                snapshot = NativeRawLidarSnapshot(
+                    raw_scan_id=scan.revision,
+                    raw_scan_timestamp=(
+                        scan.captured_monotonic_ns / 1_000_000_000.0
+                    ),
+                    scan_start_monotonic_ns=scan.scan_start_monotonic_ns,
+                    scan_end_monotonic_ns=scan.scan_end_monotonic_ns,
+                    measurement_monotonic_ns=scan.measurement_monotonic_ns,
+                    health="OK",
+                    raw_scan=scan.points,
+                    summary=_sector_summary(scan),
+                )
+                with self._lock:
+                    self._raw_snapshot = snapshot
+            pose_reference = self._pose_provider(scan.measurement_monotonic_ns)
+            if pose_reference is None:
+                self._last_matcher_reason = "POSE_REFERENCE_UNAVAILABLE"
+            else:
+                if not isinstance(pose_reference, TimedPoseReference):
+                    raise TypeError("pose_provider must return TimedPoseReference or None")
+                if pose_reference.monotonic_ns != scan.measurement_monotonic_ns:
+                    raise ValueError("pose reference must align exactly to scan measurement")
+                alignment_delta_ns = (
+                    pose_reference.monotonic_ns - scan.measurement_monotonic_ns
+                )
+                packet: dict[str, object] = {
+                    "kind": "scan",
+                    "matcher_contract_id": MATCHER_CONTRACT_ID,
+                    "source_scan_revision": scan.revision,
+                    "scan_revision": scan.revision,
+                    # Compatibility timestamp: scan completion only.
+                    "captured_monotonic_ns": scan.captured_monotonic_ns,
+                    "scan_start_monotonic_ns": scan.scan_start_monotonic_ns,
+                    "scan_end_monotonic_ns": scan.scan_end_monotonic_ns,
+                    "measurement_monotonic_ns": scan.measurement_monotonic_ns,
+                    "maximum_input_age_ns": self._config.maximum_input_age_ns,
+                    "danger_zone_m": self._config.danger_zone_m,
+                    "matcher_config": self._config.matcher,
+                    "global_matching_enabled": self._config.global_backend != "slam_toolbox",
+                    "pose_reference": pose_reference.pose,
+                    "pose_reference_monotonic_ns": pose_reference.monotonic_ns,
+                    "scan_pose_alignment_delta_ns": alignment_delta_ns,
+                    "scan": [
+                        {
+                            "angle": point.angle_deg,
+                            "angle_rad": math.radians(point.angle_deg),
+                            "dist": point.distance_m * 1_000.0,
+                            "quality": point.quality,
+                        }
+                        for point in scan.points
+                    ],
+                    "driver_status": dict(self._driver.get_runtime_status()),
+                }
+                input_queue = self._input_queue
+                if input_queue is None:
+                    raise RuntimeError("native LiDAR input queue is unavailable")
+                self._queue_drops += put_latest(input_queue, packet)
+                self._last_queued_scan_revision = scan.revision
+                self._last_matcher_reason = ""
+
+        result_queue = self._result_queue
+        if result_queue is None:
+            raise RuntimeError("native LiDAR result queue is unavailable")
+        newest: object | None = None
+        drained = 0
+        for _ in range(MATCHER_QUEUE_CAPACITY):
+            try:
+                value = result_queue.get_nowait()
+            except queue.Empty:
+                break
+            if newest is not None:
+                drained += 1
+            newest = value
+        self._result_drops += drained
+        if newest is not None:
+            self._accept_matcher_packet(newest)
+
+    def _accept_matcher_packet(self, packet: object) -> None:
+        if self._matcher_error:
+            return
+        if not isinstance(packet, Mapping):
+            self._matcher_errors += 1
+            self._last_matcher_reason = "INVALID_RESULT_TYPE"
+            self._matcher_error = self._last_matcher_reason
+            return
+        kind = packet.get("kind")
+        if kind not in {"result", "relative"}:
+            self._matcher_errors += int(kind == "error")
+            self._result_drops += int(kind == "drop")
+            self._last_matcher_reason = str(packet.get("reason", kind or "UNKNOWN"))
+            if kind != "drop":
+                self._matcher_error = self._last_matcher_reason[:256]
+            return
+        if packet.get("matcher_contract_id") != MATCHER_CONTRACT_ID:
+            self._matcher_errors += 1
+            self._last_matcher_reason = "MATCHER_CONTRACT_MISMATCH"
+            self._matcher_error = self._last_matcher_reason
+            return
+        if kind == "relative" and any(type(packet.get(name)) is not int for name in (
+                "scan_revision", "source_scan_revision", "captured_monotonic_ns",
+                "scan_start_monotonic_ns", "scan_end_monotonic_ns", "measurement_monotonic_ns",
+                "pose_reference_monotonic_ns", "scan_pose_alignment_delta_ns")):
+            self._matcher_errors += 1
+            self._last_matcher_reason = "INVALID_RELATIVE_RESULT_IDENTITY"
+            self._matcher_error = self._last_matcher_reason
+            return
+        scan_revision = int(packet.get("scan_revision", 0) or 0)
+        captured_ns = int(packet.get("captured_monotonic_ns", 0) or 0)
+        scan_start_ns = int(packet.get("scan_start_monotonic_ns", -1))
+        scan_end_ns = int(packet.get("scan_end_monotonic_ns", -1))
+        measurement_ns = int(packet.get("measurement_monotonic_ns", -1))
+        pose_reference_ns = int(packet.get("pose_reference_monotonic_ns", -1))
+        now_ns = self._checked_clock()
+        with self._lock:
+            current_scan = self._raw_snapshot.raw_scan_id if self._raw_snapshot else 0
+        if (
+            scan_revision <= (self._last_relative_scan_revision if kind == "relative"
+                              else self._last_matched_scan_revision)
+            or scan_revision > current_scan
+            or int(packet.get("source_scan_revision", 0) or 0) != scan_revision
+            or captured_ns <= 0
+            or captured_ns != scan_end_ns
+            or scan_start_ns < 0
+            or measurement_ns
+            != scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+            or not scan_start_ns <= measurement_ns <= scan_end_ns
+            or pose_reference_ns != measurement_ns
+            or int(packet.get("scan_pose_alignment_delta_ns", 1))
+            != pose_reference_ns - measurement_ns
+            or now_ns - measurement_ns < 0
+            or now_ns - measurement_ns > self._config.maximum_result_age_ns
+        ):
+            self._result_drops += 1
+            self._last_matcher_reason = "STALE_OR_INCONSISTENT_RESULT"
+            return
+        if kind == "relative":
+            motion = packet.get("relative_motion")
+            self._accept_relative(() if motion is None else motion, scan_revision, measurement_ns)
+            return
+        summary_value = packet.get("summary")
+        if not isinstance(summary_value, Mapping):
+            self._matcher_errors += 1
+            self._last_matcher_reason = "INVALID_MATCHER_SUMMARY"
+            return
+        # Fast global completion can supersede the early packet in the same
+        # one-slot queue. Retain its identical local result in that case too.
+        self._accept_relative(summary_value.get("relative_motion"), scan_revision, measurement_ns)
+        if self._matcher_error:
+            return
+        self._matcher_result_revision += 1
+        result_revision = self._matcher_result_revision
+        summary = dict(summary_value)
+        summary.update(
+            {
+                "matcher_contract_id": MATCHER_CONTRACT_ID,
+                "matcher_confidence_model": MATCHER_CONFIDENCE_MODEL,
+                "matcher_transport": MATCHER_TRANSPORT,
+                "map_frame_id": POSE_FRAME_ID,
+                "map_frame_owner": POSE_FRAME_OWNER,
+                "yaw_convention": POSE_FRAME_YAW,
+                "matcher_runtime_ms": float(
+                    packet.get("matcher_runtime_ms", 0.0) or 0.0
+                ),
+                "matcher_queue_delay_ms": float(
+                    packet.get("matcher_queue_delay_ms", 0.0) or 0.0
+                ),
+                "source_scan_revision": scan_revision,
+                "scan_start_monotonic_ns": scan_start_ns,
+                "scan_end_monotonic_ns": scan_end_ns,
+                "measurement_monotonic_ns": measurement_ns,
+                "pose_reference_monotonic_ns": pose_reference_ns,
+                "scan_pose_alignment_delta_ns": pose_reference_ns - measurement_ns,
+            }
+        )
+        published_ns = int(packet.get("published_monotonic_ns", now_ns) or now_ns)
+        result = NativeMatcherResult(
+            matcher_result_id=result_revision,
+            candidate_id=result_revision,
+            source_raw_scan_id=scan_revision,
+            source_raw_scan_timestamp=captured_ns / 1_000_000_000.0,
+            scan_start_monotonic_ns=scan_start_ns,
+            scan_end_monotonic_ns=scan_end_ns,
+            measurement_monotonic_ns=measurement_ns,
+            pose_reference_monotonic_ns=pose_reference_ns,
+            timestamp=published_ns / 1_000_000_000.0,
+            summary=_freeze(summary),  # type: ignore[arg-type]
+        )
+        with self._lock:
+            self._matcher_result = result
+        self._last_matched_scan_revision = scan_revision
+        self._last_matcher_reason = ""
+
+    def _accept_relative(self, motion: object, scan_revision: int, measurement_ns: int) -> None:
+        if motion is None or scan_revision <= self._last_relative_scan_revision:
+            return
+        try:
+            if not isinstance(motion, Mapping):
+                raise ValueError("relative motion must be a mapping")
+            result = LidarRelativeMotionReading(**dict(motion),
+                source_sequence=scan_revision, end_ns=measurement_ns)
+        except (TypeError, ValueError):
+            # A malformed compute result revokes localization capability,
+            # without terminating independent physical scan/safety acquisition.
+            self._matcher_errors += 1
+            self._last_matcher_reason = "INVALID_RELATIVE_RESULT"
+            self._matcher_error = self._last_matcher_reason
+            with self._lock:
+                self._relative_result = None
+            return
+        with self._lock:
+            self._relative_result = result
+        self._last_relative_scan_revision = scan_revision
+
+    def _stop_process(
+        self,
+        process: Any,
+        input_queue: Any,
+        result_queue: Any,
+        stop_event: Any,
+    ) -> None:
+        stop_event.set()
+        try:
+            put_latest(input_queue, {"kind": "stop"})
+        except Exception:
+            pass
+        process.join(timeout=self._config.process_stop_timeout_s)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=self._config.process_stop_timeout_s)
+        if process.is_alive():
+            raise RuntimeError("native LiDAR matcher process did not stop")
+        for value in (input_queue, result_queue):
+            close = getattr(value, "close", None)
+            if callable(close):
+                close()
+
+
+def open_native_lidar_port(
+    config: NativeLidarPortConfig,
+    pose_provider: Callable[[int], TimedPoseReference | None],
+    serial_factory: RplidarSerialFactory,
+    *,
+    matcher_cpus: CpuSet | None = None,
+    strict_affinity: bool = False,
+) -> NativeLidarPort:
+    """Create and start the production native owner or fail closed."""
+
+    port = NativeLidarPort(
+        config,
+        pose_provider,
+        driver=NativeRplidarC1(config.driver, serial_factory=serial_factory),
+        matcher_cpus=matcher_cpus,
+        strict_affinity=strict_affinity,
+    )
+    try:
+        if port.start() is not True:
+            raise RuntimeError("native V3 LiDAR owner did not start")
+        return port
+    except Exception:
+        port.stop()
+        raise
+
+
+__all__ = [
+    "MATCHER_MAX_AGE_NS",
+    "MATCHER_QUEUE_CAPACITY",
+    "MATCHER_START_METHOD",
+    "NativeLidarPort",
+    "NativeLidarPortConfig",
+    "NativeMatcherResult",
+    "NativeRawLidarSnapshot",
+    "TimedPoseReference",
+    "load_native_lidar_port_config",
+    "open_native_lidar_port",
+]

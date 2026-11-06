@@ -1,0 +1,874 @@
+"""Strict local command mailbox for the resident native V3 process."""
+
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import json
+import math
+import os
+import stat
+import threading
+import time
+from collections.abc import Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+from v3.contracts import CommandMode, CommandRequest, DataField, ExplorePreferences, TickContext
+from v3.config_types import CommandIngressPolicy
+from v3.contracts.base import require_token
+from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_affinity
+
+
+RESIDENT_COMMAND_SCHEMA = "R2B4_V3_RESIDENT_COMMAND_V2"
+_PUBLICATION_TIMEOUT_S = 0.1
+_PUBLICATION_TIMING_KEYS = frozenset({
+    "previous_publication_revision", "previous_preparation_started_ns",
+    "previous_issued_monotonic_ns", "previous_publication_returned_ns",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class CommandIngressTiming:
+    """Passive scalar evidence; never an input to command/lifecycle authority."""
+
+    revision: int
+    issued_monotonic_ns: int
+    reader_received_ns: int
+    observed_monotonic_ns: int
+    expires_monotonic_ns: int
+    ttl_remaining_ns: int
+    # A publication can only report its post-replace timestamp in the next
+    # immutable revision. This is an upper bound, sampled after os.replace
+    # returns; it must never refresh either revision's expiry.
+    previous_publication_revision: int | None = None
+    previous_preparation_started_ns: int | None = None
+    previous_issued_monotonic_ns: int | None = None
+    previous_publication_returned_ns: int | None = None
+
+
+class CommandPublicationRejected(RuntimeError):
+    """The canonical producer revoked ACTIVE publication before replacement."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _positive_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
+def _nonnegative_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _finite(value: object, name: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ValueError(f"{name} must be finite numeric")
+    return float(value)
+
+
+@dataclass(frozen=True, slots=True)
+class ResidentCommandMailboxConfig:
+    """Filesystem trust, time and initial motion limits for one mailbox."""
+
+    path: Path
+    maximum_ttl_ns: int = 250_000_000
+    maximum_future_skew_ns: int = 5_000_000
+    maximum_linear_speed_mps: float = 0.50
+    maximum_angular_speed_rad_s: float = 1.20
+    maximum_file_bytes: int = 4096
+    expected_uid: int = -1
+
+    @classmethod
+    def from_policy(cls, path: Path, policy: CommandIngressPolicy) -> ResidentCommandMailboxConfig:
+        """Client and runtime resolve the same ingress acceptance authority."""
+        return cls(path=path, maximum_ttl_ns=policy.maximum_ttl_ns,
+                   maximum_future_skew_ns=policy.maximum_future_skew_ns,
+                   maximum_linear_speed_mps=policy.maximum_linear_speed_mps,
+                   maximum_angular_speed_rad_s=policy.maximum_angular_speed_rad_s,
+                   maximum_file_bytes=policy.maximum_file_bytes)
+
+    def __post_init__(self) -> None:
+        path = Path(self.path)
+        if not path.is_absolute():
+            raise ValueError("path must be absolute")
+        object.__setattr__(self, "path", path)
+        _positive_int(self.maximum_ttl_ns, "maximum_ttl_ns")
+        _nonnegative_int(self.maximum_future_skew_ns, "maximum_future_skew_ns")
+        if self.maximum_future_skew_ns > self.maximum_ttl_ns:
+            raise ValueError("maximum_future_skew_ns cannot exceed maximum_ttl_ns")
+        for value, name in (
+            (self.maximum_linear_speed_mps, "maximum_linear_speed_mps"),
+            (self.maximum_angular_speed_rad_s, "maximum_angular_speed_rad_s"),
+        ):
+            if _finite(value, name) <= 0.0:
+                raise ValueError(f"{name} must be positive")
+        _positive_int(self.maximum_file_bytes, "maximum_file_bytes")
+        expected_uid = self.expected_uid
+        if expected_uid == -1:
+            object.__setattr__(self, "expected_uid", os.geteuid())
+        else:
+            _nonnegative_int(expected_uid, "expected_uid")
+
+
+class AtomicResidentCommandGateway:
+    """Read one immutable local command revision per V3 tick.
+
+    A missing mailbox means STOP. Malformed, untrusted, rewritten or regressed
+    revisions raise and therefore become one canonical CommandGateway fault
+    tick. Repeating the same immutable revision is allowed until its monotonic
+    expiry, after which it deterministically becomes STOP.
+    """
+
+    __slots__ = (
+        "_config",
+        "_last_digest",
+        "_last_revision",
+        "_monotonic_ns",
+        "_requires_new_revision",
+        "_reader_received_ns",
+        "_timing_evidence",
+    )
+
+    def __init__(
+        self,
+        config: ResidentCommandMailboxConfig,
+        *,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    ) -> None:
+        if not isinstance(config, ResidentCommandMailboxConfig):
+            raise TypeError("config must be ResidentCommandMailboxConfig")
+        if not callable(monotonic_ns):
+            raise TypeError("monotonic_ns must be callable")
+        self._config = config
+        self._monotonic_ns = monotonic_ns
+        self._last_revision: int | None = None
+        self._last_digest: str | None = None
+        self._requires_new_revision = False
+        self._reader_received_ns = 0
+        self._timing_evidence: CommandIngressTiming | None = None
+
+    @property
+    def timing_evidence(self) -> CommandIngressTiming | None:
+        return self._timing_evidence
+
+    @property
+    def last_revision(self) -> int | None:
+        return self._last_revision
+
+    @staticmethod
+    def _stop(context: TickContext, reason: str) -> CommandRequest:
+        return CommandRequest(
+            context=context,
+            command_id=f"resident.mailbox.{reason}.{context.tick_id}",
+            mode=CommandMode.STOP,
+            goal=(),
+            expiry_tick=context.tick_id,
+        )
+
+    def _read_trusted_bytes(self) -> bytes | None:
+        path = self._config.path
+        flags = (os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+                 | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        try:
+            descriptor = os.open(path, flags)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise ValueError("command mailbox cannot be opened safely") from exc
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("command mailbox must be a regular file")
+            if metadata.st_uid != self._config.expected_uid:
+                raise ValueError("command mailbox owner is not trusted")
+            if stat.S_IMODE(metadata.st_mode) & 0o022:
+                raise ValueError("command mailbox must not be group/world writable")
+            if metadata.st_size > self._config.maximum_file_bytes:
+                raise ValueError("command mailbox exceeds maximum_file_bytes")
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = os.read(descriptor, min(4096, self._config.maximum_file_bytes + 1 - total))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total += len(chunk)
+                if total > self._config.maximum_file_bytes:
+                    raise ValueError("command mailbox exceeds maximum_file_bytes")
+            return b"".join(chunks)
+        finally:
+            os.close(descriptor)
+
+    def snapshot(self, context: TickContext) -> CommandRequest:
+        if not isinstance(context, TickContext):
+            raise TypeError("context must be TickContext")
+        self._timing_evidence = None
+        raw = self._read_trusted_bytes()
+        if raw is None:
+            if self._last_revision is not None:
+                self._requires_new_revision = True
+            return self._stop(context, "missing")
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("command mailbox must contain valid UTF-8 JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("command mailbox root must be an object")
+        if payload.get("schema") != RESIDENT_COMMAND_SCHEMA:
+            raise ValueError("command mailbox schema is invalid")
+
+        # Command issue/expiry belongs to the external ingress observation
+        # boundary.  A TickContext may be older after a blocking L0 read, so it
+        # must not be used as the wall-time authority for mailbox freshness.
+        observed_ns = _nonnegative_int(
+            self._monotonic_ns(),
+            "observed_monotonic_ns",
+        )
+
+        mode_value = payload.get("mode")
+        try:
+            mode = CommandMode(mode_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "command mode must be STOP, TELEOP, NAVIGATE, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
+            ) from exc
+        if mode not in (
+            CommandMode.STOP,
+            CommandMode.TELEOP,
+            CommandMode.NAVIGATE,
+            CommandMode.EXPLORE,
+            CommandMode.FACE_PERSON,
+            CommandMode.FOLLOW_PERSON,
+        ):
+            raise ValueError(
+                "command mode must be STOP, TELEOP, NAVIGATE, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
+            )
+        common_keys = {
+            "schema",
+            "revision",
+            "command_id",
+            "issued_monotonic_ns",
+            "expires_monotonic_ns",
+            "mode",
+        }
+        limit_keys = {"max_v_mps", "max_omega_rad_s"}
+        motion_keys = {"v_mps", "omega_rad_s"} | limit_keys
+        expected_keys = common_keys | (
+            {"x_m", "y_m"} | limit_keys | ({"yaw_rad"} if "yaw_rad" in payload else set())
+            | ({"frame_id"} if "frame_id" in payload else set())
+            | ({"goal_tolerance_m", "yaw_tolerance_rad"} & payload.keys())
+            if mode is CommandMode.NAVIGATE
+            else motion_keys
+            if mode is CommandMode.TELEOP
+            else limit_keys
+            if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON)
+            else {"max_omega_rad_s"}
+            if mode is CommandMode.FACE_PERSON
+            else set()
+        )
+        if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(payload):
+            expected_keys |= ExplorePreferences.field_names()
+        if mode is CommandMode.FOLLOW_PERSON and "target_track_id" in payload:
+            expected_keys.add("target_track_id")
+        if set(payload) - _PUBLICATION_TIMING_KEYS != expected_keys:
+            raise ValueError("command mailbox fields do not match its mode")
+
+        revision = _positive_int(payload.get("revision"), "revision")
+        command_id = payload.get("command_id")
+        require_token(command_id, "command_id")
+        issued_ns = _nonnegative_int(payload.get("issued_monotonic_ns"), "issued_monotonic_ns")
+        expires_ns = _nonnegative_int(payload.get("expires_monotonic_ns"), "expires_monotonic_ns")
+        if expires_ns < issued_ns:
+            raise ValueError("command expiry cannot precede issue time")
+        if expires_ns - issued_ns > self._config.maximum_ttl_ns:
+            raise ValueError("command TTL exceeds maximum_ttl_ns")
+        if issued_ns > observed_ns + self._config.maximum_future_skew_ns:
+            raise ValueError("command issue time is in the future")
+
+        digest = hashlib.sha256(raw).hexdigest()
+        if self._last_revision is not None:
+            if self._requires_new_revision and revision <= self._last_revision:
+                raise ValueError("command revision must advance after mailbox removal")
+            if revision < self._last_revision:
+                raise ValueError("command revision regressed")
+            if revision == self._last_revision and digest != self._last_digest:
+                raise ValueError("command revision was rewritten")
+        if self._last_revision is None or revision > self._last_revision:
+            self._last_revision = revision
+            self._last_digest = digest
+            self._requires_new_revision = False
+
+        previous_timing: dict[str, int] = {}
+        values = {key: payload.get(key) for key in _PUBLICATION_TIMING_KEYS}
+        if (all(type(value) is int and value >= 0 for value in values.values())
+                and values["previous_publication_revision"] == revision - 1
+                and values["previous_preparation_started_ns"]
+                <= values["previous_issued_monotonic_ns"]
+                <= values["previous_publication_returned_ns"] <= issued_ns):
+            previous_timing = values
+        self._timing_evidence = CommandIngressTiming(
+            revision, issued_ns, self._reader_received_ns or observed_ns,
+            observed_ns, expires_ns, expires_ns-observed_ns,
+            **previous_timing,
+        )
+
+        if observed_ns > expires_ns:
+            return self._stop(context, f"expired.{revision}")
+        if mode is CommandMode.STOP:
+            return CommandRequest(
+                context=context,
+                command_id=command_id,
+                mode=CommandMode.STOP,
+                goal=(),
+                expiry_tick=context.tick_id,
+            )
+
+        max_omega_rad_s = _finite(payload.get("max_omega_rad_s"), "max_omega_rad_s")
+        if not 0.0 < max_omega_rad_s <= self._config.maximum_angular_speed_rad_s:
+            raise ValueError("max_omega_rad_s exceeds the resident process limit")
+        if mode is CommandMode.FACE_PERSON:
+            return CommandRequest(
+                context=context,
+                command_id=command_id,
+                mode=CommandMode.FACE_PERSON,
+                goal=(DataField("max_omega_rad_s", max_omega_rad_s),),
+                expiry_tick=context.tick_id,
+            )
+
+        max_v_mps = _finite(payload.get("max_v_mps"), "max_v_mps")
+        if not 0.0 < max_v_mps <= self._config.maximum_linear_speed_mps:
+            raise ValueError("max_v_mps exceeds the resident process limit")
+        if mode is CommandMode.NAVIGATE:
+            frame_id = payload.get("frame_id", "R2B4_BOOT_ROBOT_MAP")
+            if frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+                raise ValueError("unsupported navigation frame")
+            keys = ("x_m", "y_m", "max_v_mps", "max_omega_rad_s")
+            if "yaw_rad" in payload:
+                keys += ("yaw_rad",)
+            for name in ("goal_tolerance_m", "yaw_tolerance_rad"):
+                if name in payload:
+                    if _finite(payload[name], name) < 0.0:
+                        raise ValueError(f"{name} must be nonnegative")
+                    keys += (name,)
+            return CommandRequest(
+                context=context, command_id=command_id, mode=mode,
+                goal=tuple(DataField(key, _finite(payload[key], key)) for key in keys)+(DataField("frame_id", frame_id),),
+                expiry_tick=context.tick_id,
+            )
+        if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON):
+            preference_fields = ()
+            if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(payload):
+                preferences = ExplorePreferences.from_mapping(
+                    {key: payload[key] for key in ExplorePreferences.field_names()}
+                )
+                preference_fields = preferences.as_fields()
+            if mode is CommandMode.FOLLOW_PERSON and "target_track_id" in payload:
+                target = payload["target_track_id"]
+                require_token(target, "target_track_id")
+                if not target.startswith("person-") or len(target) > 256:
+                    raise ValueError("invalid bound person track")
+                preference_fields = (DataField("target_track_id", target),)
+            return CommandRequest(
+                context=context,
+                command_id=command_id,
+                mode=mode,
+                goal=(
+                    DataField("max_v_mps", max_v_mps),
+                    DataField("max_omega_rad_s", max_omega_rad_s),
+                ) + preference_fields,
+                expiry_tick=context.tick_id,
+            )
+
+        v_mps = _finite(payload.get("v_mps"), "v_mps")
+        omega_rad_s = _finite(payload.get("omega_rad_s"), "omega_rad_s")
+        if abs(v_mps) > max_v_mps or abs(omega_rad_s) > max_omega_rad_s:
+            raise ValueError("command target exceeds its declared limit")
+        return CommandRequest(
+            context=context,
+            command_id=command_id,
+            mode=CommandMode.TELEOP,
+            goal=(
+                DataField("v_mps", v_mps),
+                DataField("omega_rad_s", omega_rad_s),
+                DataField("max_v_mps", max_v_mps),
+                DataField("max_omega_rad_s", max_omega_rad_s),
+            ),
+            expiry_tick=context.tick_id,
+        )
+
+
+class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
+    """Acquire trusted immutable mailbox bytes outside the tick.
+
+    The inherited gateway still owns revision, digest, limits and TTL validation.
+    A stalled reader cannot refresh command expiry, and a read failure is sticky.
+    """
+
+    def __init__(self, config: ResidentCommandMailboxConfig, *,
+                 monotonic_ns: Callable[[], int] = time.monotonic_ns,
+                 worker_cpus: int | CpuSet | None = None, strict_affinity: bool = False,
+                 reader_poll_s: float, reader_stop_timeout_s: float) -> None:
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
+        super().__init__(config, monotonic_ns=monotonic_ns)
+        self._reader_poll_s = reader_poll_s
+        self._reader_stop_timeout_s = reader_stop_timeout_s
+        self._worker_cpus = worker_cpus
+        self._strict_affinity = strict_affinity
+        self._mailbox: tuple[bytes | None, int] = (None, 0)
+        self._read_error: Exception | None = None
+        self._stop_reader = threading.Event()
+        self._reader: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._reader is not None:
+            raise RuntimeError("command reader already started")
+        self._reader = threading.Thread(
+            target=self._acquire, name="r2b4-command", daemon=True
+        )
+        with temporary_current_affinity(
+            self._worker_cpus, role="command", strict=self._strict_affinity
+        ):
+            self._reader.start()
+
+    def _acquire(self) -> None:
+        try:
+            while not self._stop_reader.is_set():
+                raw = super()._read_trusted_bytes()
+                if raw != self._mailbox[0]:
+                    self._mailbox = (raw, self._monotonic_ns())
+                self._stop_reader.wait(self._reader_poll_s)
+        except Exception as exc:
+            self._read_error = exc
+
+    def _read_trusted_bytes(self) -> bytes | None:
+        if self._read_error is not None:
+            raise ValueError("asynchronous command mailbox read failed") from self._read_error
+        if self._reader is None or self._stop_reader.is_set():
+            return None
+        raw, self._reader_received_ns = self._mailbox
+        return raw
+
+    def close(self) -> None:
+        self._stop_reader.set()
+        if self._reader is not None:
+            self._reader.join(timeout=self._reader_stop_timeout_s)
+            if self._reader.is_alive():
+                raise RuntimeError("command mailbox reader did not stop")
+
+
+class ResidentCommandClient:
+    """Atomically publish heartbeat revisions for one logical resident command.
+
+    This edge client only serializes the mailbox contract. The resident gateway
+    remains responsible for trust, TTL and process-limit enforcement, while the
+    canonical L5-L12 path remains the sole control authority.
+    """
+
+    __slots__ = ("_config", "_monotonic_ns", "_revision", "_publication_timing", "_active_guard")
+
+    def __init__(
+        self,
+        config: ResidentCommandMailboxConfig,
+        *,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    ) -> None:
+        if not isinstance(config, ResidentCommandMailboxConfig):
+            raise TypeError("config must be ResidentCommandMailboxConfig")
+        if not callable(monotonic_ns):
+            raise TypeError("monotonic_ns must be callable")
+        self._config = config
+        self._monotonic_ns = monotonic_ns
+        # Admission captures the mailbox cursor before preflight or staging can
+        # stall. A STOP/replacement invalidates this producer, including its
+        # first ACTIVE publication; it must never silently rebase a heartbeat.
+        self._revision = self._existing_revision()
+        self._publication_timing: dict[str, int] = {}
+        self._active_guard: Callable[[], str | None] | None = None
+
+    def set_active_guard(self, guard: Callable[[], str | None] | None) -> None:
+        """Recheck the producer's owner/watchdog around staging I/O; STOP bypasses it."""
+        if guard is not None and not callable(guard):
+            raise TypeError("active publication guard must be callable")
+        self._active_guard = guard
+
+    def _check_active_guard(self, payload: Mapping[str, object]) -> None:
+        if payload["mode"] != CommandMode.STOP.value and self._active_guard is not None:
+            reason = self._active_guard()
+            if reason is not None:
+                raise CommandPublicationRejected(reason)
+
+    @property
+    def last_revision(self) -> int | None:
+        return self._revision
+
+    def publish_stop(
+        self, command_id: str, *, ttl_ns: int, only_if_revision: int | None = None,
+    ) -> int | None:
+        """Explicit STOP supersedes all writers; producer cleanup is conditional.
+
+        A superseded producer must not stop a newer command when unwinding.
+        ``None`` reports that its conditional STOP no longer owns the mailbox.
+        """
+        if only_if_revision is not None:
+            _nonnegative_int(only_if_revision, "only_if_revision")
+        return self._publish(command_id, CommandMode.STOP, {}, ttl_ns,
+                             only_if_revision=only_if_revision)
+
+    def publish_teleop(
+        self,
+        command_id: str,
+        *,
+        v_mps: float,
+        omega_rad_s: float,
+        max_v_mps: float,
+        max_omega_rad_s: float,
+        ttl_ns: int,
+    ) -> int:
+        return self._publish(
+            command_id,
+            CommandMode.TELEOP,
+            {
+                "v_mps": v_mps,
+                "omega_rad_s": omega_rad_s,
+                "max_v_mps": max_v_mps,
+                "max_omega_rad_s": max_omega_rad_s,
+            },
+            ttl_ns,
+        )
+
+    def publish_navigate(
+        self, command_id: str, *, x_m: float, y_m: float,
+        max_v_mps: float, max_omega_rad_s: float, ttl_ns: int,
+        yaw_rad: float | None = None,
+        frame_id: str = "R2B4_BOOT_ROBOT_MAP",
+        goal_tolerance_m: float | None = None, yaw_tolerance_rad: float | None = None,
+    ) -> int:
+        if frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+            raise ValueError("unsupported navigation frame")
+        values = {"frame_id": frame_id, "x_m": x_m, "y_m": y_m, "max_v_mps": max_v_mps,
+                  "max_omega_rad_s": max_omega_rad_s}
+        if yaw_rad is not None:
+            values["yaw_rad"] = yaw_rad
+        for name, value in (("goal_tolerance_m", goal_tolerance_m), ("yaw_tolerance_rad", yaw_tolerance_rad)):
+            if value is not None:
+                values[name] = value
+        return self._publish(command_id, CommandMode.NAVIGATE, values, ttl_ns)
+
+    def publish_explore(
+        self,
+        command_id: str,
+        *,
+        max_v_mps: float,
+        max_omega_rad_s: float,
+        ttl_ns: int,
+        preferences: ExplorePreferences | None = None,
+    ) -> int:
+        return self._publish(
+            command_id,
+            CommandMode.EXPLORE,
+            {
+                "max_v_mps": max_v_mps,
+                "max_omega_rad_s": max_omega_rad_s,
+                **({field.key: field.value for field in preferences.as_fields()} if preferences is not None else {}),
+            },
+            ttl_ns,
+        )
+
+    def publish_face_person(
+        self,
+        command_id: str,
+        *,
+        max_omega_rad_s: float,
+        ttl_ns: int,
+    ) -> int:
+        return self._publish(
+            command_id,
+            CommandMode.FACE_PERSON,
+            {"max_omega_rad_s": max_omega_rad_s},
+            ttl_ns,
+        )
+
+    def publish_follow_person(
+        self,
+        command_id: str,
+        *,
+        max_v_mps: float,
+        max_omega_rad_s: float,
+        ttl_ns: int,
+        target_track_id: str | None = None,
+    ) -> int:
+        return self._publish(
+            command_id,
+            CommandMode.FOLLOW_PERSON,
+            {
+                "max_v_mps": max_v_mps,
+                "max_omega_rad_s": max_omega_rad_s,
+                **({"target_track_id": target_track_id} if target_track_id is not None else {}),
+            },
+            ttl_ns,
+        )
+
+    def _publish(
+        self,
+        command_id: str,
+        mode: CommandMode,
+        values: Mapping[str, object],
+        ttl_ns: int,
+        *,
+        only_if_revision: int | None = None,
+    ) -> int | None:
+        preparation_started_ns = _nonnegative_int(self._monotonic_ns(), "preparation_started_ns")
+        require_token(command_id, "command_id")
+        if mode not in (
+            CommandMode.STOP,
+            CommandMode.TELEOP,
+            CommandMode.NAVIGATE,
+            CommandMode.EXPLORE,
+            CommandMode.FACE_PERSON,
+            CommandMode.FOLLOW_PERSON,
+        ):
+            raise ValueError(
+                "client mode must be STOP, TELEOP, NAVIGATE, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
+            )
+        ttl = _positive_int(ttl_ns, "ttl_ns")
+        if ttl > self._config.maximum_ttl_ns:
+            raise ValueError("command TTL exceeds maximum_ttl_ns")
+        normalized = self._validated_values(mode, values)
+        deadline = time.monotonic() + _PUBLICATION_TIMEOUT_S
+        while True:
+            baseline = (self._existing_revision() if mode is CommandMode.STOP and only_if_revision is None
+                        else only_if_revision if only_if_revision is not None else self._revision)
+            revision = baseline + 1
+            payload: dict[str, object] = {
+                "schema": RESIDENT_COMMAND_SCHEMA,
+                "revision": revision,
+                "command_id": command_id,
+                "mode": mode.value,
+                **normalized,
+                **self._publication_timing,
+            }
+            try:
+                issued_ns, publication_returned_ns = self._atomic_write(payload, ttl, baseline, deadline)
+                break
+            except CommandPublicationRejected as exc:
+                if exc.reason != "COMMAND_SUPERSEDED":
+                    raise
+                if only_if_revision is not None:
+                    return None
+                if mode is not CommandMode.STOP:
+                    raise
+                # Explicit STOP may race another publication. Restage it from
+                # the latest revision, within the same bounded retry budget.
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("command STOP publication contention") from exc
+        self._revision = revision
+        self._publication_timing = {
+            "previous_publication_revision": revision,
+            "previous_preparation_started_ns": preparation_started_ns,
+            "previous_issued_monotonic_ns": issued_ns,
+            "previous_publication_returned_ns": publication_returned_ns,
+        }
+        return revision
+
+    def _validated_values(
+        self,
+        mode: CommandMode,
+        values: Mapping[str, object],
+    ) -> dict[str, float | str]:
+        expected = (
+            {"x_m", "y_m", "max_v_mps", "max_omega_rad_s"}
+            | ({"yaw_rad"} if "yaw_rad" in values else set())
+            | ({"frame_id"} if "frame_id" in values else set())
+            | ({"goal_tolerance_m", "yaw_tolerance_rad"} & values.keys())
+            if mode is CommandMode.NAVIGATE
+            else {"v_mps", "omega_rad_s", "max_v_mps", "max_omega_rad_s"}
+            if mode is CommandMode.TELEOP
+            else {"max_v_mps", "max_omega_rad_s"}
+            if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON)
+            else {"max_omega_rad_s"}
+            if mode is CommandMode.FACE_PERSON
+            else set()
+        )
+        if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(values):
+            expected |= ExplorePreferences.field_names()
+            ExplorePreferences.from_mapping({key: values[key] for key in ExplorePreferences.field_names() if key in values})
+        if mode is CommandMode.FOLLOW_PERSON and "target_track_id" in values:
+            expected.add("target_track_id")
+        if set(values) != expected:
+            raise ValueError("client command values do not match its mode")
+        normalized = {key: _finite(value, key) for key, value in values.items()
+                      if key not in {"frame_id", "target_track_id"}}
+        for name in ("goal_tolerance_m", "yaw_tolerance_rad"):
+            if name in normalized and normalized[name] < 0.0:
+                raise ValueError(f"{name} must be nonnegative")
+        if "target_track_id" in values:
+            target = values["target_track_id"]
+            require_token(target, "target_track_id")
+            if not target.startswith("person-") or len(target) > 256:
+                raise ValueError("invalid bound person track")
+            normalized["target_track_id"] = target
+        if "frame_id" in values:
+            if values["frame_id"] not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+                raise ValueError("unsupported navigation frame")
+            normalized["frame_id"] = values["frame_id"]
+        if mode is CommandMode.STOP:
+            return normalized
+        max_omega_rad_s = normalized["max_omega_rad_s"]
+        if not 0.0 < max_omega_rad_s <= self._config.maximum_angular_speed_rad_s:
+            raise ValueError("max_omega_rad_s exceeds the resident process limit")
+        if mode is CommandMode.FACE_PERSON:
+            return normalized
+        max_v_mps = normalized["max_v_mps"]
+        if not 0.0 < max_v_mps <= self._config.maximum_linear_speed_mps:
+            raise ValueError("max_v_mps exceeds the resident process limit")
+        if mode is CommandMode.TELEOP and (
+            abs(normalized["v_mps"]) > max_v_mps
+            or abs(normalized["omega_rad_s"]) > max_omega_rad_s
+        ):
+            raise ValueError("command target exceeds its declared limit")
+        return normalized
+
+    def _existing_revision(self) -> int:
+        path = self._config.path
+        flags = (os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+                 | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        try:
+            descriptor = os.open(path, flags)
+        except FileNotFoundError:
+            return 0
+        except OSError as exc:
+            raise ValueError("existing command mailbox cannot be opened safely") from exc
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("existing command mailbox must be a regular file")
+            if metadata.st_uid != self._config.expected_uid:
+                raise ValueError("existing command mailbox owner is not trusted")
+            if stat.S_IMODE(metadata.st_mode) & 0o022:
+                raise ValueError("existing command mailbox must not be group/world writable")
+            if metadata.st_size > self._config.maximum_file_bytes:
+                raise ValueError("existing command mailbox exceeds maximum_file_bytes")
+            raw = os.read(descriptor, self._config.maximum_file_bytes + 1)
+        finally:
+            os.close(descriptor)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("existing command mailbox must contain valid UTF-8 JSON") from exc
+        if not isinstance(payload, dict) or payload.get("schema") != RESIDENT_COMMAND_SCHEMA:
+            raise ValueError("existing command mailbox schema is invalid")
+        return _positive_int(payload.get("revision"), "revision")
+
+    @contextmanager
+    def _publication_lock(self, deadline: float):
+        # All canonical writers use this stable inode. Never unlink it during
+        # cleanup: recreating a lock file would split the publication boundary.
+        path = self._config.path.with_name(f".{self._config.path.name}.lock")
+        descriptor = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
+                             | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0), 0o600)
+        try:
+            metadata = os.fstat(descriptor)
+            if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != self._config.expected_uid
+                    or stat.S_IMODE(metadata.st_mode) & 0o022):
+                raise ValueError("command publication lock is not trusted")
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError("command publication lock timed out")
+                    time.sleep(min(0.001, remaining))
+            try:
+                yield
+            finally:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+
+    def _atomic_write(
+        self, payload: dict[str, object], ttl_ns: int, baseline: int, deadline: float,
+    ) -> tuple[int, int]:
+        path = self._config.path
+        parent = path.parent
+        if parent.is_symlink() or not parent.is_dir():
+            raise ValueError("command mailbox parent must be a regular directory")
+        temporary = parent / f".{path.name}.tmp.{os.getpid()}.{time.monotonic_ns()}"
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(
+                temporary,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+                0o600,
+            )
+            # Prepare the trusted staging file before issuing this heartbeat.
+            # Directory checks/open/creation may block on filesystem metadata;
+            # they must not consume a freshly issued command's TTL.
+            self._check_active_guard(payload)
+            issued_ns = _nonnegative_int(self._monotonic_ns(), "issued_monotonic_ns")
+            payload["issued_monotonic_ns"] = issued_ns
+            payload["expires_monotonic_ns"] = issued_ns + ttl_ns
+            encoded = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
+            if len(encoded) > self._config.maximum_file_bytes and _PUBLICATION_TIMING_KEYS.intersection(payload):
+                # Optional diagnostics must not make a previously valid command
+                # exceed the mailbox's configured bound.
+                for key in _PUBLICATION_TIMING_KEYS:
+                    payload.pop(key, None)
+                encoded = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
+            if len(encoded) > self._config.maximum_file_bytes:
+                raise ValueError("command mailbox exceeds maximum_file_bytes")
+            view = memoryview(encoded)
+            while view:
+                written = os.write(descriptor, view)
+                if written <= 0:
+                    raise OSError("command mailbox write made no progress")
+                view = view[written:]
+            # This is an ephemeral, TTL-guarded mailbox rather than durable
+            # storage. Atomic replacement provides the required reader
+            # boundary; waiting for media durability here can make a command
+            # stale before the resident process can observe it.
+            os.close(descriptor)
+            descriptor = None
+            # Staging, encoding and writes do not hold the publication lock.
+            # A stalled heartbeat therefore cannot keep STOP waiting for them.
+            with self._publication_lock(deadline):
+                if self._existing_revision() != baseline:
+                    raise CommandPublicationRejected("COMMAND_SUPERSEDED")
+                self._check_active_guard(payload)
+                os.replace(temporary, path)
+            publication_returned_ns = self._monotonic_ns()
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+        return issued_ns, publication_returned_ns
+
+
+__all__ = [
+    "AtomicResidentCommandGateway",
+    "AsyncResidentCommandGateway",
+    "CommandPublicationRejected",
+    "RESIDENT_COMMAND_SCHEMA",
+    "ResidentCommandClient",
+    "ResidentCommandMailboxConfig",
+]

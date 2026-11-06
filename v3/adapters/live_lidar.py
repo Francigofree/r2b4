@@ -1,0 +1,866 @@
+"""Native V3 physical-scan, safety and optional localization source."""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Protocol
+
+from v3.async_capability import TransportSemantics, latest_state_snapshot
+from v3.lidar_geometry import lidar_point_xy
+
+from v3.contracts import (
+    DataField,
+    DeviceHealth,
+    DeviceHealthState,
+    DeviceSample,
+    TickContext,
+)
+
+from .live_inputs import LiveDeviceSnapshot
+
+
+def _finite(value: object, name: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ValueError(f"{name} must be finite numeric")
+    return float(value)
+
+
+def _nonnegative_integer(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _optional_finite(value: object, name: str) -> float | None:
+    if value is None:
+        return None
+    return _finite(value, name)
+
+
+@dataclass(frozen=True, slots=True)
+class NativeLidarConfig:
+    """Immutable identity, pose frame and gates for one lidar matcher source."""
+
+    device_id: str
+    minimum_confidence: float
+    maximum_measurement_age_ns: int
+    pose_frame_id: str = "R2B4_BOOT_ROBOT_MAP"
+    local_perception_min_range_m: float = 0.08
+    local_perception_max_range_m: float = 2.50
+    local_perception_max_points: int = 96
+    lidar_x_offset_m: float = 0.0
+    lidar_y_offset_m: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.device_id, str) or not self.device_id.strip():
+            raise ValueError("device_id must be a non-empty string")
+        confidence = _finite(self.minimum_confidence, "minimum_confidence")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError("minimum_confidence must be within [0, 1]")
+        _nonnegative_integer(
+            self.maximum_measurement_age_ns,
+            "maximum_measurement_age_ns",
+        )
+        if not isinstance(self.pose_frame_id, str) or not self.pose_frame_id.strip():
+            raise ValueError("pose_frame_id must be a non-empty string")
+        minimum_range = _finite(
+            self.local_perception_min_range_m,
+            "local_perception_min_range_m",
+        )
+        maximum_range = _finite(
+            self.local_perception_max_range_m,
+            "local_perception_max_range_m",
+        )
+        if minimum_range < 0.0 or maximum_range <= minimum_range:
+            raise ValueError("local perception range must be finite and increasing")
+        maximum_points = _nonnegative_integer(
+            self.local_perception_max_points,
+            "local_perception_max_points",
+        )
+        if maximum_points == 0:
+            raise ValueError("local_perception_max_points must be positive")
+        _finite(self.lidar_x_offset_m, "lidar_x_offset_m")
+        _finite(self.lidar_y_offset_m, "lidar_y_offset_m")
+
+
+@dataclass(frozen=True, slots=True)
+class LidarPoseReading:
+    """One matcher-owned absolute pose in the configured V3 pose frame."""
+
+    x_m: float
+    y_m: float
+    yaw_rad: float
+    r_scale: float = 1.0
+
+    def __post_init__(self) -> None:
+        _finite(self.x_m, "x_m")
+        _finite(self.y_m, "y_m")
+        _finite(self.yaw_rad, "yaw_rad")
+        r_scale = _finite(self.r_scale, "r_scale")
+        if not 0.05 <= r_scale <= 20.0:
+            raise ValueError("r_scale must be within [0.05, 20]")
+
+
+@dataclass(frozen=True, slots=True)
+class LidarMatcherDiagnostics:
+    """Passive matcher identity and quality evidence for one result revision."""
+
+    candidate_id: int
+    source_raw_scan_id: int
+    # Compatibility field: the source raw scan's completion timestamp.
+    source_raw_scan_timestamp_ns: int
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    pose_reference_monotonic_ns: int
+    scan_pose_alignment_delta_ns: int
+    matcher_reason: str = ""
+    tracking_ready: bool | None = None
+    matcher_timed_out: bool | None = None
+    matcher_degenerate: bool | None = None
+    degeneracy_reasons: tuple[str, ...] = ()
+    matcher_runtime_ms: float | None = None
+    matcher_queue_delay_ms: float | None = None
+    matcher_input_age_ns: int | None = None
+    matcher_confidence: float | None = None
+    inlier_ratio: float | None = None
+    robust_rmse_m: float | None = None
+    sector_coverage: float | None = None
+    observability_score: float | None = None
+    ambiguity_margin: float | None = None
+    scan_to_map_seed: tuple[float, float, float] | None = None
+    matcher_contract_id: str | None = None
+    slam_session_id: int | None = None
+    slam_generation: int | None = None
+    slam_bridge_generation: int | None = None
+
+    def __post_init__(self) -> None:
+        _nonnegative_integer(self.candidate_id, "candidate_id")
+        if self.candidate_id == 0:
+            raise ValueError("candidate_id must be positive")
+        _nonnegative_integer(self.source_raw_scan_id, "source_raw_scan_id")
+        if self.source_raw_scan_id == 0:
+            raise ValueError("source_raw_scan_id must be positive")
+        _nonnegative_integer(
+            self.source_raw_scan_timestamp_ns,
+            "source_raw_scan_timestamp_ns",
+        )
+        for value, name in (
+            (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
+            (self.scan_end_monotonic_ns, "scan_end_monotonic_ns"),
+            (self.measurement_monotonic_ns, "measurement_monotonic_ns"),
+            (self.pose_reference_monotonic_ns, "pose_reference_monotonic_ns"),
+        ):
+            _nonnegative_integer(value, name)
+        if self.source_raw_scan_timestamp_ns != self.scan_end_monotonic_ns:
+            raise ValueError("source raw scan timestamp must equal scan completion")
+        midpoint_ns = self.scan_start_monotonic_ns + (
+            self.scan_end_monotonic_ns - self.scan_start_monotonic_ns
+        ) // 2
+        if (
+            self.scan_start_monotonic_ns > self.scan_end_monotonic_ns
+            or self.measurement_monotonic_ns != midpoint_ns
+        ):
+            raise ValueError("matcher scan timing must contain its exact midpoint")
+        if (
+            not isinstance(self.scan_pose_alignment_delta_ns, int)
+            or isinstance(self.scan_pose_alignment_delta_ns, bool)
+            or self.scan_pose_alignment_delta_ns
+            != self.pose_reference_monotonic_ns - self.measurement_monotonic_ns
+            or self.pose_reference_monotonic_ns != self.measurement_monotonic_ns
+        ):
+            raise ValueError("matcher pose reference must align to scan measurement")
+        if not isinstance(self.matcher_reason, str):
+            raise ValueError("matcher_reason must be a string")
+        if self.matcher_contract_id is not None and (
+            not isinstance(self.matcher_contract_id, str) or not self.matcher_contract_id.strip()
+        ):
+            raise ValueError("matcher_contract_id must be a non-empty string or None")
+        for name in ("slam_session_id", "slam_generation", "slam_bridge_generation"):
+            value = getattr(self, name)
+            if value is not None:
+                _nonnegative_integer(value, name)
+                if name != "slam_generation" and value == 0:
+                    raise ValueError(f"{name} must be positive or None")
+        for value, name in (
+            (self.tracking_ready, "tracking_ready"),
+            (self.matcher_timed_out, "matcher_timed_out"),
+            (self.matcher_degenerate, "matcher_degenerate"),
+        ):
+            if value is not None and type(value) is not bool:
+                raise ValueError(f"{name} must be bool or None")
+        if not isinstance(self.degeneracy_reasons, tuple) or any(
+            not isinstance(item, str) for item in self.degeneracy_reasons
+        ):
+            raise ValueError("degeneracy_reasons must be a tuple of strings")
+        for value, name in (
+            (self.matcher_runtime_ms, "matcher_runtime_ms"),
+            (self.matcher_queue_delay_ms, "matcher_queue_delay_ms"),
+            (self.robust_rmse_m, "robust_rmse_m"),
+        ):
+            parsed = _optional_finite(value, name)
+            if parsed is not None and parsed < 0.0:
+                raise ValueError(f"{name} must be non-negative or None")
+        if self.matcher_input_age_ns is not None:
+            _nonnegative_integer(self.matcher_input_age_ns, "matcher_input_age_ns")
+        for value, name in (
+            (self.matcher_confidence, "matcher_confidence"),
+            (self.inlier_ratio, "inlier_ratio"),
+            (self.sector_coverage, "sector_coverage"),
+            (self.observability_score, "observability_score"),
+            (self.ambiguity_margin, "ambiguity_margin"),
+        ):
+            parsed = _optional_finite(value, name)
+            if parsed is not None and not 0.0 <= parsed <= 1.0:
+                raise ValueError(f"{name} must be within [0, 1] or None")
+        if self.scan_to_map_seed is not None:
+            if (
+                not isinstance(self.scan_to_map_seed, tuple)
+                or len(self.scan_to_map_seed) != 3
+            ):
+                raise ValueError("scan_to_map_seed must be a three-value tuple or None")
+            for index, value in enumerate(self.scan_to_map_seed):
+                _finite(value, f"scan_to_map_seed[{index}]")
+
+
+@dataclass(frozen=True, slots=True)
+class LidarPointReading:
+    """One matcher-independent physical point in clockwise sensor polar coordinates."""
+
+    angle_deg: float
+    distance_m: float
+    quality: int
+
+    def __post_init__(self) -> None:
+        angle = _finite(self.angle_deg, "angle_deg")
+        if not 0.0 <= angle < 360.0:
+            raise ValueError("angle_deg must be within [0, 360)")
+        distance = _finite(self.distance_m, "distance_m")
+        if distance < 0.0:
+            raise ValueError("distance_m must be non-negative")
+        _nonnegative_integer(self.quality, "quality")
+
+
+@dataclass(frozen=True, slots=True)
+class LidarScanReading:
+    """One physical scan and its matcher-independent sector safety result.
+
+    ``captured_monotonic_ns`` remains the scan-completion timestamp.
+    """
+
+    revision: int
+    captured_monotonic_ns: int
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    measurement_age_ns: int
+    health: str
+    stale: bool
+    timing_valid: bool
+    point_count: int
+    front_clearance_m: float
+    rear_clearance_m: float
+    left_clearance_m: float
+    right_clearance_m: float
+    front_observation_count: int
+    rear_observation_count: int
+    left_observation_count: int
+    right_observation_count: int
+    local_points: tuple[LidarPointReading, ...] = ()
+
+    def __post_init__(self) -> None:
+        _nonnegative_integer(self.revision, "revision")
+        _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
+        for value, name in (
+            (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
+            (self.scan_end_monotonic_ns, "scan_end_monotonic_ns"),
+            (self.measurement_monotonic_ns, "measurement_monotonic_ns"),
+        ):
+            _nonnegative_integer(value, name)
+        if self.captured_monotonic_ns != self.scan_end_monotonic_ns:
+            raise ValueError("captured_monotonic_ns must equal scan completion")
+        midpoint_ns = self.scan_start_monotonic_ns + (
+            self.scan_end_monotonic_ns - self.scan_start_monotonic_ns
+        ) // 2
+        if (
+            self.scan_start_monotonic_ns > self.scan_end_monotonic_ns
+            or self.measurement_monotonic_ns != midpoint_ns
+        ):
+            raise ValueError("scan timing must contain its exact midpoint")
+        _nonnegative_integer(self.measurement_age_ns, "measurement_age_ns")
+        if self.health not in {"OK", "STALE", "ERROR"}:
+            raise ValueError("health must be OK, STALE or ERROR")
+        if type(self.stale) is not bool or type(self.timing_valid) is not bool:
+            raise ValueError("stale and timing_valid must be bool")
+        for value, name in (
+            (self.point_count, "point_count"),
+            (self.front_observation_count, "front_observation_count"),
+            (self.rear_observation_count, "rear_observation_count"),
+            (self.left_observation_count, "left_observation_count"),
+            (self.right_observation_count, "right_observation_count"),
+        ):
+            _nonnegative_integer(value, name)
+        for value, name in (
+            (self.front_clearance_m, "front_clearance_m"),
+            (self.rear_clearance_m, "rear_clearance_m"),
+            (self.left_clearance_m, "left_clearance_m"),
+            (self.right_clearance_m, "right_clearance_m"),
+        ):
+            parsed = _finite(value, name)
+            if parsed < 0.0:
+                raise ValueError(f"{name} must be non-negative")
+        if not isinstance(self.local_points, tuple) or any(
+            not isinstance(point, LidarPointReading) for point in self.local_points
+        ):
+            raise ValueError("local_points must be a tuple of LidarPointReading")
+
+
+@dataclass(frozen=True, slots=True)
+class LidarRelativeMotionReading:
+    start_ns: int
+    dx_m: float
+    dy_m: float
+    dyaw_rad: float
+    rmse_m: float
+    observability: float
+    source_sequence: int | None = None
+    end_ns: int | None = None
+
+    def __post_init__(self) -> None:
+        _nonnegative_integer(self.start_ns, "start_ns")
+        for name in ("dx_m", "dy_m", "dyaw_rad", "rmse_m", "observability"):
+            _finite(getattr(self, name), name)
+        if self.rmse_m < 0 or not 0 <= self.observability <= 1:
+            raise ValueError("invalid relative registration quality")
+        if (self.source_sequence is None) != (self.end_ns is None):
+            raise ValueError("relative registration requires complete source identity")
+        if self.source_sequence is not None:
+            _nonnegative_integer(self.source_sequence, "source_sequence")
+            _nonnegative_integer(self.end_ns, "end_ns")
+            if self.source_sequence == 0 or self.end_ns <= self.start_ns:
+                raise ValueError("invalid relative registration source interval")
+
+
+@dataclass(frozen=True, slots=True)
+class LidarHealthReading:
+    """One physical scan plus the latest optional localization result."""
+
+    revision: int
+    captured_monotonic_ns: int
+    measurement_age_ns: int
+    confidence: float
+    stale: bool
+    timing_valid: bool
+    pose: LidarPoseReading | None = None
+    diagnostics: LidarMatcherDiagnostics | None = None
+    scan: LidarScanReading | None = None
+    relative_motion: LidarRelativeMotionReading | None = None
+
+    def __post_init__(self) -> None:
+        _nonnegative_integer(self.revision, "revision")
+        _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
+        _nonnegative_integer(self.measurement_age_ns, "measurement_age_ns")
+        confidence = _finite(self.confidence, "confidence")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError("confidence must be within [0, 1]")
+        if type(self.stale) is not bool:
+            raise ValueError("stale must be bool")
+        if type(self.timing_valid) is not bool:
+            raise ValueError("timing_valid must be bool")
+        if self.pose is not None and not isinstance(self.pose, LidarPoseReading):
+            raise ValueError("pose must be LidarPoseReading or None")
+        if self.diagnostics is not None and not isinstance(
+            self.diagnostics,
+            LidarMatcherDiagnostics,
+        ):
+            raise ValueError("diagnostics must be LidarMatcherDiagnostics or None")
+        if (
+            self.diagnostics is not None
+            and self.diagnostics.candidate_id != self.revision
+        ):
+            raise ValueError("diagnostics candidate_id must match revision")
+        if self.scan is not None and not isinstance(self.scan, LidarScanReading):
+            raise ValueError("scan must be LidarScanReading or None")
+
+
+def _localization_publication_ready(
+    reading: LidarHealthReading,
+    minimum_confidence: float,
+) -> bool:
+    """Resolve the matcher-owned publication gate without rewriting quality."""
+
+    if reading.pose is None:
+        return False
+    diagnostics = reading.diagnostics
+    if diagnostics is not None and diagnostics.tracking_ready is not None:
+        # Native matcher results expose an explicit per-result gate. This also
+        # covers one-scan direction rejection without destroying global tracking.
+        return bool(diagnostics.tracking_ready)
+    # Compatibility fallback for older/injected backends that do not expose the
+    # explicit matcher gate yet.
+    return reading.confidence >= minimum_confidence
+
+
+class LidarHealthBackend(Protocol):
+    """Injected edge backend; process, queue and hardware owners stay outside."""
+
+    def read(self, context: TickContext) -> LidarHealthReading: ...
+
+
+class NativeLidarSource:
+    """Split one acquired scan into independent native V3 capabilities."""
+
+    transport_semantics = TransportSemantics.LATEST_STATE
+
+    __slots__ = ("_backend", "_config", "_local_points_cache_key", "_local_points_cache", "_latest", "_error")
+
+    def __init__(
+        self,
+        backend: LidarHealthBackend,
+        config: NativeLidarConfig,
+    ) -> None:
+        if not isinstance(config, NativeLidarConfig):
+            raise TypeError("config must be NativeLidarConfig")
+        self._backend = backend
+        self._config = config
+        self._latest = None
+        self._error = None
+        self._local_points_cache_key: tuple[int, int] | None = None
+        self._local_points_cache: DeviceSample | None = None
+
+    def capability_snapshot(self, observed_monotonic_ns: int):
+        scan = None if self._latest is None else self._latest.scan
+        return latest_state_snapshot(
+            name="lidar.control", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if scan is None or scan.revision == 0 else scan.revision,
+            source_monotonic_ns=None if scan is None else scan.measurement_monotonic_ns,
+            stale_after_ns=self._config.maximum_measurement_age_ns, running=True,
+            error=self._error or ("LIDAR_DEVICE_FAILED" if scan is not None and scan.health == "ERROR" else None),
+            stale=scan is not None and scan.stale,
+            timing_valid=scan is None or scan.timing_valid,
+        )
+
+    def localization_capability_snapshot(self, observed_monotonic_ns: int):
+        reading = self._latest
+        return latest_state_snapshot(
+            name="lidar.localization", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if reading is None or reading.revision == 0 else reading.revision,
+            source_monotonic_ns=None if reading is None else reading.captured_monotonic_ns,
+            stale_after_ns=self._config.maximum_measurement_age_ns, running=True,
+            error=self._error,
+            stale=reading is not None and reading.stale,
+            timing_valid=reading is None or reading.timing_valid,
+            degraded=reading is not None
+            and not _localization_publication_ready(
+                reading,
+                self._config.minimum_confidence,
+            ),
+        )
+
+    @property
+    def device_id(self) -> str:
+        return self._config.device_id
+
+    def read(self, context: TickContext) -> LiveDeviceSnapshot:
+        if not isinstance(context, TickContext):
+            raise TypeError("context must be TickContext")
+        try:
+            reading = self._backend.read(context)
+        except Exception as exc:
+            self._error = f"{type(exc).__name__}:{exc}"[:256]
+            raise
+        if not isinstance(reading, LidarHealthReading):
+            raise TypeError("lidar backend must return LidarHealthReading")
+        self._latest = reading
+        self._error = None
+
+        scan = reading.scan
+        if scan is None:
+            raise ValueError("native lidar reading must include a physical scan")
+        physical_revision = scan.revision
+        physical_captured_ns = scan.measurement_monotonic_ns
+        physical_age_ns = scan.measurement_age_ns
+        physical_stale = scan.stale
+        physical_timing_valid = scan.timing_valid
+        physical_health = scan.health
+
+        if not physical_timing_valid or physical_health == "ERROR":
+            health = DeviceHealth(
+                self.device_id,
+                DeviceHealthState.FAILED,
+                "LIDAR_TIMING_INVALID",
+            )
+        elif (
+            physical_stale
+            or physical_health == "STALE"
+            or physical_age_ns > self._config.maximum_measurement_age_ns
+        ):
+            health = DeviceHealth(
+                self.device_id,
+                DeviceHealthState.DEGRADED,
+                "LIDAR_STALE",
+            )
+        else:
+            health = DeviceHealth(self.device_id, DeviceHealthState.OK)
+
+        health_sample = DeviceSample(
+            device_id=self.device_id,
+            kind="lidar_health",
+            sequence=physical_revision,
+            captured_monotonic_ns=physical_captured_ns,
+            values=(
+                DataField("age_ns", physical_age_ns),
+                DataField("point_count", scan.point_count),
+                DataField(
+                    "scan_start_monotonic_ns",
+                    scan.scan_start_monotonic_ns,
+                ),
+                DataField("scan_end_monotonic_ns", scan.scan_end_monotonic_ns),
+                DataField(
+                    "measurement_monotonic_ns",
+                    scan.measurement_monotonic_ns,
+                ),
+            ),
+        )
+        samples = [health_sample]
+        if scan.revision > 0 and health.state is DeviceHealthState.OK:
+            samples.append(
+                DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_safety_clearance",
+                    sequence=scan.revision,
+                    captured_monotonic_ns=scan.measurement_monotonic_ns,
+                    values=(
+                        DataField("age_ns", scan.measurement_age_ns),
+                        DataField("front_clearance_m", scan.front_clearance_m),
+                        DataField("rear_clearance_m", scan.rear_clearance_m),
+                        DataField("left_clearance_m", scan.left_clearance_m),
+                        DataField("right_clearance_m", scan.right_clearance_m),
+                        DataField(
+                            "front_observation_count",
+                            scan.front_observation_count,
+                        ),
+                        DataField(
+                            "rear_observation_count",
+                            scan.rear_observation_count,
+                        ),
+                        DataField(
+                            "left_observation_count",
+                            scan.left_observation_count,
+                        ),
+                        DataField(
+                            "right_observation_count",
+                            scan.right_observation_count,
+                        ),
+                    ),
+                )
+            )
+            # The geometry payload is immutable for one physical revision. Reuse
+            # the already-built typed sample on duplicate 20 ms polls instead of
+            # rebuilding ~3 DataFields per retained point. Dynamic age/stale and
+            # health samples above remain freshly constructed every poll.
+            cache_key = (scan.revision, scan.captured_monotonic_ns)
+            local_sample = self._local_points_cache
+            if self._local_points_cache_key != cache_key or local_sample is None:
+                local_points = _bounded_local_points(scan.local_points, self._config)
+                local_values: list[DataField] = [
+                    DataField("frame_id", "ROBOT_BASE"),
+                    DataField("point_count", len(local_points)),
+                ]
+                for index, point in enumerate(local_points):
+                    angle_rad = math.radians(point.angle_deg)
+                    x_m, y_m = lidar_point_xy(angle_rad, point.distance_m,
+                        self._config.lidar_x_offset_m, self._config.lidar_y_offset_m)
+                    local_values.extend(
+                        (
+                            DataField(
+                                f"point_{index:03d}_x_m",
+                                x_m,
+                            ),
+                            DataField(
+                                f"point_{index:03d}_y_m",
+                                y_m,
+                            ),
+                            DataField(f"point_{index:03d}_quality", point.quality),
+                        )
+                    )
+                local_sample = DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_local_points",
+                    sequence=scan.revision,
+                    captured_monotonic_ns=scan.measurement_monotonic_ns,
+                    values=tuple(local_values),
+                )
+                self._local_points_cache_key = cache_key
+                self._local_points_cache = local_sample
+            samples.append(local_sample)
+        localization_usable = bool(
+            reading.timing_valid
+            and not reading.stale
+            and reading.measurement_age_ns
+            <= self._config.maximum_measurement_age_ns
+            and _localization_publication_ready(
+                reading,
+                self._config.minimum_confidence,
+            )
+        )
+        has_localization = bool(
+            reading.revision > 0
+            or reading.pose is not None
+            or reading.diagnostics is not None
+        )
+        if has_localization:
+            samples.append(
+                DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_localization_health",
+                    sequence=reading.revision,
+                    captured_monotonic_ns=reading.captured_monotonic_ns,
+                    values=(
+                        DataField("age_ns", reading.measurement_age_ns),
+                        DataField("confidence", reading.confidence),
+                        DataField("timing_valid", reading.timing_valid),
+                        DataField("stale", reading.stale),
+                        DataField("usable", localization_usable),
+                    ),
+                )
+            )
+        if reading.diagnostics is not None:
+            diagnostics = reading.diagnostics
+            samples.append(
+                DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_matcher_diagnostics",
+                    sequence=reading.revision,
+                    captured_monotonic_ns=reading.captured_monotonic_ns,
+                    values=(
+                        DataField("candidate_id", diagnostics.candidate_id),
+                        DataField("matcher_contract_id", diagnostics.matcher_contract_id),
+                        DataField("slam_session_id", diagnostics.slam_session_id),
+                        DataField("slam_generation", diagnostics.slam_generation),
+                        DataField("slam_bridge_generation", diagnostics.slam_bridge_generation),
+                        DataField(
+                            "source_raw_scan_id",
+                            diagnostics.source_raw_scan_id,
+                        ),
+                        DataField(
+                            "source_raw_scan_timestamp_ns",
+                            diagnostics.source_raw_scan_timestamp_ns,
+                        ),
+                        DataField(
+                            "source_scan_revision",
+                            diagnostics.source_raw_scan_id,
+                        ),
+                        DataField(
+                            "scan_start_monotonic_ns",
+                            diagnostics.scan_start_monotonic_ns,
+                        ),
+                        DataField(
+                            "scan_end_monotonic_ns",
+                            diagnostics.scan_end_monotonic_ns,
+                        ),
+                        DataField(
+                            "measurement_monotonic_ns",
+                            diagnostics.measurement_monotonic_ns,
+                        ),
+                        DataField(
+                            "pose_reference_monotonic_ns",
+                            diagnostics.pose_reference_monotonic_ns,
+                        ),
+                        DataField(
+                            "scan_pose_alignment_delta_ns",
+                            diagnostics.scan_pose_alignment_delta_ns,
+                        ),
+                        DataField("matcher_reason", diagnostics.matcher_reason),
+                        DataField("tracking_ready", diagnostics.tracking_ready),
+                        DataField(
+                            "matcher_timed_out",
+                            diagnostics.matcher_timed_out,
+                        ),
+                        DataField(
+                            "matcher_degenerate",
+                            diagnostics.matcher_degenerate,
+                        ),
+                        DataField(
+                            "degeneracy_reasons",
+                            "|".join(diagnostics.degeneracy_reasons),
+                        ),
+                        DataField(
+                            "matcher_runtime_ms",
+                            diagnostics.matcher_runtime_ms,
+                        ),
+                        DataField(
+                            "matcher_queue_delay_ms",
+                            diagnostics.matcher_queue_delay_ms,
+                        ),
+                        DataField(
+                            "matcher_input_age_ns",
+                            diagnostics.matcher_input_age_ns,
+                        ),
+                        DataField(
+                            "matcher_confidence",
+                            diagnostics.matcher_confidence,
+                        ),
+                        DataField(
+                            "inlier_ratio",
+                            diagnostics.inlier_ratio,
+                        ),
+                        DataField("robust_rmse_m", diagnostics.robust_rmse_m),
+                        DataField("sector_coverage", diagnostics.sector_coverage),
+                        DataField(
+                            "observability_score",
+                            diagnostics.observability_score,
+                        ),
+                        DataField("ambiguity_margin", diagnostics.ambiguity_margin),
+                        DataField(
+                            "seed_pose_x_m",
+                            (
+                                diagnostics.scan_to_map_seed[0]
+                                if diagnostics.scan_to_map_seed is not None
+                                else None
+                            ),
+                        ),
+                        DataField(
+                            "seed_pose_y_m",
+                            (
+                                diagnostics.scan_to_map_seed[1]
+                                if diagnostics.scan_to_map_seed is not None
+                                else None
+                            ),
+                        ),
+                        DataField(
+                            "seed_pose_yaw_rad",
+                            (
+                                diagnostics.scan_to_map_seed[2]
+                                if diagnostics.scan_to_map_seed is not None
+                                else None
+                            ),
+                        ),
+                    ),
+                )
+            )
+        relative = reading.relative_motion
+        relative_end_ns = (reading.captured_monotonic_ns if relative is None or relative.end_ns is None
+                           else relative.end_ns)
+        independent_relative = relative is not None and relative.end_ns is not None
+        if (relative is not None and (independent_relative or (reading.timing_valid and not reading.stale))
+                and 0 <= context.monotonic_ns-relative_end_ns <= self._config.maximum_measurement_age_ns
+                and relative.start_ns < relative_end_ns):
+            samples.append(DeviceSample(
+                # This is the physical scan's interval, independently of the
+                # global matcher's completion counter or later fallback packet.
+                device_id=self.device_id, kind="lidar_relative_motion",
+                sequence=relative.source_sequence if independent_relative else reading.revision,
+                captured_monotonic_ns=relative_end_ns,
+                values=tuple(DataField(name, getattr(relative, name)) for name in
+                             ("start_ns", "dx_m", "dy_m", "dyaw_rad", "rmse_m", "observability")),
+            ))
+        if localization_usable:
+            assert reading.pose is not None
+            samples.append(
+                DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_pose",
+                    sequence=reading.revision,
+                    captured_monotonic_ns=reading.captured_monotonic_ns,
+                    values=(
+                        DataField("frame_id", self._config.pose_frame_id),
+                        DataField("x_m", reading.pose.x_m),
+                        DataField("y_m", reading.pose.y_m),
+                        DataField("yaw_rad", reading.pose.yaw_rad),
+                        DataField("confidence", reading.confidence),
+                        DataField("r_scale", reading.pose.r_scale),
+                    ),
+                )
+            )
+        return LiveDeviceSnapshot(context, health, tuple(samples))
+
+
+def _bounded_local_points(
+    points: tuple[LidarPointReading, ...],
+    config: NativeLidarConfig,
+) -> tuple[LidarPointReading, ...]:
+    filtered = tuple(
+        sorted(
+            (
+                point
+                for point in points
+                if config.local_perception_min_range_m
+                <= point.distance_m
+                <= config.local_perception_max_range_m
+            ),
+            key=lambda point: (point.angle_deg, point.distance_m, -point.quality),
+        )
+    )
+    limit = config.local_perception_max_points
+    if len(filtered) <= limit:
+        return filtered
+
+    # Preserve angular observability first, then use any remaining budget for
+    # deterministic density. The previous list-index decimator could erase a
+    # narrow physical surface completely (including a camera-correlated person
+    # return) when it happened to fall between two selected indices.
+    bucket_width_deg = 360.0 / limit
+    selected_by_bucket: dict[int, int] = {}
+    for index, point in enumerate(filtered):
+        normalized_angle = point.angle_deg % 360.0
+        bucket = min(limit - 1, int(normalized_angle / bucket_width_deg))
+        previous_index = selected_by_bucket.get(bucket)
+        if previous_index is None:
+            selected_by_bucket[bucket] = index
+            continue
+        previous = filtered[previous_index]
+        candidate_key = (point.distance_m, -point.quality, normalized_angle, index)
+        previous_key = (
+            previous.distance_m,
+            -previous.quality,
+            previous.angle_deg % 360.0,
+            previous_index,
+        )
+        if candidate_key < previous_key:
+            selected_by_bucket[bucket] = index
+
+    selected_indices = set(selected_by_bucket.values())
+    remaining_indices = tuple(
+        index for index in range(len(filtered)) if index not in selected_indices
+    )
+    missing = limit - len(selected_indices)
+    if missing > 0 and remaining_indices:
+        if missing >= len(remaining_indices):
+            selected_indices.update(remaining_indices)
+        elif missing == 1:
+            selected_indices.add(remaining_indices[len(remaining_indices) // 2])
+        else:
+            last = len(remaining_indices) - 1
+            selected_indices.update(
+                remaining_indices[round(slot * last / (missing - 1))]
+                for slot in range(missing)
+            )
+
+    return tuple(
+        sorted(
+            (filtered[index] for index in selected_indices),
+            key=lambda point: (
+                point.angle_deg % 360.0,
+                point.distance_m,
+                -point.quality,
+            ),
+        )
+    )
+
+
+__all__ = [
+    "LidarHealthBackend",
+    "LidarHealthReading",
+    "LidarMatcherDiagnostics",
+    "LidarPointReading",
+    "LidarPoseReading",
+    "LidarScanReading",
+    "NativeLidarConfig",
+    "NativeLidarSource",
+]

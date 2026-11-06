@@ -1,0 +1,817 @@
+"""Process-isolated passive runtime observers for the production V3 control path.
+
+The control process may enqueue immutable TickResult/CaptureRecord values, but it
+never performs status file I/O, MCAP encoding, hashing, compression, fsync or Test
+Hub post-processing.  Sidecars own no command, mission, safety or motor authority.
+"""
+
+from __future__ import annotations
+
+import multiprocessing
+import os
+import pickle
+import queue
+import time
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+from v3.async_capability import TransportSemantics
+from v3.engine import TickResult
+from v3.adapters.process_lidar_port import _unwire_raw
+from v3.execution import CaptureRecord
+from v3.capture_ipc import CaptureCoreExpander
+from v3.capture_behavior import project_behavior_record
+from v3.capture_navigation import NAVIGATION_EVENT_TOPIC, NavigationDecisionRecorder
+from v3.hri_evidence import HriEventFollower
+from v3.host_telemetry import HOST_TELEMETRY_TOPIC, HostTelemetrySampler
+from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
+from v3.observation import ObservationHub
+from v3.public_runtime_evidence import PublicRuntimeEventFollower
+from v3.navigation_map_capture import NAVIGATION_MAP_TOPIC, NAVIGATION_MAP_TRANSPORT_TOPIC
+from v3.local_costmap_capture import LOCAL_COSTMAP_TOPIC, pack_local_costmap
+from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
+from v3.resident_status import (
+    RESIDENT_PROCESS_STATUS_SCHEMA,
+    _atomic_private_json,
+    _tick_status,
+)
+
+
+_SPAWN_METHOD = "spawn"
+_CAPTURE_LOCAL_CAPACITY = 4096
+_CAPTURE_TRANSPORT_MIN_CAPACITY = 512
+_RAW_LIDAR_CAPACITY = 512
+_RAW_LIDAR_DRAIN_BATCH = 256
+_SIDECAR_READY_TIMEOUT_S = 10.0
+_SIDECAR_FINISH_TIMEOUT_S = 120.0
+_RAW_END_TIMEOUT_S = 2.0
+_SIDECAR_IO_TIMEOUT_S = 2.0
+_SIDECAR_TERMINATE_TIMEOUT_S = 2.0
+_STATUS_FINISH_TIMEOUT_S = 10.0
+_STATUS_MAILBOX_BYTES = 65_536  # Compact status only, never a production graph.
+_STATUS_POLL_S = 0.01
+_STATUS_WRITE_INTERVAL_NS = 100_000_000
+
+
+class _StatusMailbox:
+    """One complete latest status; neither peer waits for the other process."""
+
+    def __init__(self, context: Any) -> None:
+        self._buffer = context.RawArray("B", _STATUS_MAILBOX_BYTES)
+        self._size = context.RawValue("I", 0)
+        self._revision = context.RawValue("Q", 0)
+        self._lock = context.Lock()
+
+    def publish(self, snapshot: Mapping[str, object]) -> bool:
+        encoded = pickle.dumps(snapshot, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(encoded) > _STATUS_MAILBOX_BYTES:
+            raise ValueError("compact status exceeds mailbox bound")
+        if not self._lock.acquire(False):
+            return False
+        try:
+            memoryview(self._buffer).cast("B")[:len(encoded)] = encoded
+            self._size.value = len(encoded)
+            self._revision.value += 1
+        finally:
+            self._lock.release()
+        return True
+
+    def latest(self, after_revision: int) -> tuple[int, object | None]:
+        if not self._lock.acquire(False):
+            return after_revision, None
+        try:
+            revision = self._revision.value
+            if revision <= after_revision:
+                return after_revision, None
+            size = self._size.value
+            if not 0 < size <= _STATUS_MAILBOX_BYTES:
+                raise ValueError("invalid status mailbox size")
+            encoded = memoryview(self._buffer).cast("B")[:size].tobytes()
+        finally:
+            self._lock.release()
+        return revision, pickle.loads(encoded)
+
+
+def observation_shutdown_budget_s(*, capture_enabled: bool) -> float:
+    """Outer host shutdown includes both sequential observer finish paths."""
+    status = _SIDECAR_IO_TIMEOUT_S + _STATUS_FINISH_TIMEOUT_S + _SIDECAR_TERMINATE_TIMEOUT_S
+    capture = (2 * _SIDECAR_IO_TIMEOUT_S + _SIDECAR_FINISH_TIMEOUT_S
+               + _SIDECAR_TERMINATE_TIMEOUT_S) if capture_enabled else 0.0
+    return status + capture
+
+# R2B4_HRI_P0_V1
+
+
+def _capture_sidecar_main(
+    capture_id: str,
+    output_path: str,
+    configuration: Mapping[str, object],
+    metadata: Mapping[str, object],
+    config: McapCaptureConfig,
+    data_queue: Any,
+    raw_lidar_queue: Any,
+    control_queue: Any,
+    result_queue: Any,
+    ready_event: Any,
+    failed_event: Any,
+    expect_raw_lidar_end: bool,
+    project_root: str,
+    worker_cpus: int | CpuSet | None,
+    strict_affinity: bool,
+) -> None:
+    try:
+        if worker_cpus is not None:
+            apply_process_cpuset(
+                worker_cpus,
+                role="capture",
+                strict=strict_affinity,
+            )
+        hub = ObservationHub()
+        subscription = hub.subscribe_reliable(
+            "capture-process",
+            capacity=_CAPTURE_LOCAL_CAPACITY,
+            required=True,
+        )
+        consumer = McapCaptureConsumer(
+            capture_id,
+            Path(output_path),
+            subscription=subscription,
+            configuration=configuration,
+            metadata=metadata,
+            config=config,
+        )
+        consumer.start()
+        public_events = PublicRuntimeEventFollower(project_root)
+        public_events.start()
+        hri_events = HriEventFollower(project_root)
+        hri_events.start()
+        host_telemetry = HostTelemetrySampler()
+        expander = CaptureCoreExpander()
+        ready_event.set()
+
+        processed = 0
+        raw_end_received = not expect_raw_lidar_end
+        finish_request: tuple[str, bool, int, int] | None = None
+        raw_end_deadline: float | None = None
+        running = True
+        while running:
+            metrics = host_telemetry.sample()
+            if metrics is not None:
+                hub.publish(metrics, topic=HOST_TELEMETRY_TOPIC)
+            for topic, payload in public_events.drain():
+                hub.publish(payload, topic=topic)
+            for topic, payload in hri_events.drain():
+                hub.publish(payload, topic=topic)
+            # The LiDAR producer sends full scans directly here. The control
+            # interpreter never unpickles/rebuilds/re-pickles raw geometry.
+            for _ in range(_RAW_LIDAR_DRAIN_BATCH if raw_lidar_queue is not None else 0):
+                try:
+                    raw_message = raw_lidar_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if not isinstance(raw_message, tuple) or not raw_message:
+                    raise RuntimeError("invalid LiDAR evidence message")
+                raw_kind = raw_message[0]
+                if raw_kind == "raw":
+                    if len(raw_message) < 2:
+                        raise RuntimeError("raw LiDAR evidence lacks payload")
+                    snapshot = _unwire_raw(raw_message[1])
+                    if snapshot is not None:
+                        hub.publish(snapshot, topic="v3.raw_lidar")
+                elif raw_kind == "navigation_map":
+                    if len(raw_message) != 2 or not config.navigation_map_hz:
+                        raise RuntimeError("unexpected navigation map evidence")
+                    hub.publish(raw_message[1], topic=NAVIGATION_MAP_TOPIC)
+                elif raw_kind == "raw_end":
+                    if len(raw_message) != 4:
+                        raise RuntimeError("invalid raw LiDAR end marker")
+                    raw_end_received = True
+                    hub.publish(
+                        {
+                            "event_type": ("navigation_map_transport_end" if config.navigation_map_hz
+                                           else "raw_lidar_transport_end"),
+                            "last_revision": int(raw_message[1]),
+                            "produced_count": int(raw_message[2]),
+                            "superseded_count": int(raw_message[3]),
+                        },
+                        topic=(NAVIGATION_MAP_TRANSPORT_TOPIC if config.navigation_map_hz
+                               else "v3.raw_lidar_transport"),
+                    )
+                else:
+                    raise RuntimeError(f"unknown LiDAR evidence kind: {raw_kind!r}")
+            while True:
+                try:
+                    command = control_queue.get_nowait()
+                except queue.Empty:
+                    break
+                kind = command[0]
+                if kind == "trigger":
+                    consumer.trigger(command[1], command[2])
+                elif kind == "warmup":
+                    continue
+                elif kind == "finish":
+                    finish_request = (
+                        str(command[1]), bool(command[2]), int(command[3]), int(command[4])
+                    )
+                    raw_end_deadline = time.monotonic() + _RAW_END_TIMEOUT_S
+                elif kind == "abort":
+                    raise RuntimeError("observer sidecar aborted by parent")
+                else:
+                    raise RuntimeError(f"unknown observer sidecar command: {kind!r}")
+
+            if (
+                finish_request is not None
+                and processed >= finish_request[2]
+                and (raw_end_received or time.monotonic() >= raw_end_deadline)
+            ):
+                if finish_request[3]:
+                    hub.publish(
+                        {"event_type": "capture_core_transport_loss", "drop_count": finish_request[3]},
+                        topic="v3.capture_transport",
+                    )
+                for follower in (public_events, hri_events):
+                    for batch in follower.finish():
+                        for topic, payload in batch:
+                            hub.publish(payload, topic=topic)
+                hub.close()
+                result = consumer.finish(finish_request[0], terminal=finish_request[1])
+                result_path = str(result.path) if result is not None else None
+                result_queue.put(("done", result_path))
+                running = False
+                continue
+
+            try:
+                kind, payload = data_queue.get(timeout=0.01)
+            except queue.Empty:
+                continue
+            if kind == "warmup":
+                continue
+            if kind == "core":
+                hub.publish(expander.expand_transport(payload), topic="v3.capture_record")
+            elif kind == "record":
+                hub.publish(payload, topic="v3.capture_record")
+            elif kind == "behavior_with_map":
+                behavior, costmap = payload
+                hub.publish(behavior, topic="v3.capture_record")
+                hub.publish(costmap, topic=LOCAL_COSTMAP_TOPIC)
+            elif kind == "navigation_decision":
+                hub.publish(payload, topic=NAVIGATION_EVENT_TOPIC)
+            elif kind == "runtime_timing":
+                hub.publish(payload, topic="v3.runtime_timing")
+            elif kind == "raw_lidar":
+                if payload is not None:
+                    hub.publish(payload, topic="v3.raw_lidar")
+            else:
+                raise RuntimeError(f"unknown observer data kind: {kind!r}")
+            processed += 1
+    except BaseException as exc:
+        failed_event.set()
+        try:
+            result_queue.put(("error", type(exc).__name__, str(exc)))
+        except BaseException:
+            pass
+        ready_event.set()
+    finally:
+        if "public_events" in locals():
+            public_events.close()
+        if "hri_events" in locals():
+            hri_events.close()
+
+
+def _status_sidecar_main(
+    path: str,
+    file_mode: int,
+    tick_mailbox: _StatusMailbox,
+    control_queue: Any,
+    result_queue: Any,
+    ready_event: Any,
+    failed_event: Any,
+    worker_cpus: int | CpuSet | None,
+    strict_affinity: bool,
+    effective_config=None,
+) -> None:
+    try:
+        if worker_cpus is not None:
+            apply_process_cpuset(
+                worker_cpus,
+                role="status",
+                strict=strict_affinity,
+            )
+        target = Path(path)
+        configuration = ({"effective_config": effective_config.as_dict(), "config_snapshot_id": effective_config.snapshot_id,
+                          "configuration_diagnostics": effective_config.configuration_diagnostics()}
+                         if effective_config is not None else {})
+        _atomic_private_json(
+            target,
+            {
+                "schema": RESIDENT_PROCESS_STATUS_SCHEMA,
+                "state": "BOOTING",
+                **configuration,
+                "monotonic_ns": time.monotonic_ns(),
+            },
+            file_mode,
+        )
+        ready_event.set()
+
+        finishing = False
+        last_revision = 0
+        next_write_ns = 0
+        egress = {
+            "schema": "R2B4_STATUS_EGRESS_TIMING_V1",
+            "scope": "RUNNING_WRITES_ONLY",
+            "worker_pid": os.getpid(),
+            "write_interval_ns": _STATUS_WRITE_INTERVAL_NS,
+            "mailbox_receipt_count": 0,
+            "coalesced_revision_count": 0,
+            "write_count": 0,
+            "write_wall_total_ns": 0,
+            "write_wall_max_ns": 0,
+            "write_thread_cpu_total_ns": 0,
+            "write_thread_cpu_max_ns": 0,
+            "source_age_at_receipt_max_ns": 0,
+            "source_age_at_write_return_max_ns": 0,
+            "max_write_source_tick_id": None,
+            "max_write_started_monotonic_ns": None,
+            "max_write_returned_monotonic_ns": None,
+            "note": "Wall minus thread CPU includes I/O, GIL wait and scheduler delay; it does not distinguish them.",
+        }
+        while not finishing:
+            try:
+                command = control_queue.get_nowait()
+            except queue.Empty:
+                command = None
+            if command is not None:
+                kind = command[0]
+                if kind != "finish":
+                    raise RuntimeError(f"unknown status sidecar command: {kind!r}")
+                report_payload = command[1]
+                error_type = command[2]
+                error_text = command[3]
+                payload: dict[str, object] = {
+                    "schema": RESIDENT_PROCESS_STATUS_SCHEMA,
+                    "state": "STOPPED" if error_type is None else "ERROR",
+                    "monotonic_ns": time.monotonic_ns(),
+                    "report": report_payload,
+                    "error_type": error_type,
+                    "error": error_text,
+                    "status_egress": egress,
+                }
+                _atomic_private_json(target, {**payload, **configuration}, file_mode)
+                finishing = True
+                continue
+
+            now_ns = time.monotonic_ns()
+            if now_ns < next_write_ns:
+                # Host status needs a bounded latest view, not 50 file
+                # replacements per second. Keep finish admission responsive.
+                time.sleep(min(_STATUS_POLL_S, (next_write_ns-now_ns)/1e9))
+                continue
+            previous_revision = last_revision
+            last_revision, snapshot = tick_mailbox.latest(last_revision)
+            if snapshot is None:
+                time.sleep(_STATUS_POLL_S)
+                continue
+            # Select only when ready to write, so the rate limit never holds
+            # a previously copied tick. Source timestamps remain unchanged.
+            received_ns = time.monotonic_ns()
+            egress["mailbox_receipt_count"] += 1
+            egress["coalesced_revision_count"] += max(0, last_revision-previous_revision-1)
+            source_ns = snapshot.get("monotonic_ns")
+            if type(source_ns) is int:
+                egress["source_age_at_receipt_max_ns"] = max(
+                    egress["source_age_at_receipt_max_ns"], max(0, received_ns-source_ns))
+            wall_started_ns = time.perf_counter_ns()
+            cpu_started_ns = time.thread_time_ns()
+            _atomic_private_json(
+                target,
+                {**snapshot, **configuration},
+                file_mode,
+                durable=False,
+            )
+            wall_ns = time.perf_counter_ns()-wall_started_ns
+            cpu_ns = time.thread_time_ns()-cpu_started_ns
+            returned_ns = time.monotonic_ns()
+            egress["write_count"] += 1
+            egress["write_wall_total_ns"] += wall_ns
+            egress["write_thread_cpu_total_ns"] += cpu_ns
+            egress["write_thread_cpu_max_ns"] = max(egress["write_thread_cpu_max_ns"], cpu_ns)
+            if wall_ns > egress["write_wall_max_ns"]:
+                egress.update(write_wall_max_ns=wall_ns,
+                    max_write_source_tick_id=snapshot.get("tick_id"),
+                    max_write_started_monotonic_ns=received_ns,
+                    max_write_returned_monotonic_ns=returned_ns)
+            if type(source_ns) is int:
+                egress["source_age_at_write_return_max_ns"] = max(
+                    egress["source_age_at_write_return_max_ns"], max(0, returned_ns-source_ns))
+            next_write_ns = received_ns+_STATUS_WRITE_INTERVAL_NS
+        result_queue.put(("done",))
+    except BaseException as exc:
+        failed_event.set()
+        try:
+            result_queue.put(("error", type(exc).__name__, str(exc)))
+        except BaseException:
+            pass
+        ready_event.set()
+
+
+class ProcessMcapCaptureSession:
+    """Production MCAP capture whose expensive work lives outside control process."""
+
+    transport_semantics = TransportSemantics.EVIDENCE_STREAM
+
+    __slots__ = (
+        "_capture_id",
+        "_config",
+        "_configuration",
+        "_control_queue",
+        "_data_queue",
+        "_raw_lidar_queue",
+        "_drop_count",
+        "_enqueued_count",
+        "_failed_event",
+        "_metadata",
+        "_output_path",
+        "_process",
+        "_project_root",
+        "_ready_event",
+        "_result_queue",
+        "_started",
+        "_strict_affinity",
+        "_transport_capacity",
+        "_worker_cpus",
+        "_expect_raw_lidar_end",
+        "_last_localmap_bucket",
+        "_navigation_recorder",
+    )
+
+    def __init__(
+        self,
+        capture_id: str,
+        output_path: str | Path,
+        *,
+        configuration: Mapping[str, object],
+        metadata: Mapping[str, object] | None = None,
+        config: McapCaptureConfig | None = None,
+        capacity: int = 256,
+        project_root: str | Path,
+        worker_cpus: int | CpuSet | None = None,
+        strict_affinity: bool = False,
+        expect_raw_lidar_end: bool = False,
+    ) -> None:
+        identifier = str(capture_id or "").strip()
+        if not identifier:
+            raise ValueError("capture_id must be non-empty")
+        target = Path(output_path)
+        if not target.is_absolute() or target.suffix.lower() != ".mcap":
+            raise ValueError("output_path must be an absolute .mcap path")
+        if not isinstance(configuration, Mapping):
+            raise TypeError("configuration must be a mapping")
+        if metadata is not None and not isinstance(metadata, Mapping):
+            raise TypeError("metadata must be a mapping or None")
+        if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity <= 0:
+            raise ValueError("capacity must be a positive integer")
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
+
+        context = multiprocessing.get_context(_SPAWN_METHOD)
+        self._capture_id = identifier
+        self._output_path = target
+        self._configuration = dict(configuration)
+        self._metadata = dict(metadata or {})
+        self._config = config or McapCaptureConfig()
+        self._last_localmap_bucket = None
+        self._navigation_recorder = NavigationDecisionRecorder()
+        self._transport_capacity = max(_CAPTURE_TRANSPORT_MIN_CAPACITY, capacity * 2)
+        self._data_queue = context.Queue(maxsize=self._transport_capacity)
+        self._raw_lidar_queue = (
+            context.Queue(maxsize=_RAW_LIDAR_CAPACITY)
+            if self._config.sensor_debug or self._config.navigation_map_hz else None
+        )
+        self._control_queue = context.Queue(maxsize=16)
+        self._result_queue = context.Queue(maxsize=4)
+        self._ready_event = context.Event()
+        self._failed_event = context.Event()
+        self._project_root = Path(project_root)
+        self._worker_cpus = worker_cpus
+        self._strict_affinity = strict_affinity
+        self._expect_raw_lidar_end = bool(
+            expect_raw_lidar_end and self._config.sensor_debug or self._config.navigation_map_hz)
+        self._process = context.Process(
+            target=_capture_sidecar_main,
+            args=(
+                self._capture_id,
+                str(self._output_path),
+                self._configuration,
+                self._metadata,
+                self._config,
+                self._data_queue,
+                self._raw_lidar_queue,
+                self._control_queue,
+                self._result_queue,
+                self._ready_event,
+                self._failed_event,
+                self._expect_raw_lidar_end,
+                str(self._project_root),
+                self._worker_cpus,
+                self._strict_affinity,
+            ),
+            name="v3-observer-capture",
+            daemon=False,
+        )
+        self._started = False
+        self._enqueued_count = 0
+        self._drop_count = 0
+
+    @property
+    def raw_lidar_queue(self) -> Any:
+        """Spawn-time producer → sidecar evidence lane; never a control input."""
+        return self._raw_lidar_queue
+
+    @property
+    def raw_lidar_transport_capacity(self) -> int:
+        """Bounded burst reserve; overflow remains explicit integrity failure."""
+        return _RAW_LIDAR_CAPACITY
+
+    @property
+    def failed(self) -> bool:
+        return bool(self._failed_event.is_set() or self._drop_count)
+
+    @property
+    def transport_drop_count(self) -> int:
+        return self._drop_count
+
+    def start(self) -> None:
+        if self._started:
+            return
+        with temporary_current_affinity(self._worker_cpus, role="worker-start", strict=self._strict_affinity):
+            self._process.start()
+        self._started = True
+        if not self._ready_event.wait(_SIDECAR_READY_TIMEOUT_S):
+            self._terminate()
+            raise RuntimeError("capture sidecar did not become ready")
+        self._raise_early_error()
+        if not self._process.is_alive():
+            raise RuntimeError("capture sidecar exited during startup")
+        # Queue feeders are created by the first put, not by Process.start().
+        # Start serialization off the control CPU before accepting observations.
+        with temporary_current_affinity(
+            self._worker_cpus, role="capture-feeder", strict=self._strict_affinity
+        ):
+            self._data_queue.put(("warmup", None), timeout=_SIDECAR_READY_TIMEOUT_S)
+            self._control_queue.put(("warmup",), timeout=_SIDECAR_READY_TIMEOUT_S)
+
+    def _raise_early_error(self) -> None:
+        try:
+            message = self._result_queue.get_nowait()
+        except queue.Empty:
+            return
+        if message and message[0] == "error":
+            raise RuntimeError(f"capture sidecar failed: {message[1]}:{message[2]}")
+        self._result_queue.put(message)
+
+    def _enqueue(self, kind: str, payload: object) -> bool:
+        if not self._started:
+            self.start()
+        try:
+            self._data_queue.put_nowait((kind, payload))
+        except queue.Full:
+            self._drop_count += 1
+            return False
+        else:
+            self._enqueued_count += 1
+            return True
+
+    def observe(self, record: CaptureRecord) -> None:
+        # Sampled capture hands off a small immutable state summary. Full raw
+        # inputs/checkpoints cross this edge only for sensor debug. A requested
+        # planner grid uses bounded C-packed cells on this same queue item.
+        if self._config.sensor_debug:
+            self._enqueue("record", record)
+            return
+        behavior = project_behavior_record(record)
+        if self._config.navigation_map_hz:
+            bucket = behavior.context.monotonic_ns // (1_000_000_000 // self._config.navigation_map_hz)
+            if self._last_localmap_bucket is None or bucket > self._last_localmap_bucket:
+                self._last_localmap_bucket = bucket
+                self._enqueue("behavior_with_map", (behavior, pack_local_costmap(record)))
+                return
+        self._enqueue("record", behavior)
+
+    def observe_raw_lidar(self, snapshot: object | None) -> None:
+        if self._config.sensor_debug and snapshot is not None:
+            self._enqueue("raw_lidar", snapshot)
+
+    def observe_decision(self, record: CaptureRecord) -> None:
+        event = self._navigation_recorder.observe(record)
+        if event is not None:
+            self._enqueue("navigation_decision", event)
+
+    def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
+        if not self._started:
+            self.start()
+        try:
+            self._control_queue.put_nowait(("trigger", str(reason), monotonic_ns))
+        except queue.Full:
+            self._drop_count += 1
+
+    def finalize(self, report: object | None, *, error: BaseException | None = None) -> Path | None:
+        if not self._started:
+            self.start()
+        timing = getattr(report, "timing", None)
+        if timing is not None:
+            # The control loop has stopped. Preserve its bounded aggregate;
+            # formatting and transport here cannot compete with a live tick.
+            self._enqueue("runtime_timing", {"event_type": "runtime_timing", "timing": timing.as_dict()})
+        status = "PASS" if error is None and getattr(report, "status", 1) == 0 else "FAULT"
+        self._control_queue.put(
+            ("finish", status, True, self._enqueued_count, self._drop_count),
+            timeout=_SIDECAR_IO_TIMEOUT_S,
+        )
+        self._process.join(_SIDECAR_FINISH_TIMEOUT_S)
+        if self._process.is_alive():
+            self._terminate()
+            raise RuntimeError("capture sidecar did not stop")
+        try:
+            message = self._result_queue.get(timeout=_SIDECAR_IO_TIMEOUT_S)
+        except queue.Empty as exc:
+            raise RuntimeError("capture sidecar returned no result") from exc
+        if message[0] == "error":
+            raise RuntimeError(f"capture sidecar failed: {message[1]}:{message[2]}")
+        result_path = Path(message[1]) if message[1] is not None else None
+        return result_path
+
+    def _terminate(self) -> None:
+        if self._process.is_alive():
+            self._process.terminate()
+            self._process.join(timeout=_SIDECAR_TERMINATE_TIMEOUT_S)
+
+
+class ProcessResidentStatusPublisher:
+    """Compact status projection followed by sidecar-owned encoding/file I/O."""
+
+    transport_semantics = TransportSemantics.LATEST_STATE
+
+    __slots__ = (
+        "_config",
+        "_control_queue",
+        "_drop_count",
+        "_failed_event",
+        "_finished",
+        "_process",
+        "_ready_event",
+        "_result_queue",
+        "_started",
+        "_strict_affinity",
+        "_tick_mailbox",
+        "_worker_cpus",
+        "_error_text",
+    )
+
+    def __init__(
+        self,
+        config: object,
+        *,
+        worker_cpus: int | CpuSet | None = None,
+        strict_affinity: bool = False,
+    ) -> None:
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
+        path = getattr(config, "path", None)
+        file_mode = getattr(config, "file_mode", None)
+        if not isinstance(path, Path) or not path.is_absolute():
+            raise TypeError("config must provide absolute Path path")
+        if file_mode != 0o600:
+            raise ValueError("status file_mode must be 0o600")
+        context = multiprocessing.get_context(_SPAWN_METHOD)
+        self._config = config
+        self._tick_mailbox = _StatusMailbox(context)
+        self._control_queue = context.Queue(maxsize=4)
+        self._result_queue = context.Queue(maxsize=4)
+        self._ready_event = context.Event()
+        self._failed_event = context.Event()
+        self._worker_cpus = worker_cpus
+        self._strict_affinity = strict_affinity
+        self._process = context.Process(
+            target=_status_sidecar_main,
+            args=(
+                str(path),
+                int(file_mode),
+                self._tick_mailbox,
+                self._control_queue,
+                self._result_queue,
+                self._ready_event,
+                self._failed_event,
+                worker_cpus,
+                strict_affinity,
+                getattr(config, "effective_config", None),
+            ),
+            name="v3-observer-status",
+            daemon=False,
+        )
+        self._started = False
+        self._drop_count = 0
+        self._error_text: str | None = None
+        self._finished = False
+
+    @property
+    def failed(self) -> bool:
+        self._poll_error()
+        return self._error_text is not None or bool(self._failed_event.is_set())
+
+    @property
+    def error(self) -> BaseException | None:
+        self._poll_error()
+        return RuntimeError(self._error_text) if self._error_text is not None else None
+
+    @property
+    def drop_count(self) -> int:
+        return self._drop_count
+
+    def _poll_error(self) -> None:
+        if self._error_text is not None:
+            return
+        while True:
+            try:
+                message = self._result_queue.get_nowait()
+            except queue.Empty:
+                if self._started and not self._finished and self._process.exitcode is not None:
+                    self._error_text = f"status sidecar exited:{self._process.exitcode}"
+                return
+            if message and message[0] == "error":
+                self._error_text = f"{message[1]}:{message[2]}"
+                return
+
+    def start(self) -> None:
+        if self._started:
+            raise RuntimeError("status publisher is already started")
+        with temporary_current_affinity(self._worker_cpus, role="worker-start", strict=self._strict_affinity):
+            self._process.start()
+        self._started = True
+        if not self._ready_event.wait(_SIDECAR_READY_TIMEOUT_S):
+            self._process.terminate()
+            self._process.join(timeout=2.0)
+            raise RuntimeError("status sidecar did not become ready")
+        self._poll_error()
+        if self._error_text is not None:
+            raise RuntimeError(f"status sidecar failed: {self._error_text}")
+        if not self._process.is_alive():
+            raise RuntimeError("status sidecar exited during startup")
+
+    def publish_tick(self, result: TickResult, ready_for_active: bool = False) -> None:
+        if not isinstance(result, TickResult):
+            raise TypeError("result must be TickResult")
+        if type(ready_for_active) is not bool:
+            raise TypeError("ready_for_active must be bool")
+        if not self._started:
+            raise RuntimeError("status publisher is not started")
+        if self._finished:
+            if self._error_text is not None:
+                return
+            raise RuntimeError("status publisher is finished")
+        # Project before IPC: only bounded counts/scalars enter the mailbox.
+        # Every accepted tick replaces the previous pending value. A slow fsync
+        # can never strand the final tick behind FIFO values or drop it as new.
+        try:
+            accepted = self._tick_mailbox.publish(_tick_status(result, ready_for_active))
+        except Exception as exc:
+            # Report egress failure through the existing host lifecycle check,
+            # never by throwing through an already completed tick/motor result.
+            self._error_text = f"{type(exc).__name__}:{str(exc)[:256]}"
+            accepted = False
+        if not accepted:
+            self._drop_count += 1
+
+    def finish(self, *, report: object | None = None, error: BaseException | None = None) -> None:
+        if not self._started or self._finished:
+            return
+        if report is not None and error is not None:
+            raise ValueError("finish accepts report or error, not both")
+        self._poll_error()
+        self._finished = True
+        report_payload = report.as_dict() if report is not None else None
+        self._control_queue.put(
+            (
+                "finish",
+                report_payload,
+                type(error).__name__ if error is not None else None,
+                str(error) if error is not None else None,
+            ),
+            timeout=_SIDECAR_IO_TIMEOUT_S,
+        )
+        self._process.join(timeout=_STATUS_FINISH_TIMEOUT_S)
+        if self._process.is_alive():
+            self._process.terminate()
+            self._process.join(timeout=_SIDECAR_TERMINATE_TIMEOUT_S)
+            raise RuntimeError("status sidecar did not stop")
+        self._poll_error()
+
+
+__all__ = [
+    "ProcessMcapCaptureSession",
+    "ProcessResidentStatusPublisher",
+]

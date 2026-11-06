@@ -1,0 +1,657 @@
+from __future__ import annotations
+
+import os
+import signal
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from v3.operator_controller import OperatorController, OperatorError
+from v3.mcap_reader import McapReadError
+
+
+pytestmark = [pytest.mark.contract, pytest.mark.control]
+
+
+@pytest.fixture
+def roomcruise_ack_status(tmp_path, monkeypatch):
+    """A live host snapshot; no command producer or hardware is started."""
+    controller = OperatorController(tmp_path)
+    mission_id = "mission-roomcruise-test"
+    status = {
+        "schema": "R2B4_V3_RESIDENT_PROCESS_STATUS_V1",
+        "state": "RUNNING", "tick_id": 2, "monotonic_ns": time.monotonic_ns(),
+        "fault_layer": None, "safety_decision": "STOP", "safety_reason": "NOT_ACTIVE",
+        "enabled": False, "left_output": 0.0, "right_output": 0.0,
+        "mission": {"mission_id": mission_id, "mode": "EXPLORE", "lifecycle": "ACTIVE"},
+        "navigation": {"mission_id": mission_id, "status": "IDLE", "reason": "NO_PATH_HOLD"},
+    }
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: 123)
+    monkeypatch.setattr(controller, "_pid_matches", lambda *args: True)
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: status)
+    monkeypatch.setattr(controller, "_transition_sleep", lambda seconds: None)
+    return controller, status
+
+
+@pytest.mark.parametrize("safety", ["STOP", "ALLOW"])
+@pytest.mark.parametrize("navigation,reason", [
+    ("PENDING", "PLANNER_PENDING"),
+    ("IDLE", "PLANNER_GEOMETRY_HOLD"),
+    ("IDLE", "NO_PATH_HOLD"),
+])
+def test_roomcruise_acknowledges_active_mission_without_motor_motion(
+    roomcruise_ack_status, safety, navigation, reason,
+):
+    controller, status = roomcruise_ack_status
+    status.update(safety_decision=safety, enabled=safety == "ALLOW")
+    status["navigation"].update(status=navigation, reason=reason)
+
+    assert controller._wait_allow(
+        456, 1, "roomcruise", mission_command_id="roomcruise-test", mission_mode="EXPLORE",
+    )
+    assert status["left_output"] == status["right_output"] == 0.0
+
+
+@pytest.mark.parametrize("boundary,patch", [
+    ("mission", {"mission_id": "mission-another-command"}),
+    ("navigation", {"mission_id": "mission-another-command"}),
+    ("mission", {"mode": "STOP"}),
+    ("mission", {"lifecycle": "IDLE"}),
+    ("mission", {"lifecycle": "CANCELLED"}),
+    ("mission", {"lifecycle": "FAILED"}),
+    ("status", {"fault_layer": "L6"}),
+    ("status", {"safety_decision": "FAULT"}),
+    ("status", {"state": "STOPPED"}),
+    ("status", {"tick_id": 1}),
+    ("status", {"monotonic_ns": 1}),
+])
+def test_roomcruise_ack_rejects_unrelated_inactive_faulted_or_old_status(
+    roomcruise_ack_status, boundary, patch,
+):
+    controller, status = roomcruise_ack_status
+    # Unrelated physical motion must not acknowledge this RoomCruise request.
+    status.update(safety_decision="ALLOW", enabled=True, left_output=0.2, right_output=0.2)
+    (status if boundary == "status" else status[boundary]).update(patch)
+
+    assert not controller._wait_allow(
+        456, 1, "roomcruise", mission_command_id="roomcruise-test", mission_mode="EXPLORE",
+    )
+
+
+def test_roomcruise_start_uses_mission_acknowledgement(roomcruise_ack_status, monkeypatch):
+    from v3.config import ConfigResolver
+    from v3.contracts import ExplorePreferences
+
+    resolved = SimpleNamespace(
+        roomcruise=SimpleNamespace(
+            max_v_mps=0.2, max_omega_rad_s=0.6,
+            preferences=ExplorePreferences(
+                local_goal_novelty_weight=1.0, local_goal_clearance_weight=1.0,
+                local_goal_forward_weight=1.0, explore_local_goal_min_distance_m=0.3,
+                explore_local_goal_max_distance_m=0.6, explore_local_goal_distance_weight=1.0,
+            ),
+        ),
+        edges=SimpleNamespace(command_ingress=SimpleNamespace(
+            maximum_linear_speed_mps=0.5, maximum_angular_speed_rad_s=1.2,
+        )),
+    )
+    monkeypatch.setattr(ConfigResolver, "for_project", lambda root: SimpleNamespace(resolve=lambda: resolved))
+    controller, status = roomcruise_ack_status
+    requests, stops = [], []
+    monkeypatch.setattr(controller, "ensure_runtime", lambda *args: 123)
+    monkeypatch.setattr(controller, "stop", lambda **kwargs: stops.append(kwargs))
+    monkeypatch.setattr(controller, "current_capture_mode", lambda: "nincs")
+
+    def spawn_control(command):
+        requests.append(command)
+        command_id = command[command.index("--command-id") + 1]
+        status.update(tick_id=3, monotonic_ns=time.monotonic_ns())
+        status["mission"]["mission_id"] = f"mission-{command_id}"
+        status["navigation"]["mission_id"] = f"mission-{command_id}"
+        return 456
+
+    monkeypatch.setattr(controller, "_spawn_control_process", spawn_control)
+    handle = controller.roomcruise(capture=False, capture_mode="nincs")
+    command = requests[0]
+    assert command[3] == "explore"
+    assert command[command.index("--command-id") + 1] == handle.command_id
+    assert handle.pid == 456 and handle.label == "roomcruise"
+    assert status["safety_decision"] == "STOP"
+    assert status["left_output"] == status["right_output"] == 0.0
+    assert stops == [{}]  # Initial preemption only; accepted HOLD is not cancelled.
+
+
+@pytest.mark.parametrize("condition", ["detector_pending", "target_missing", "foreign_mission", "foreign_navigation",
+                                        "wrong_mode", "inactive", "fault"])
+def test_followperson_admission_uses_own_active_mission_even_during_stop_hold(
+    roomcruise_ack_status, monkeypatch, condition,
+):
+    from v3.config import ConfigResolver
+
+    resolved = SimpleNamespace(
+        followperson=SimpleNamespace(max_v_mps=0.2, max_omega_rad_s=1.1),
+        edges=SimpleNamespace(command_ingress=SimpleNamespace(
+            maximum_linear_speed_mps=0.5, maximum_angular_speed_rad_s=1.2,
+        )),
+    )
+    monkeypatch.setattr(ConfigResolver, "for_project", lambda root: SimpleNamespace(resolve=lambda: resolved))
+    controller, status = roomcruise_ack_status
+    stops = []
+    monkeypatch.setattr(controller, "ensure_runtime", lambda *args: 123)
+    monkeypatch.setattr(controller, "stop", lambda **kwargs: stops.append(kwargs))
+    monkeypatch.setattr(controller, "current_capture_mode", lambda: "nincs")
+
+    def spawn_control(command):
+        command_id = command[command.index("--command-id") + 1]
+        status.update(tick_id=3, monotonic_ns=time.monotonic_ns())
+        status["mission"].update(mission_id="mission-" + command_id, mode="FOLLOW_PERSON")
+        status["navigation"].update(mission_id="mission-" + command_id, status="PENDING",
+                                    reason="PERSON_DETECTOR_PENDING" if condition == "detector_pending" else "PERSON_NOT_FOUND")
+        if condition == "foreign_mission":
+            status["mission"]["mission_id"] = "mission-other"
+        elif condition == "foreign_navigation":
+            status["navigation"]["mission_id"] = "mission-other"
+        elif condition == "wrong_mode":
+            status["mission"]["mode"] = "EXPLORE"
+        elif condition == "inactive":
+            status["mission"]["lifecycle"] = "CANCELLED"
+        elif condition == "fault":
+            status["safety_decision"] = "FAULT"
+        return 456
+
+    monkeypatch.setattr(controller, "_spawn_control_process", spawn_control)
+    if condition in {"detector_pending", "target_missing"}:
+        handle = controller.followperson(capture=False, capture_mode="nincs")
+        assert status["mission"]["mission_id"] == "mission-" + handle.command_id
+        assert stops == [{}]
+    else:
+        with pytest.raises(OperatorError, match="followperson was not acknowledged"):
+            controller.followperson(capture=False, capture_mode="nincs")
+        assert stops == [{}, {"wait_idle": False}]
+    assert status["enabled"] is False and status["left_output"] == status["right_output"] == 0
+
+
+def test_stop_cleanup_preserves_concurrent_stop_and_passive_clients(tmp_path, monkeypatch):
+    import v3.operator_controller as module
+
+    controller = OperatorController(tmp_path)
+    controller.runtime_dir.mkdir()
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    processes = {
+        101: ["stop", "--command-id", "navigate"],
+        102: ["status"],
+        103: ["config"],
+        104: ["--status-path", "navigate", "stop", "--command-id", "teleop"],
+        105: ["--owner-pid", "700", "--max-runtime-s=30", "navigate"],
+        106: ["teleop"],
+        107: ["explore"],
+        108: ["faceperson"],
+        109: ["followperson"],
+        110: ["--command-path", "other_command.json", "navigate"],
+        111: ["--command-path=runtime/v3_command.json", "navigate"],
+    }
+    for pid, arguments in processes.items():
+        directory = proc / str(pid)
+        directory.mkdir()
+        (directory / "cwd").symlink_to(tmp_path, target_is_directory=True)
+        (directory / "cmdline").write_bytes(
+            b"\0".join(part.encode() for part in ["python", "-m", "v3.control_cli", *arguments])
+        )
+    # A stale owner record points at the concurrent STOP client. It is never a
+    # command heartbeat, even when its command-id names a producer operation.
+    controller.command_pid_file.write_text("101")
+    monkeypatch.setattr(module, "Path", lambda path: proc if str(path) == "/proc" else Path(path))
+    killed = []
+
+    def kill(pid, sig):
+        assert sig == signal.SIGTERM
+        killed.append(pid)
+        (proc / str(pid) / "cmdline").write_bytes(b"")
+
+    monkeypatch.setattr(module.os, "kill", kill)
+    monkeypatch.setattr(controller, "_wait_gone", lambda *args: True)
+    controller._stop_control_cli_only()
+
+    assert set(killed) == {105, 106, 107, 108, 109, 111}
+    assert len(killed) == 6
+    assert not controller.command_pid_file.exists()
+
+
+def test_stop_still_preempts_before_waiting_for_operator_lock(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    controller = OperatorController(tmp_path)
+    events = []
+
+    @contextmanager
+    def transition():
+        assert events == ["STOP", "cleanup", "STOP"]
+        events.append("locked")
+        yield
+
+    monkeypatch.setattr(controller, "operator_transition", transition)
+    monkeypatch.setattr(controller, "_stop_command_producers", lambda: events.append("cleanup"))
+    monkeypatch.setattr(controller, "_publish_stop", lambda: events.append("STOP"))
+    monkeypatch.setattr(controller, "_trigger_movement_capture_if_needed", lambda: None)
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: None)
+    controller.stop()
+    assert events == ["STOP", "cleanup", "STOP", "locked", "STOP", "cleanup", "STOP"]
+
+
+def test_stop_recovers_early_publication_contention_after_revoking_producers(tmp_path, monkeypatch):
+    import v3.operator_controller as module
+    from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandMailboxConfig
+    from v3.contracts import CommandMode, TickContext
+
+    controller = OperatorController(tmp_path)
+    controller.runtime_dir.mkdir()
+    publications, cleanup, killed = [], [], []
+    publish = module.ResidentCommandClient.publish_stop
+
+    def contended_first(client, *args, **kwargs):
+        publications.append("STOP")
+        if len(publications) == 1:
+            raise TimeoutError("command STOP publication contention")
+        return publish(client, *args, **kwargs)
+
+    monkeypatch.setattr(module.ResidentCommandClient, "publish_stop", contended_first)
+    monkeypatch.setattr(controller, "_stop_command_producers", lambda: cleanup.append("revoked"))
+    monkeypatch.setattr(controller, "_trigger_movement_capture_if_needed", lambda: None)
+    monkeypatch.setattr(controller, "_runtime_kill", lambda: killed.append(True))
+    controller.stop(wait_idle=False)
+
+    request = AtomicResidentCommandGateway(ResidentCommandMailboxConfig(path=controller.command_file)).snapshot(
+        TickContext(1, time.monotonic_ns()))
+    assert request.mode is CommandMode.STOP
+    assert cleanup == ["revoked", "revoked"] and len(publications) == 4
+    assert killed == []
+
+
+@pytest.mark.parametrize("failure", ["producer revocation failed", "final STOP failed"])
+def test_stop_keeps_terminal_cleanup_failures_after_early_contention(tmp_path, monkeypatch, failure):
+    controller = OperatorController(tmp_path)
+    events, killed = [], []
+
+    def publish():
+        events.append("STOP")
+        if len(events) == 1:
+            raise TimeoutError("obsolete early contention")
+        if failure == "final STOP failed":
+            raise OSError(failure)
+
+    def cleanup():
+        events.append("cleanup")
+        if failure == "producer revocation failed":
+            raise RuntimeError(failure)
+
+    monkeypatch.setattr(controller, "_publish_stop", publish)
+    monkeypatch.setattr(controller, "_stop_command_producers", cleanup)
+    monkeypatch.setattr(controller, "_trigger_movement_capture_if_needed", lambda: None)
+    monkeypatch.setattr(controller, "_runtime_kill", lambda: killed.append(True))
+    with pytest.raises(OperatorError, match=failure):
+        controller.stop(wait_idle=False)
+    assert events == ["STOP", "cleanup", "STOP"]
+    assert killed == [True]
+
+
+def test_stop_reaches_canonical_mailbox_while_producer_cleanup_is_blocked(tmp_path, monkeypatch):
+    import threading
+    from v3.adapters.resident_command import (
+        AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig,
+    )
+    from v3.contracts import CommandMode, TickContext
+
+    controller = OperatorController(tmp_path)
+    controller.runtime_dir.mkdir()
+    config = ResidentCommandMailboxConfig(path=controller.command_file)
+    ResidentCommandClient(config).publish_teleop(
+        "old-command", v_mps=0.1, omega_rad_s=0.0, max_v_mps=0.1,
+        max_omega_rad_s=0.6, ttl_ns=100_000_000,
+    )
+    entered, release = threading.Event(), threading.Event()
+    errors = []
+
+    def cleanup():
+        entered.set()
+        assert release.wait(2)
+
+    monkeypatch.setattr(controller, "_stop_command_producers", cleanup)
+    monkeypatch.setattr(controller, "_trigger_movement_capture_if_needed", lambda: None)
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: None)
+
+    def stop():
+        try:
+            controller.stop()
+        except Exception as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=stop)
+    worker.start()
+    try:
+        assert entered.wait(2)
+        now = time.monotonic_ns()
+        request = AtomicResidentCommandGateway(config).snapshot(
+            TickContext(tick_id=1, monotonic_ns=now),
+        )
+        assert request.mode is CommandMode.STOP
+        assert worker.is_alive()
+    finally:
+        release.set()
+        worker.join(2)
+    assert not worker.is_alive() and not errors
+
+
+def test_runtime_shutdown_publishes_stop_before_waiting_for_operator_lock(tmp_path, monkeypatch):
+    import threading
+
+    controller = OperatorController(tmp_path)
+    published = threading.Event()
+    events, errors = [], []
+    monkeypatch.setattr(controller, "_publish_stop", lambda: (events.append("STOP"), published.set()))
+    monkeypatch.setattr(controller, "_stop_command_producers", lambda: events.append("cleanup"))
+    monkeypatch.setattr(controller, "_trigger_movement_capture_if_needed", lambda: None)
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: None)
+
+    def shutdown():
+        try:
+            controller.runtime_stop()
+        except Exception as exc:
+            errors.append(exc)
+
+    with controller.operator_transition():
+        worker = threading.Thread(target=shutdown)
+        worker.start()
+        assert published.wait(2)
+        assert events == ["STOP"]
+        assert worker.is_alive()
+    worker.join(2)
+    assert not worker.is_alive() and not errors
+    assert events[-1] == "STOP" and "cleanup" in events
+
+
+def test_stop_publication_failure_preserves_canonical_writer_error(tmp_path, monkeypatch):
+    import v3.operator_controller as module
+
+    controller = OperatorController(tmp_path)
+    error = OSError("mailbox unavailable")
+
+    def unavailable(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(module.ResidentCommandClient, "publish_stop", unavailable)
+    with pytest.raises(OperatorError, match="canonical STOP publication failed: mailbox unavailable") as caught:
+        controller._publish_stop()
+    assert caught.value.__cause__ is error
+
+
+@pytest.mark.parametrize("failure", ["L3", "Empty", "previous_report"])
+@pytest.mark.parametrize("sink_failed", [False, True])
+def test_runtime_start_reports_bounded_original_fault_without_diagnostic_authority(
+    tmp_path, monkeypatch, failure, sink_failed,
+):
+    import json
+    import v3.operator_controller as module
+
+    events, stopped = [], []
+
+    def sink(event):
+        events.append(event)
+        if sink_failed:
+            raise RuntimeError("observation unavailable")
+
+    controller = OperatorController(tmp_path, event_sink=sink)
+    report = {"state": "STOPPED", "report": {
+        "fault_layer": "L3", "final_reason": "L3_ERROR", "last_tick_id": 0,
+    }} if failure in {"L3", "previous_report"} else {"state": "BOOTING"}
+    diagnostic = {
+        "status": {**report, "effective_config": "large observation payload" * 10_000},
+        "runtime_log": str(tmp_path / "failed.log"),
+        "runtime_log_tail": [json.dumps({"status": "ERROR", "error_type": "Empty"})] if failure == "Empty" else [],
+    }
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: None)
+    monkeypatch.setattr(controller, "_stop_command_producers", lambda: None)
+    monkeypatch.setattr(controller, "_new_capture_path", lambda: tmp_path / "unused.mcap")
+    monkeypatch.setattr(controller, "_new_temp_log", lambda prefix: tmp_path / "failed.log")
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: diagnostic["status"] if failure == "previous_report" else None)
+    monkeypatch.setattr(controller, "_read_pid_file", lambda path: 123)
+    monkeypatch.setattr(controller, "_pid_matches", lambda *args: True)
+    created_before_readiness = []
+    monkeypatch.setattr(controller, "_wait_fresh_ready",
+                        lambda *args, **kwargs: created_before_readiness.append(controller.runtime_start_identity) or False)
+    monkeypatch.setattr(controller, "_transition_sleep", lambda seconds: None)
+    monkeypatch.setattr(controller, "diagnostics", lambda: diagnostic)
+    monkeypatch.setattr(controller, "runtime_stop", lambda: stopped.append("STOP"))
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *args, **kwargs: SimpleNamespace(poll=lambda: None))
+
+    with pytest.raises(OperatorError) as caught:
+        controller.runtime_start("nincs")
+    expected = {"L3": "RUNTIME_FAULT:L3", "Empty": "PROCESS_CRASH:Empty",
+                "previous_report": "TRANSPORT_FAILURE:RUNTIME_READY_TIMEOUT"}[failure]
+    assert caught.value.reason_code == expected
+    assert str(caught.value).startswith(expected + ":")
+    assert len(str(caught.value)) <= 1024
+    assert "large observation payload" not in str(caught.value)
+    assert stopped == ["STOP"]
+    assert created_before_readiness == [(1, 123)]
+    assert OperatorController(tmp_path).runtime_start_identity == (0, None)
+    assert events[-1].data is diagnostic
+
+
+@pytest.mark.parametrize("capture_result", ["PASS", "FAULT", "INCOMPLETE", "MISSING"])
+def test_shutdown_allows_tail_then_verifies_capture_after_native_close(tmp_path, monkeypatch, capture_result):
+    import v3.operator_controller as module
+
+    events, stopped, verified = [], [], []
+    clock = [0.0]
+    running = [True]
+    controller = OperatorController(tmp_path, event_sink=events.append)
+    capture = tmp_path / "bounded.mcap"
+    controller.capture_used_file.parent.mkdir(parents=True, exist_ok=True)
+    controller.capture_used_file.write_text("origin=movement-stop\n")
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(controller, "_transition_sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(controller, "stop", lambda **kw: stopped.append("STOP"))
+    monkeypatch.setattr(controller, "_publish_stop", lambda: None)
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: 123)
+    monkeypatch.setattr(controller, "_pid_matches", lambda *a: running[0])
+    monkeypatch.setattr(controller, "current_capture_mode", lambda: "alap")
+    monkeypatch.setattr(controller, "current_capture_path", lambda: capture)
+
+    def shutdown(pid, sig):
+        assert stopped == ["STOP"] and sig == signal.SIGTERM
+        assert 2.0 <= clock[0] <= 4.0
+        assert not capture.exists() and not verified
+        assert not any(event.kind == "warning" for event in events)
+        running[0] = False
+        if capture_result != "MISSING":
+            capture.write_bytes(b"native finalized artifact")
+
+    def verify(path):
+        assert not running[0]
+        verified.append(path)
+        if capture_result == "INCOMPLETE":
+            raise McapReadError("CAPTURE_INCOMPLETE: POST_WINDOW_INCOMPLETE")
+        return {"status": capture_result}
+
+    monkeypatch.setattr(module.os, "kill", shutdown)
+    monkeypatch.setattr(controller, "_verified_capture_final", verify)
+    controller.runtime_stop()
+    warnings = [event.message for event in events if event.kind == "warning"]
+    if capture_result in {"PASS", "FAULT"}:
+        assert not warnings and verified == [capture]
+        assert any(f"runtime status {capture_result}" in event.message for event in events)
+    elif capture_result == "INCOMPLETE":
+        assert len(warnings) == 1 and "POST_WINDOW_INCOMPLETE" in warnings[0]
+    else:
+        assert len(warnings) == 1 and "not finalized after runtime shutdown" in warnings[0]
+
+
+@pytest.mark.parametrize("termination", ["SHUTDOWN_SAFE_LOW", "FAULT_SAFE_LOW"])
+def test_finite_stop_racing_runtime_shutdown_requires_verified_clean_close(tmp_path, monkeypatch, termination):
+    controller = OperatorController(tmp_path)
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: 123)
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: {
+        "state": "STOPPED", "monotonic_ns": time.monotonic_ns(),
+        "report": {"status": "PASS" if termination == "SHUTDOWN_SAFE_LOW" else "FAULT",
+                   "termination_class": termination, "fault_layer": None}})
+    if termination == "SHUTDOWN_SAFE_LOW":
+        controller.wait_idle()
+    else:
+        with pytest.raises(OperatorError, match="inactive outputs"):
+            controller.wait_idle()
+
+
+def test_runtime_disappearance_during_stop_cannot_hide_unverified_close(tmp_path, monkeypatch):
+    controller = OperatorController(tmp_path)
+    pids = iter((123, None))
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: next(pids))
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: None)
+    with pytest.raises(OperatorError, match="without verified output-owner close"):
+        controller.wait_idle()
+
+
+@pytest.mark.parametrize("state", ["RUNNING", "STOPPED"])
+def test_idle_confirmation_cannot_cross_runtime_session(tmp_path, monkeypatch, state):
+    controller = OperatorController(tmp_path)
+    pids = iter((123, 456))
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: next(pids))
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: {
+        "state": state, "monotonic_ns": time.monotonic_ns(),
+        "safety_decision": "STOP", "enabled": False,
+        "left_output": 0, "right_output": 0, "ready_for_active": True,
+        "report": {"status": "PASS", "termination_class": "SHUTDOWN_SAFE_LOW", "fault_layer": None},
+    })
+    with pytest.raises(OperatorError, match="runtime session changed"):
+        controller.wait_idle()
+
+
+@pytest.mark.parametrize("replace_command", [False, True])
+def test_stop_during_proba_pause_revokes_future_phases_for_interface_callers(tmp_path, monkeypatch, replace_command):
+    """Exercise the real sequence/phase loop with hardware edges replaced."""
+    import v3.operator_controller as module
+
+    commands = []
+    active = False
+    now = 1.0
+    stopped_during_pause = False
+
+    class Controller(OperatorController):
+        def ensure_runtime(self, *args):
+            return 123
+
+        def _runtime_pid(self):
+            return None
+
+        def _track_width(self):
+            return 0.3
+
+        def current_capture_mode(self):
+            return "nincs"
+
+        def _wait_allow(self, *args, **kwargs):
+            return True
+
+        def _publish_stop(self):
+            pass
+
+        def _find_pid(self, args):
+            return None
+
+        def _stop_control_cli_only(self):
+            nonlocal active
+            active = False
+
+        def _spawn_control_process(self, command, **session):
+            nonlocal active
+            active = True
+            commands.append((command, session))
+            return 456
+
+        def _pid_matches(self, pid, args):
+            return active
+
+        def _runtime_status(self):
+            return {
+                "monotonic_ns": int(now * 1e9), "state": "RUNNING",
+                "safety_decision": "ALLOW", "enabled": True,
+            }
+
+    controller = Controller(tmp_path)
+    other_client = Controller(tmp_path)
+
+    def sleep(seconds):
+        nonlocal now, stopped_during_pause
+        now += seconds
+        if seconds == 5.0:
+            stopped_during_pause = True
+            # Same process, different facade: no CLI-name/PID-kill dependency.
+            other_client.stop()
+            if replace_command:
+                other_client.forward(0.1, capture=False, capture_mode="nincs")
+
+    monkeypatch.setattr(module, "time", SimpleNamespace(
+        monotonic=lambda: now, monotonic_ns=lambda: int(now * 1e9),
+        time_ns=lambda: int(now * 1e9), sleep=sleep,
+    ))
+    with pytest.raises(OperatorError, match="cancelled"):
+        controller.run_proba(capture_mode="nincs")
+    assert stopped_during_pause and len(commands) == (2 if replace_command else 1)
+    assert active is replace_command
+    assert commands[0][1]["session_owner_pid"] == os.getpid()
+    assert commands[0][1]["session_watchdog_s"] > 0
+
+
+def test_command_producer_owner_exit_and_watchdog_stop_before_next_heartbeat(capsys, monkeypatch):
+    from v3 import control_cli
+
+    for reason in ("OWNER_EXITED", "WATCHDOG_TIMEOUT"):
+        now = 0
+        publications = []
+        alive = True
+
+        class Client:
+            def set_active_guard(self, guard):
+                pass
+
+            def publish_stop(self, command_id, **kwargs):
+                publications.append("STOP")
+                return len(publications)
+
+        def sleep(seconds):
+            nonlocal now, alive
+            now += int(seconds * 1e9)
+            alive = False
+
+        monkeypatch.setattr(control_cli, "_pid_alive", lambda pid: alive)
+        control_cli._run_active(
+            Client(), lambda command_id: publications.append("ACTIVE") or len(publications),
+            command_id="test", ttl_ns=200_000_000, heartbeat_ns=100_000_000,
+            owner_pid=123 if reason == "OWNER_EXITED" else None,
+            max_runtime_s=0.1 if reason == "WATCHDOG_TIMEOUT" else None,
+            monotonic_ns=lambda: now, sleep=sleep,
+        )
+        assert publications == ["ACTIVE", "STOP"]
+        assert reason in capsys.readouterr().out
+
+
+def test_launcher_tool_cannot_bypass_runtime_or_hardware_ownership(tmp_path, monkeypatch):
+    from v3 import host_cli
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tmp_path / "v3_process_runtime.py").write_text("# never executed\n")
+    (tools / "runtime_alias.py").symlink_to(tmp_path / "v3_process_runtime.py")
+    runs = []
+    monkeypatch.setattr(host_cli, "_run", lambda command, **kwargs: runs.append(command) or 0)
+    for name in ("v3_process_runtime", "runtime_alias", "../v3_process_runtime"):
+        with pytest.raises(host_cli.HostCliError):
+            host_cli.execute("tool", [name], tmp_path)
+    monkeypatch.setattr(OperatorController, "status", lambda self: {"runtime_running": True})
+    for name in ("r2b4_imu_control_diag", "r2b4_periferial_control_diag", "v3_mcap_measurement"):
+        (tools / f"{name}.py").write_text("# never executed\n")
+        with pytest.raises(host_cli.HostCliError, match="owns physical hardware"):
+            host_cli.execute("tool", [name], tmp_path)
+    assert runs == []

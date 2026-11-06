@@ -1,0 +1,290 @@
+from dataclasses import dataclass
+import pytest
+from v3.adapters.latest_lidar import LatestLidarBackendConfig, NativeLatestLidarBackend
+from v3.adapters.live_lidar import LidarRelativeMotionReading, NativeLidarConfig, NativeLidarSource
+from v3.contracts import DeviceHealthState, TickContext
+
+@dataclass(frozen=True)
+class Result:
+    matcher_result_id: int
+    candidate_id: int
+    source_raw_scan_id: int
+    source_raw_scan_timestamp: float
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    pose_reference_monotonic_ns: int
+    timestamp: float
+    summary: dict
+
+@dataclass(frozen=True)
+class RawPoint:
+    angle_deg: float
+    distance_m: float
+    quality: int
+
+@dataclass(frozen=True)
+class RawSnapshot:
+    raw_scan_id: int = 31
+    raw_scan_timestamp: float = 0.98
+    scan_start_monotonic_ns: int | None = None
+    scan_end_monotonic_ns: int | None = None
+    measurement_monotonic_ns: int | None = None
+    health: str = 'OK'
+    raw_scan: tuple = (RawPoint(0.0, 1.0, 12), RawPoint(90.0, 0.5, 9))
+    summary: dict | None = None
+    observed_monotonic_ns: int | None = None
+
+    def __post_init__(self):
+        scan_end_ns = int(round(self.raw_scan_timestamp * 1000000000))
+        if self.scan_end_monotonic_ns is None:
+            object.__setattr__(self, 'scan_end_monotonic_ns', scan_end_ns)
+        if self.scan_start_monotonic_ns is None:
+            object.__setattr__(self, 'scan_start_monotonic_ns', scan_end_ns - 100000000)
+        if self.measurement_monotonic_ns is None:
+            object.__setattr__(self, 'measurement_monotonic_ns', scan_end_ns - 50000000)
+        if self.summary is None:
+            object.__setattr__(self, 'summary', {'raw_safety_valid_point_count': 80, 'front_clearance_m': 1.2, 'rear_clearance_m': 1.1, 'left_clearance_m': 0.9, 'right_clearance_m': 1.0, 'front_observation_count': 20, 'rear_observation_count': 20, 'left_observation_count': 20, 'right_observation_count': 20})
+
+def _summary(**changes):
+    value = {'matcher_contract_id': 'R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1', 'matcher_confidence_model': 'R2B4_SCAN_MATCH_CONFIDENCE_V2', 'matcher_transport': 'process_latest_only', 'map_frame_id': 'R2B4_BOOT_ROBOT_MAP', 'map_frame_owner': 'EKF_POSE_ODOMETRY_SSOT', 'yaw_convention': 'CCW_POSITIVE_LEFT', 'lidar_pose_x': 0.25, 'lidar_pose_y': -0.1, 'lidar_pose_theta': 0.2, 'lidar_pose_confidence': 0.8, 'matcher_reason': '', 'tracking_ready': True, 'matcher_timed_out': False, 'matcher_degenerate': False, 'matcher_degeneracy_reasons': [], 'matcher_runtime_ms': 28.5, 'matcher_queue_delay_ms': 1.25, 'matcher_input_age_ns': 51250000, 'matcher_confidence': 0.82, 'scan_to_map_seed': {'x': 0.2, 'y': -0.05, 'theta': 0.1}, 'matcher_quality': {'inlier_ratio': 0.75, 'robust_rmse_m': 0.012, 'sector_coverage': 0.5, 'observability_score': 0.8, 'ambiguity_margin': 0.9}}
+    value.update(changes)
+    return value
+
+def _result(**changes) -> Result:
+    source_timestamp = changes.get('source_raw_scan_timestamp', 0.98)
+    scan_end_ns = int(round(source_timestamp * 1000000000))
+    values = {'matcher_result_id': 17, 'candidate_id': 17, 'source_raw_scan_id': 31, 'source_raw_scan_timestamp': source_timestamp, 'scan_start_monotonic_ns': scan_end_ns - 100000000, 'scan_end_monotonic_ns': scan_end_ns, 'measurement_monotonic_ns': scan_end_ns - 50000000, 'pose_reference_monotonic_ns': scan_end_ns - 50000000, 'timestamp': 0.995, 'summary': _summary()}
+    values.update(changes)
+    return Result(**values)
+
+def _status(**changes):
+    value = {'matcher_contract_id': 'R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1', 'matcher_confidence_model': 'R2B4_SCAN_MATCH_CONFIDENCE_V2', 'matcher_transport': 'process_latest_only', 'running': True, 'matcher_process_alive': True, 'driver_connected': True, 'health': 'OK'}
+    value.update(changes)
+    return value
+
+class Port:
+
+    def __init__(self, result=None, status=None, raw=None) -> None:
+        self.result = _result() if result is None else result
+        self.status = _status() if status is None else status
+        self.raw = RawSnapshot() if raw is None else raw
+        self.result_calls = 0
+        self.status_calls = 0
+        self.raw_calls = 0
+        self.stop_calls = 0
+
+    def get_matcher_result(self):
+        self.result_calls += 1
+        return self.result
+
+    def get_runtime_status(self):
+        self.status_calls += 1
+        return self.status
+
+    def get_raw_scan_snapshot(self):
+        self.raw_calls += 1
+        return self.raw
+
+    def stop(self) -> None:
+        self.stop_calls += 1
+
+def _backend(port: Port) -> NativeLatestLidarBackend:
+    return NativeLatestLidarBackend(port, LatestLidarBackendConfig(maximum_result_age_ns=100000000))
+
+def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
+    port = Port()
+    reading = _backend(port).read(TickContext(7, 1000000000))
+    assert port.result_calls == 1
+    assert port.status_calls == 1
+    assert port.raw_calls == 1
+    assert reading.revision == 17
+    assert reading.captured_monotonic_ns == 930000000
+    assert reading.measurement_age_ns == 70000000
+    assert reading.confidence == 0.8
+    assert reading.pose is not None
+    assert reading.pose.x_m == 0.25
+    assert reading.pose.y_m == -0.1
+    assert reading.pose.yaw_rad == 0.2
+    assert reading.pose.r_scale == 1.0
+    assert reading.timing_valid is True
+    assert reading.stale is False
+    assert reading.diagnostics is not None
+    assert reading.diagnostics.candidate_id == 17
+    assert reading.diagnostics.source_raw_scan_id == 31
+    assert reading.diagnostics.source_raw_scan_timestamp_ns == 980000000
+    assert reading.diagnostics.scan_start_monotonic_ns == 880000000
+    assert reading.diagnostics.scan_end_monotonic_ns == 980000000
+    assert reading.diagnostics.measurement_monotonic_ns == 930000000
+    assert reading.diagnostics.pose_reference_monotonic_ns == 930000000
+    assert reading.diagnostics.scan_pose_alignment_delta_ns == 0
+    assert reading.diagnostics.tracking_ready is True
+    assert reading.diagnostics.matcher_runtime_ms == 28.5
+    assert reading.diagnostics.matcher_queue_delay_ms == 1.25
+    assert reading.diagnostics.matcher_input_age_ns == 51250000
+    assert reading.diagnostics.matcher_confidence == 0.82
+    assert reading.diagnostics.inlier_ratio == 0.75
+    assert reading.diagnostics.robust_rmse_m == 0.012
+    assert reading.diagnostics.sector_coverage == 0.5
+    assert reading.diagnostics.observability_score == 0.8
+    assert reading.diagnostics.ambiguity_margin == 0.9
+    assert reading.diagnostics.scan_to_map_seed == pytest.approx((0.2, -0.05, 0.1))
+    assert reading.scan is not None
+    assert reading.scan.revision == 31
+    assert reading.scan.scan_start_monotonic_ns == 880000000
+    assert reading.scan.scan_end_monotonic_ns == 980000000
+    assert reading.scan.measurement_monotonic_ns == 930000000
+    assert reading.scan.front_clearance_m == 1.2
+    assert tuple(((point.angle_deg, point.distance_m, point.quality) for point in reading.scan.local_points)) == ((0.0, 1.0, 12), (90.0, 0.5, 9))
+
+def test_matcher_drift_does_not_fail_physical_scan_and_pose_is_not_admitted():
+    cases = ((_result(summary=_summary(matcher_transport='thread')), _status()), (_result(summary=_summary(map_frame_id='wrong')), _status()), (_result(), _status(matcher_confidence_model='wrong')), (_result(), _status(matcher_process_alive=False)), (_result(timestamp=1.1), _status()))
+    for result, status in cases:
+        port = Port(result, status)
+        source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', 0.3, 250000000))
+        snapshot = source.read(TickContext(7, 1000000000))
+        assert port.result_calls == 1
+        assert port.status_calls == 1
+        assert snapshot.health.state is DeviceHealthState.OK
+        assert tuple((sample.kind for sample in snapshot.samples)) == ('lidar_health', 'lidar_safety_clearance', 'lidar_local_points', 'lidar_localization_health', 'lidar_matcher_diagnostics')
+
+def test_missing_latest_result_keeps_independent_physical_safety_without_pose():
+    port = Port()
+    port.result = None
+    source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', 0.3, 250000000))
+    snapshot = source.read(TickContext(7, 1000000000))
+    assert port.result_calls == 1
+    assert port.status_calls == 1
+    assert snapshot.health.state is DeviceHealthState.OK
+    assert tuple((sample.kind for sample in snapshot.samples)) == ('lidar_health', 'lidar_safety_clearance', 'lidar_local_points')
+
+def test_measurement_age_and_runtime_stale_health_are_degraded():
+    old_port = Port(_result(timestamp=0.995, source_raw_scan_timestamp=0.9), _status())
+    status_port = Port(_result(), _status(health='STALE'))
+    old = _backend(old_port).read(TickContext(7, 1000000000))
+    status = _backend(status_port).read(TickContext(7, 1000000000))
+    assert old.timing_valid is True and old.stale is True
+    assert status.timing_valid is True and status.stale is True
+
+def test_recent_completion_does_not_rejuvenate_or_retimestamp_measurement():
+    port = Port(_result(timestamp=1.005, source_raw_scan_timestamp=1.004), _status())
+    backend = NativeLatestLidarBackend(port, LatestLidarBackendConfig(maximum_result_age_ns=20000000, maximum_future_skew_ns=10000000))
+    reading = backend.read(TickContext(7, 1000000000))
+    assert reading.timing_valid is True
+    assert reading.stale is True
+    assert reading.captured_monotonic_ns == 954000000
+    assert reading.measurement_age_ns == 46000000
+
+def test_result_beyond_explicit_same_tick_skew_remains_failed():
+    port = Port(_result(timestamp=1.011, source_raw_scan_timestamp=1.004), _status())
+    backend = NativeLatestLidarBackend(port, LatestLidarBackendConfig(maximum_result_age_ns=20000000, maximum_future_skew_ns=10000000))
+    assert backend.read(TickContext(7, 1000000000)).timing_valid is False
+
+def test_same_tick_raw_scan_uses_measurement_age_despite_recent_completion():
+    port = Port(raw=RawSnapshot(raw_scan_timestamp=1.011227336, observed_monotonic_ns=1012000000))
+    backend = NativeLatestLidarBackend(port, LatestLidarBackendConfig(maximum_result_age_ns=20000000, maximum_future_skew_ns=10000000))
+    context = TickContext(7, 1000000000)
+    reading = backend.read(context)
+    physical = NativeLidarSource(backend, NativeLidarConfig('lidar', 0.3, 250000000)).read(context)
+    assert reading.scan is not None
+    assert reading.scan.timing_valid is True
+    assert reading.scan.measurement_age_ns == 38772664
+    assert reading.scan.captured_monotonic_ns == 1011227336
+    assert physical.health.state is DeviceHealthState.DEGRADED
+
+def test_raw_scan_beyond_observation_future_skew_remains_failed_closed():
+    port = Port(raw=RawSnapshot(raw_scan_timestamp=1.023000001, observed_monotonic_ns=1012000000))
+    backend = NativeLatestLidarBackend(port, LatestLidarBackendConfig(maximum_result_age_ns=20000000, maximum_future_skew_ns=10000000))
+    context = TickContext(7, 1000000000)
+    reading = backend.read(context)
+    physical = NativeLidarSource(backend, NativeLidarConfig('lidar', 0.3, 250000000)).read(context)
+    assert reading.scan is not None
+    assert reading.scan.timing_valid is False
+    assert physical.health.state is DeviceHealthState.FAILED
+    assert physical.health.reason == 'LIDAR_TIMING_INVALID'
+
+def test_protected_config_identifiers_cannot_be_overridden():
+    with pytest.raises(ValueError, match='odometry_mode'):
+        LatestLidarBackendConfig(20000000, odometry_mode='ENCODER_ONLY')
+    with pytest.raises(ValueError, match='matcher_transport'):
+        LatestLidarBackendConfig(20000000, matcher_transport='thread')
+    with pytest.raises(ValueError, match='cannot exceed'):
+        LatestLidarBackendConfig(20000000, maximum_future_skew_ns=20000001)
+
+
+def test_relative_motion_survives_when_global_pose_is_not_publishable():
+    relative = {
+        'start_ns': 830000000,
+        'dx_m': 0.02,
+        'dy_m': -0.003,
+        'dyaw_rad': 0.01,
+        'rmse_m': 0.002,
+        'observability': 0.9,
+    }
+    port = Port(
+        _result(summary=_summary(tracking_ready=False, relative_motion=relative)),
+        _status(),
+    )
+    source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', 0.3, 250000000))
+    snapshot = source.read(TickContext(7, 1000000000))
+    kinds = tuple(sample.kind for sample in snapshot.samples)
+
+    assert 'lidar_safety_clearance' in kinds
+    assert 'lidar_local_points' in kinds
+    assert 'lidar_relative_motion' in kinds
+    assert 'lidar_pose' not in kinds
+
+    sample = next(item for item in snapshot.samples if item.kind == 'lidar_relative_motion')
+    values = {field.key: field.value for field in sample.values}
+    assert values == relative
+
+
+def test_independent_relative_result_keeps_own_identity_when_global_result_is_stale():
+    port = Port(_result(source_raw_scan_timestamp=.7))
+    relative = LidarRelativeMotionReading(830_000_000, .02, -.003, .01, .002, .9,
+                                         source_sequence=31, end_ns=930_000_000)
+    port.get_relative_result = lambda: relative
+    source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', .3, 250_000_000))
+    snapshot = source.read(TickContext(7, 1_000_000_000))
+    by_kind = {s.kind: s for s in snapshot.samples}
+    assert 'lidar_pose' not in by_kind
+    sample = by_kind['lidar_relative_motion']
+    assert sample.sequence == 31 and sample.captured_monotonic_ns == 930_000_000
+    assert {f.key: f.value for f in sample.values} == {
+        'start_ns': 830_000_000, 'dx_m': .02, 'dy_m': -.003, 'dyaw_rad': .01,
+        'rmse_m': .002, 'observability': .9}
+    assert by_kind['lidar_localization_health'].captured_monotonic_ns == 650_000_000
+    # The existing outer process state carries the exact compact immutable
+    # value, independently of the global result and raw evidence lane.
+    from v3.adapters.process_lidar_port import _wire_relative, _unwire_relative
+    assert _unwire_relative(_wire_relative(relative)) == relative
+    assert len(_wire_relative(relative)) == 8
+    # Later global completion for this physical scan does not manufacture a
+    # second relative measurement at the canonical admission boundary.
+    from v3.contracts import AcquisitionFrame, RejectionReason
+    from v3.layers.l2_admission import AdmissionConfig, InputAdmission
+    admission = InputAdmission(AdmissionConfig(250_000_000, 0))
+    first = admission(AcquisitionFrame(snapshot.context, (sample,), (snapshot.health,)))
+    assert len(first.accepted) == 1
+    port.result = _result()
+    later = source.read(TickContext(8, 1_020_000_000))
+    repeated = next(s for s in later.samples if s.kind == 'lidar_relative_motion')
+    assert repeated == sample
+    second = admission(AcquisitionFrame(later.context, (repeated,), (later.health,)))
+    assert not second.accepted and second.rejected[0].reason is RejectionReason.DUPLICATE
+
+
+@pytest.mark.parametrize('failure', ['stale', 'dead', 'error', 'future'])
+def test_independent_relative_cannot_publish_after_its_own_expiry_or_worker_failure(failure):
+    port = Port(_result(source_raw_scan_timestamp=.7))
+    relative = LidarRelativeMotionReading(830_000_000, .02, 0., .01, .002, .9,
+        source_sequence=31, end_ns=930_000_000 if failure != 'future' else 1_010_000_000)
+    port.get_relative_result = lambda: relative
+    if failure == 'dead':
+        port.status['matcher_process_alive'] = False
+    if failure == 'error':
+        port.status['matcher_error'] = 'COMPUTE_FAILURE'
+    now = 1_030_000_001 if failure == 'stale' else 1_000_000_000
+    source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', .3, 250_000_000))
+    snapshot = source.read(TickContext(7, now))
+    assert 'lidar_relative_motion' not in {s.kind for s in snapshot.samples}

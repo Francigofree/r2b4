@@ -1,0 +1,532 @@
+from __future__ import annotations
+
+import pickle
+from dataclasses import replace
+
+import pytest
+
+from rig import resolved_config, healthy_localization
+from v3.contracts import (
+    AdmittedFrame, CostmapCell, DataField, Observation, RobotEstimate,
+    RollingLocalCostmap, TickContext, TrackEstimateStatus, QualityState,
+)
+from v3.layers.l4_structural_memory import StructuralMemoryGrid
+from v3.layers.l4_temporal_occupancy import TemporalOccupancyGrid
+from v3.layers.l4_world_model import ShadowWorldModel
+
+
+def _config():
+    return resolved_config().runtime.composition.live_control.control.world_model
+
+
+def _observation(kind, sequence, captured_ns, **values):
+    return Observation(kind, "RPLIDAR_C1", sequence, captured_ns,
+                       tuple(DataField(key, value) for key, value in values.items()))
+
+
+def _scan(sequence, captured_ns, points=((1.05, 0.05),)):
+    values = {"frame_id": "ROBOT_BASE", "point_count": len(points)}
+    for index, (x, y) in enumerate(points):
+        values.update({f"point_{index:03d}_x_m": x, f"point_{index:03d}_y_m": y,
+                       f"point_{index:03d}_quality": 10})
+    return (
+        _observation("lidar_health", sequence, captured_ns, age_ns=0, point_count=len(points)),
+        _observation("lidar_local_points", sequence, captured_ns, **values),
+    )
+
+
+def _tick(model, now_ns, observations=(), *, x=0.0, variance=0.0, frame_id="odom", quality=None):
+    context = TickContext(now_ns, now_ns)
+    covariance = tuple(variance if i in (0, 6, 12) else 0.0 for i in range(25))
+    estimate = RobotEstimate(context, frame_id, x, 0.0, 0.0, 0.0, 0.0, covariance,
+                            localization_quality=quality or healthy_localization(global_position=QualityState.LOST))
+    return model(AdmittedFrame(context, observations, ()), estimate)
+
+
+def _confirmed_wall(model, config, point=(1.05, 0.05)):
+    count = max(config.structural_confirm_min_hits, config.structural_confirm_score)
+    step = max(20_000_000, (config.structural_confirm_min_span_ns + count - 2) // (count - 1))
+    for sequence in range(1, count + 1):
+        now = 1_000_000_000 + (sequence - 1) * step
+        result = _tick(model, now, _scan(sequence, now, (point,)))
+    return now, sequence, result
+
+
+def _no_map_work(*args, **kwargs):
+    pytest.fail("unchanged control tick traversed or rebuilt map geometry")
+
+
+def test_lidar_multirate_cache_keeps_50hz_projection_freshness_and_lineage(monkeypatch):
+    config = _config()
+    model = ShadowWorldModel(config)
+    previous = None
+    start = 1_000_000_000
+    for tick in range(50):
+        now = start + tick * 20_000_000
+        observations = _scan(tick // 10 + 1, now) if tick % 10 == 0 else ()
+        if tick == 0:
+            observations += (_observation(
+                "obstacle_track", 1, now, track_id="cart", x_m=-1.0, y_m=1.0,
+                radius_m=0.1, vx_mps=0.1, vy_mps=0.0, confidence=1.0,
+            ),)
+        if tick % 10:
+            with monkeypatch.context() as patch:
+                for cls, methods in (
+                    (TemporalOccupancyGrid, ("integrate_scan", "prune", "occupied_cells", "window_margin_m")),
+                    (StructuralMemoryGrid, ("integrate", "prune", "confirmed_cells", "window_margin_m")),
+                    (RollingLocalCostmap, ("__post_init__",)),
+                ):
+                    for method in methods:
+                        patch.setattr(cls, method, _no_map_work)
+                result = _tick(model, now, observations, x=tick * 0.001)
+            assert result.local_costmap.occupied_cells is previous.local_costmap.occupied_cells
+            assert result.local_costmap.revision == previous.local_costmap.revision
+        else:
+            result = _tick(model, now, observations, x=tick * 0.001)
+            if previous is not None:
+                assert result.local_costmap.revision > previous.local_costmap.revision
+        assert result.context.monotonic_ns == now
+        assert result.freshness_ns == result.local_costmap.freshness_ns == tick % 10 * 20_000_000
+        assert result.local_costmap.source_sequence == tick // 10 + 1
+        age = now - start
+        if age <= config.max_track_age_ns:
+            track = result.obstacle_tracks[0]
+            assert track.measurement_monotonic_ns == start
+            assert track.x_m == pytest.approx(-1.0 + 0.1 * min(age, config.person_track_prediction_max_age_ns) / 1e9)
+            assert track.usable_at(now) == (age <= config.person_track_prediction_max_age_ns)
+            if age > config.person_track_prediction_max_age_ns:
+                assert track.estimate_status is TrackEstimateStatus.DEGRADED
+        else:
+            assert result.obstacle_tracks == ()
+        previous = result
+
+
+def test_lidar_localization_memory_quality_and_expiry_invalidate_cache_without_new_scans():
+    config = _config()
+    model = ShadowWorldModel(config)
+    last_ns, sequence, initial = _confirmed_wall(model, config)
+    temporal_expiry = last_ns + config.local_costmap_max_cell_age_ns + 1
+    remembered = _tick(model, temporal_expiry)
+    assert remembered.local_costmap.occupied_cells  # Learned with no global fix.
+    assert remembered.local_costmap.occupied_cells == initial.local_costmap.occupied_cells
+    assert remembered.local_costmap.revision > initial.local_costmap.revision
+    degraded = _tick(model, temporal_expiry + 20_000_000, variance=1.0)
+    assert degraded.local_costmap.occupied_cells == ()
+    assert degraded.local_costmap.revision > remembered.local_costmap.revision
+    recovered = _tick(model, temporal_expiry + 40_000_000)
+    assert recovered.local_costmap.occupied_cells == remembered.local_costmap.occupied_cells
+    for index, quality in enumerate((
+        healthy_localization(global_position=QualityState.GOOD),
+        healthy_localization(global_position=QualityState.DEGRADED),
+        healthy_localization(global_position=QualityState.LOST),
+    )):
+        result = _tick(model, temporal_expiry + (3 + index)*20_000_000, quality=quality)
+        assert result.local_costmap.occupied_cells is recovered.local_costmap.occupied_cells
+        assert result.local_costmap.revision == recovered.local_costmap.revision
+    checkpoint = model.checkpoint()
+    for index, quality in enumerate((
+        healthy_localization(heading=QualityState.DEGRADED),
+        healthy_localization(local_translation=QualityState.LOST),
+        healthy_localization(local_pose_continuous=False),
+    )):
+        result = _tick(model, temporal_expiry + (6 + index)*20_000_000, quality=quality)
+        assert not result.local_costmap.occupied_cells
+    # LOST requires a new trustworthy scan before recall; expiry below checks
+    # the independently retained, valid-localization branch.
+    model.restore(checkpoint)
+    boundary = last_ns + config.structural_max_age_ns
+    valid = _tick(model, boundary)
+    assert valid.local_costmap.occupied_cells
+    expired = _tick(model, boundary + 1)
+    assert expired.local_costmap.occupied_cells == ()
+    assert expired.local_costmap.revision > valid.local_costmap.revision
+    assert expired.local_costmap.source_sequence == sequence
+    assert expired.local_costmap.freshness_ns == config.structural_max_age_ns + 1
+
+
+def test_accumulated_bias_retires_old_memory_same_tick_without_erasing_fresh_obstacles():
+    config = _config()
+    model = ShadowWorldModel(config)
+    last_ns, sequence, initial = _confirmed_wall(model, config)
+    old_wall = initial.local_costmap.occupied_cells
+    fresh_ns = last_ns + 200_000_000
+    fresh_scan = _scan(sequence + 1, fresh_ns, ((-1.05, .05),))
+    _tick(model, fresh_ns, fresh_scan)
+    # Only the older wall now depends on structural recall; the opposite
+    # obstacle remains inside the normal temporal evidence lifetime.
+    now = last_ns + config.local_costmap_max_cell_age_ns + 1
+    before = _tick(model, now)
+    assert all(cell in before.local_costmap.occupied_cells for cell in old_wall)
+    fresh = tuple(cell for cell in before.local_costmap.occupied_cells if cell not in old_wall)
+    assert fresh
+    checkpoint = pickle.loads(pickle.dumps(model.checkpoint()))
+    restored = ShadowWorldModel(config)
+    restored.restore(checkpoint)
+    warning = healthy_localization(accumulated_translation_bias_warning=True,
+                                   encoder_lidar_consistency_m=.43)
+    now += 20_000_000
+    changed = _tick(model, now, quality=warning)
+    assert _tick(restored, now, quality=warning) == changed
+    assert changed.local_costmap.occupied_cells == fresh
+    assert changed.local_costmap.revision > before.local_costmap.revision
+    assert changed.local_costmap.source_sequence == before.local_costmap.source_sequence
+    assert changed.local_costmap.freshness_ns == now - fresh_ns
+    assert changed.robot_relative_geometry.captured_monotonic_ns == fresh_ns
+    assert not model.checkpoint().structural_memory.cells
+
+    # Clearing the quality warning cannot revive the discarded alignment.
+    # Check both uninterrupted and restored execution at that boundary.
+    restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+    now += 20_000_000
+    recovered = _tick(model, now)
+    assert _tick(restored, now) == recovered
+    assert recovered.local_costmap.occupied_cells == fresh
+    now = fresh_ns + config.local_costmap_max_cell_age_ns + 1
+    expired = _tick(model, now)
+    assert _tick(restored, now) == expired
+    assert not expired.local_costmap.occupied_cells
+
+
+def test_drift_warning_preserves_current_scan_lineage_but_cannot_learn_long_memory():
+    config = _config()
+    model = ShadowWorldModel(config)
+    warning = healthy_localization(accumulated_translation_bias_warning=True,
+                                   encoder_lidar_consistency_m=.43)
+    count = max(config.structural_confirm_min_hits, config.structural_confirm_score)
+    step = max(20_000_000, (config.structural_confirm_min_span_ns + count - 2) // (count - 1))
+    for sequence in range(1, count + 1):
+        now = 1_000_000_000 + (sequence - 1) * step
+        result = _tick(model, now, _scan(sequence, now), quality=warning)
+        assert result.local_costmap.occupied_cells
+        assert result.local_costmap.source_sequence == result.robot_relative_geometry.source_sequence == sequence
+        assert result.local_costmap.freshness_ns == result.robot_relative_geometry.freshness_ns == 0
+        assert result.robot_relative_geometry.captured_monotonic_ns == now
+        assert not model.checkpoint().structural_memory.cells
+    # Fresh occupancy expires normally rather than returning from memory.
+    expired = _tick(model, now + config.local_costmap_max_cell_age_ns + 1)
+    assert not expired.local_costmap.occupied_cells
+
+
+def test_lidar_rolling_window_recall_free_space_and_continuity():
+    config = _config()
+    model = ShadowWorldModel(config)
+    last_ns, sequence, initial = _confirmed_wall(model, config, point=(2.35, 0.05))
+    outside = _tick(model, last_ns + 20_000_000, x=-0.2)
+    assert outside.local_costmap.occupied_cells == ()
+    assert outside.local_costmap.revision > initial.local_costmap.revision
+    recalled = _tick(model, last_ns + 40_000_000)
+    assert recalled.local_costmap.occupied_cells == initial.local_costmap.occupied_cells
+    assert recalled.local_costmap.revision > outside.local_costmap.revision
+    now = last_ns + 60_000_000
+    cleared = _tick(model, now, _scan(sequence + 1, now, ((2.45, 0.05),)))
+    assert initial.local_costmap.occupied_cells[0] not in cleared.local_costmap.occupied_cells
+    # A pose discontinuity is an immediate reset, even with no new sensor data.
+    reset = _tick(model, now + 20_000_000, x=1.0)
+    assert reset.local_costmap is None
+    assert reset.map_revision > cleared.map_revision
+    now += 40_000_000
+    rebuilt = _tick(model, now, _scan(sequence + 2, now), x=1.0)
+    assert rebuilt.local_costmap is not None
+    reframed = _tick(model, now + 20_000_000, x=1.0, frame_id="relocated")
+    assert reframed.frame_id == "relocated"
+    assert reframed.local_costmap is None
+
+
+@pytest.mark.parametrize("free_scan_count", (1, 7))
+def test_lidar_newer_free_observation_survives_other_rays_until_a_new_hit(free_scan_count):
+    config = _config()
+    model = ShadowWorldModel(config)
+    now, sequence, initial = _confirmed_wall(model, config, point=(0.35, 0.05))
+    blocked_key = (3, 0)
+
+    def occupied(result):
+        return {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+
+    assert blocked_key in occupied(initial)
+    for _ in range(free_scan_count):
+        now += 20_000_000
+        sequence += 1
+        cleared = _tick(model, now, _scan(sequence, now, ((2.45, 0.05),)))
+        assert blocked_key not in occupied(cleared)
+
+    restored = ShadowWorldModel(config)
+    restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+    now += 20_000_000
+    sequence += 1
+    unrelated = _scan(sequence, now, ((0.05, 2.45),))
+    result = _tick(model, now, unrelated)
+    assert _tick(restored, now, unrelated) == result
+    assert blocked_key not in occupied(result)
+
+    now += 20_000_000
+    sequence += 1
+    new_hit = _scan(sequence, now, ((0.35, 0.05),))
+    result = _tick(model, now, new_hit)
+    assert _tick(restored, now, new_hit) == result
+    assert blocked_key in occupied(result)
+
+
+def test_lidar_trusted_free_ray_clears_dynamic_masked_temporal_residue():
+    model = ShadowWorldModel(_config())
+    start = 1_000_000_000
+    for sequence in range(1, 9):
+        now = start + sequence * 20_000_000
+        moving_obstacle = _observation(
+            "obstacle_track", sequence, now, track_id="moving-cart",
+            x_m=0.35, y_m=0.05, radius_m=0.1, vx_mps=0.1, vy_mps=0.0,
+            confidence=1.0,
+        )
+        result = _tick(model, now, _scan(sequence, now, ((0.35, 0.05),)) + (moving_obstacle,))
+    blocked_key = (3, 0)
+
+    def occupied(result):
+        return {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+
+    assert blocked_key in occupied(result)
+    now += 20_000_000
+    cleared = _tick(model, now, _scan(9, now, ((2.45, 0.05),)))
+    assert blocked_key not in occupied(cleared)
+    now += 20_000_000
+    unrelated = _tick(model, now, _scan(10, now, ((0.05, 2.45),)))
+    assert blocked_key not in occupied(unrelated)
+    now += 20_000_000
+    moving_obstacle = _observation(
+        "obstacle_track", 11, now, track_id="moving-cart",
+        x_m=0.35, y_m=0.05, radius_m=0.1, vx_mps=0.1, vy_mps=0.0,
+        confidence=1.0,
+    )
+    new_hit = _tick(model, now, _scan(11, now, ((0.35, 0.05),)) + (moving_obstacle,))
+    assert blocked_key in occupied(new_hit)
+
+
+def test_lidar_uncertain_free_ray_does_not_retire_existing_occupancy():
+    config = _config()
+    model = ShadowWorldModel(config)
+    now, sequence, _ = _confirmed_wall(model, config, point=(0.35, 0.05))
+    now += 20_000_000
+    result = _tick(
+        model, now, _scan(sequence + 1, now, ((2.45, 0.05),)),
+        quality=healthy_localization(heading=QualityState.DEGRADED),
+    )
+    assert (3, 0) in {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+    now += 20_000_000
+    result = _tick(model, now, _scan(sequence + 2, now, ((0.05, 2.45),)))
+    assert (3, 0) in {(cell.grid_x, cell.grid_y) for cell in result.local_costmap.occupied_cells}
+
+
+def test_lidar_checkpoint_restore_preserves_cache_and_future_invalidation(monkeypatch):
+    config = _config()
+    original = ShadowWorldModel(config)
+    last_ns, sequence, initial = _confirmed_wall(original, config)
+    restored = ShadowWorldModel(config)
+    restored.restore(pickle.loads(pickle.dumps(original.checkpoint())))
+    with monkeypatch.context() as patch:
+        patch.setattr(TemporalOccupancyGrid, "occupied_cells", _no_map_work)
+        patch.setattr(StructuralMemoryGrid, "confirmed_cells", _no_map_work)
+        assert _tick(original, last_ns + 20_000_000) == _tick(restored, last_ns + 20_000_000)
+    for offset, variance in ((config.local_costmap_max_cell_age_ns + 1, 0.0),
+                             (1_000_000_000, 1.0), (1_020_000_000, 0.0),
+                             (config.structural_max_age_ns + 1, 0.0)):
+        now = last_ns + offset
+        assert _tick(original, now, variance=variance) == _tick(restored, now, variance=variance)
+    now += 20_000_000
+    observations = _scan(sequence + 1, now)
+    assert _tick(original, now, observations) == _tick(restored, now, observations)
+
+
+def test_lidar_duplicate_measurement_and_cached_costmap_remain_immutable():
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    observations = _scan(1, now)
+    first = _tick(model, now, observations)
+    duplicate = _tick(model, now + 20_000_000, observations)
+    assert duplicate.local_costmap.occupied_cells is first.local_costmap.occupied_cells
+    assert duplicate.local_costmap.revision == first.local_costmap.revision
+    assert duplicate.local_costmap.freshness_ns == 20_000_000
+    assert first.local_costmap.freshness_ns == 0
+    with pytest.raises(ValueError, match="rewritten"):
+        _tick(model, now + 40_000_000, _scan(1, now, ((1.5, 0.0),)))
+    with pytest.raises(ValueError):
+        first.local_costmap.with_freshness_ns(-1)
+    with pytest.raises(ValueError, match="duplicates"):
+        replace(first.local_costmap, occupied_cells=(CostmapCell(1, 1, 1),) * 2)
+    with pytest.raises(ValueError, match="immutable tuple"):
+        replace(first.local_costmap, occupied_cells=list(first.local_costmap.occupied_cells))
+
+
+def test_lidar_robot_relative_geometry_updates_while_pose_aligned_map_is_frozen_on_lost():
+    config = _config()
+    model = ShadowWorldModel(config)
+    start = 1_000_000_000
+    good = _tick(model, start, _scan(1, start, ((1.0, 0.2),)))
+    assert good.robot_relative_geometry is not None
+    assert good.robot_relative_geometry.source_sequence == 1
+    assert good.robot_relative_geometry.point_count == 1
+    assert good.robot_relative_geometry.freshness_ns == 0
+    assert good.local_costmap is not None
+    assert good.local_costmap.source_sequence == 1
+
+    lost_quality = replace(
+        healthy_localization(global_position=QualityState.LOST),
+        local_translation=QualityState.LOST,
+        heading=QualityState.GOOD,
+        local_sigma_m=0.19,
+    )
+    now = start + 20_000_000
+    lost = _tick(model, now, _scan(2, now, ((0.8, -0.3),)), quality=lost_quality)
+    assert lost.robot_relative_geometry is not None
+    assert lost.robot_relative_geometry.source_sequence == 2
+    assert lost.robot_relative_geometry.freshness_ns == 0
+    # The pose-aligned map deliberately did not consume scan 2.
+    assert lost.local_costmap is not None
+    assert lost.local_costmap.source_sequence == 1
+    assert lost.local_costmap.freshness_ns == 20_000_000
+
+    later = _tick(model, now + 20_000_000, quality=lost_quality)
+    assert later.robot_relative_geometry is not None
+    assert later.robot_relative_geometry.source_sequence == 2
+    assert later.robot_relative_geometry.freshness_ns == 20_000_000
+    assert later.local_costmap.source_sequence == 1
+    assert later.local_costmap.freshness_ns == 40_000_000
+
+    restored = ShadowWorldModel(config)
+    restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+    assert _tick(restored, now + 20_000_000, quality=lost_quality) == later
+
+
+
+def test_lidar_localization_recovery_retains_scan_time_and_requires_valid_measurement_pose():
+    config = _config()
+    for measured_during_loss in (False, True):
+        model = ShadowWorldModel(config)
+        start = 1_000_000_000
+        _tick(model, start, _scan(1, start))
+        lost_ns = start+20_000_000
+        captured_ns = lost_ns if measured_during_loss else start
+        lost = _tick(model, lost_ns, _scan(2, captured_ns),
+            quality=healthy_localization(local_translation=QualityState.LOST))
+        assert lost.local_costmap.source_sequence == 1
+        restored = ShadowWorldModel(config)
+        restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+        recovered = _tick(model, start+40_000_000)
+        assert _tick(restored, start+40_000_000) == recovered
+        assert recovered.local_costmap.source_sequence == (1 if measured_during_loss else 2)
+        assert recovered.local_costmap.freshness_ns == 40_000_000
+        assert recovered.robot_relative_geometry.captured_monotonic_ns == captured_ns
+
+
+def test_lidar_scan_parses_once_and_equal_reconstructed_duplicate_reuses_map(monkeypatch):
+    model = ShadowWorldModel(_config())
+    parsed = []
+    original = ShadowWorldModel._local_scan_points
+
+    def parse(self, observation):
+        parsed.append(observation.source_sequence)
+        return original(self, observation)
+
+    monkeypatch.setattr(ShadowWorldModel, "_local_scan_points", parse)
+    now = 1_000_000_000
+    observations = _scan(1, now, ((1.0, 0.2), (3.0, 0.0)))
+    initial = _tick(model, now, observations)
+    assert parsed == [1]
+    reconstructed = pickle.loads(pickle.dumps(observations))
+    assert reconstructed[1].values is not observations[1].values
+    duplicate = _tick(model, now + 20_000_000, reconstructed)
+    assert parsed == [1]
+    assert duplicate.local_costmap.revision == initial.local_costmap.revision
+    assert duplicate.local_costmap.occupied_cells is initial.local_costmap.occupied_cells
+    assert duplicate.robot_relative_geometry.point_count == 2
+    assert duplicate.robot_relative_geometry.freshness_ns == 20_000_000
+    now += 40_000_000
+    result = _tick(model, now, _scan(2, now, ()))
+    assert parsed == [1, 2]
+    assert result.local_costmap.source_sequence == result.robot_relative_geometry.source_sequence == 2
+    assert result.local_costmap.revision > duplicate.local_costmap.revision
+    assert result.robot_relative_geometry.point_count == 0
+
+
+@pytest.mark.parametrize("field,value", (
+    ("frame_id", "odom"),
+    ("point_count", True),
+    ("point_count", 1.0),
+    ("point_count", -1),
+    ("point_count", 10000),
+    ("point_000_x_m", True),
+    ("point_000_y_m", "bad"),
+    ("point_000_quality", False),
+    ("point_000_quality", -1),
+))
+@pytest.mark.parametrize("local_quality", (QualityState.GOOD, QualityState.LOST))
+def test_lidar_new_malformed_scan_fails_closed_before_geometry_and_map_update(field, value, local_quality):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    _tick(model, now, _scan(1, now))
+    before = model.checkpoint()
+    now += 20_000_000
+    health, scan = _scan(2, now)
+    malformed = replace(scan, values=tuple(
+        replace(item, value=value) if item.key == field else item
+        for item in scan.values
+    ))
+    with pytest.raises(ValueError):
+        _tick(model, now, (health, malformed),
+              quality=healthy_localization(local_translation=local_quality))
+    after = model.checkpoint()
+    assert after.robot_relative_geometry == before.robot_relative_geometry
+    assert after.pending_local_scan == before.pending_local_scan
+    assert after.last_local_sequence == before.last_local_sequence
+    assert after.cells == before.cells
+
+
+@pytest.mark.parametrize("fields", (
+    (DataField("extra", 1),),
+    (DataField("point_000_x_m", 1.0),),
+))
+def test_lidar_malformed_scan_schema_never_becomes_pending_during_localization_loss(fields):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    health, scan = _scan(1, now)
+    if fields[0].key == "extra":
+        malformed = replace(scan, values=scan.values + fields)
+    else:
+        malformed = replace(scan, values=tuple(item for item in scan.values if item.key != "point_000_quality"))
+    with pytest.raises(ValueError, match="fields do not match"):
+        _tick(model, now, (health, malformed),
+              quality=healthy_localization(local_translation=QualityState.LOST))
+    assert model.checkpoint().pending_local_scan is None
+    assert model.checkpoint().robot_relative_geometry is None
+
+
+@pytest.mark.parametrize("point_count", (True, 1.0))
+def test_lidar_equal_scalar_malformed_duplicate_keeps_header_validation(point_count):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    health, scan = _scan(1, now)
+    _tick(model, now, (health, scan))
+    malformed = replace(scan, values=tuple(
+        replace(item, value=point_count) if item.key == "point_count" else item
+        for item in scan.values
+    ))
+    assert malformed.values == scan.values
+    with pytest.raises(ValueError, match="point_count must be a non-negative integer"):
+        _tick(model, now + 20_000_000, (health, malformed))
+
+
+@pytest.mark.parametrize("rewrite", ("time", "coordinate", "fields"))
+def test_lidar_rewritten_scan_stays_rejected_after_checkpoint_restore(rewrite):
+    model = ShadowWorldModel(_config())
+    now = 1_000_000_000
+    observations = _scan(1, now)
+    _tick(model, now, observations)
+    restored = ShadowWorldModel(_config())
+    restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+    health, scan = observations
+    if rewrite == "time":
+        scan = replace(scan, captured_monotonic_ns=now + 1)
+    elif rewrite == "coordinate":
+        scan = _scan(1, now, ((0.8, 0.2),))[1]
+    else:
+        scan = replace(scan, values=scan.values + (DataField("extra", 1),))
+    for branch in (model, restored):
+        with pytest.raises(ValueError, match="rewritten"):
+            _tick(branch, now + 20_000_000, (health, scan))

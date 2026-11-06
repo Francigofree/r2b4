@@ -1,0 +1,397 @@
+"""Passive status delivery keeps the newest completed tick without renewing it."""
+from __future__ import annotations
+
+import json
+import multiprocessing
+import stat
+import threading
+import time
+from dataclasses import replace
+from types import SimpleNamespace
+
+import pytest
+
+from test_spatial_service import Clock, geometry_tick
+from v3.process_sidecars import ProcessResidentStatusPublisher, _StatusMailbox
+from v3.resident_status import HOST_STATUS_MAX_AGE_NS, _tick_status, status_is_fresh
+
+
+def _wait_status(path, tick_id):
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        received = json.loads(path.read_text())
+        if received.get("tick_id") == tick_id:
+            return received
+        time.sleep(.005)
+    pytest.fail(f"status did not deliver tick {tick_id}")
+
+
+def _navigation_tick(clock, *, tick=1, validity=None):
+    from v3.contracts import MissionConstraints, MotionValidity, NavigationPlan, NavigationStatus, TickContext
+    from v3.contracts.localization import LocalizationRequirement
+    from v3.engine import LayerRecord
+
+    completed = geometry_tick(clock, tick=tick, cells=4000)
+    context = completed.trace.context
+    validity = validity or MotionValidity(
+        TickContext(0, context.monotonic_ns - 5_000_000),
+        context.monotonic_ns + 100_000_000, "R2B4_ODOM_LOCAL", "mission-nav",
+        LocalizationRequirement(global_position=False), 7, context.monotonic_ns - 10_000_000,
+    )
+    navigation = NavigationPlan(
+        context, "mission-nav", (), None, MissionConstraints(.2, .6, .2, .1, .1), .2, .25,
+        NavigationStatus.PENDING, "ASYNC_L6_PENDING", motion_validity=validity,
+        goal_selection_reason="INITIAL_GOAL", goal_selected_ns=validity.source_context.monotonic_ns,
+    )
+    return replace(completed, trace=replace(completed.trace,
+        layers=(*completed.trace.layers, LayerRecord("L6", navigation))))
+
+
+@pytest.mark.parametrize("process", [False, True])
+def test_navigation_status_preserves_goal_and_guidance_lineage_without_geometry(tmp_path, process):
+    from v3_process_runtime import AsyncResidentStatusPublisher, ResidentStatusConfig
+
+    clock = Clock()
+    first = _navigation_tick(clock)
+    validity = first.trace.layers[-1].output.motion_validity
+    config = ResidentStatusConfig(path=tmp_path / "navigation.json")
+    publisher = ProcessResidentStatusPublisher(config) if process else AsyncResidentStatusPublisher(config)
+    publisher.start()
+    try:
+        publisher.publish_tick(first)
+        initial = _wait_status(config.path, 1)
+        clock.now += 20_000_000
+        latest = _navigation_tick(clock, tick=2, validity=validity)
+        navigation_row = latest.trace.layers[-1]
+        latest = replace(latest, trace=replace(latest.trace, layers=(
+            *latest.trace.layers[:-1], replace(navigation_row,
+                output=replace(navigation_row.output, reason="GEOMETRY_HOLD")),
+        )))
+        publisher.publish_tick(latest)
+        received = _wait_status(config.path, 2)
+        assert received == _tick_status(latest)
+        navigation = received["navigation"]
+        assert navigation == {**initial["navigation"], "reason": "GEOMETRY_HOLD"}
+        assert navigation["progress"] == initial["navigation"]["progress"] > 0.0
+        assert navigation["goal_selection_reason"] == "INITIAL_GOAL"
+        assert navigation["goal_selected_ns"] == validity.source_context.monotonic_ns
+        assert navigation["motion_validity"] == {
+            "source_context": {"tick_id": 0, "monotonic_ns": validity.source_context.monotonic_ns},
+            "valid_until_ns": validity.valid_until_ns,
+            "frame_id": validity.frame_id, "scope": validity.scope,
+            "geometry_revision": validity.geometry_revision,
+            "geometry_captured_ns": validity.geometry_captured_ns,
+            "localization_requirement": {"local_translation": True, "heading": True, "global_position": False},
+        }
+        assert "occupied_cells" not in received["world"]["local_costmap"]
+        assert not {"route", "trajectory_candidates", "geometry_proof"} & navigation.keys()
+        assert len(json.dumps(received)) < 10_000
+    finally:
+        publisher.finish()
+
+
+def _blocked_status_sidecar(entered, release, written, *arguments):
+    from v3 import process_sidecars
+    original = process_sidecars._atomic_private_json
+
+    def write(path, payload, mode, **options):
+        if payload["state"] == "RUNNING":
+            if not entered.is_set():
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("test status writer was not released")
+            written.value += 1
+        original(path, payload, mode, **options)
+
+    process_sidecars._atomic_private_json = write
+    process_sidecars._status_sidecar_main(*arguments)
+
+
+def _slow_status_fsync_sidecar(sync_count, terminal_sync_entered, release, *arguments):
+    from v3 import process_sidecars, resident_status
+    original = resident_status.os.fsync
+
+    def sync(descriptor):
+        sync_count.value += 1
+        if sync_count.value > 1:
+            terminal_sync_entered.set()
+            if not release.wait(5):
+                raise TimeoutError("test terminal status fsync was not released")
+        original(descriptor)
+
+    resident_status.os.fsync = sync
+    process_sidecars._status_sidecar_main(*arguments)
+
+
+def _clocked_status_sidecar(clock_ns, writes, *arguments):
+    from v3 import process_sidecars
+    original = process_sidecars._atomic_private_json
+    process_sidecars.time = SimpleNamespace(monotonic_ns=lambda: clock_ns.value,
+        perf_counter_ns=time.perf_counter_ns, thread_time_ns=time.thread_time_ns, sleep=time.sleep)
+
+    def write(path, payload, mode, **options):
+        if payload['state'] == 'RUNNING':
+            writes.value += 1
+        original(path, payload, mode, **options)
+
+    process_sidecars._atomic_private_json = write
+    process_sidecars._status_sidecar_main(*arguments)
+
+
+def test_status_rate_limit_selects_latest_at_write_time_and_finish_bypasses_interval(tmp_path):
+    context = multiprocessing.get_context('spawn')
+    now = context.RawValue('Q', 1_000_000_000)
+    writes = context.RawValue('I', 0)
+    path = tmp_path / 'status.json'
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=path, file_mode=0o600))
+    publisher._process = context.Process(target=_clocked_status_sidecar, args=(
+        now, writes, str(path), 0o600, publisher._tick_mailbox, publisher._control_queue,
+        publisher._result_queue, publisher._ready_event, publisher._failed_event, None, False))
+    publisher.start()
+    worker_pid = publisher._process.pid
+    clock = Clock()
+    clock.now = now.value
+    try:
+        first = geometry_tick(clock, tick=1, cells=1)
+        publisher.publish_tick(first)
+        _wait_status(path, 1)
+        for tick_id in range(2, 52):
+            clock.now += 1_000_000
+            latest = geometry_tick(clock, tick=tick_id, cells=1)
+            publisher.publish_tick(latest)
+        # A controlled sidecar clock proves that the interval is a write
+        # deadline, independent of process scheduling and producer frequency.
+        now.value = 1_099_999_999
+        time.sleep(.03)
+        assert writes.value == 1
+        assert json.loads(path.read_text()) == _tick_status(first)
+        now.value = 1_100_000_000
+        received = _wait_status(path, 51)
+        assert received == _tick_status(latest)
+        assert received['monotonic_ns'] == latest.trace.context.monotonic_ns
+        assert writes.value == 2
+        # Keep the sidecar clock frozen before its next write deadline.
+        # Terminal admission must still finish, rather than wait for it.
+        publisher.publish_tick(geometry_tick(clock, tick=52, cells=1))
+        publisher.finish()
+        terminal = json.loads(path.read_text())
+        assert terminal['state'] == 'STOPPED'
+        timing = terminal['status_egress']
+        assert timing['worker_pid'] == worker_pid
+        assert timing['write_interval_ns'] == 100_000_000
+        assert timing['write_count'] == timing['mailbox_receipt_count'] == 2
+        assert timing['coalesced_revision_count'] == 49
+        assert timing['write_wall_total_ns'] >= timing['write_wall_max_ns'] > 0
+        assert timing['write_thread_cpu_total_ns'] >= timing['write_thread_cpu_max_ns'] > 0
+        assert timing['source_age_at_write_return_max_ns'] >= timing['source_age_at_receipt_max_ns']
+        assert timing['max_write_source_tick_id'] in (1, 51)
+    finally:
+        publisher.finish()
+
+
+def test_running_status_stays_atomic_and_current_without_waiting_for_storage_sync(tmp_path):
+    context = multiprocessing.get_context("spawn")
+    sync_count = context.RawValue("I", 0)
+    terminal_sync_entered, release = context.Event(), context.Event()
+    path = tmp_path / "status.json"
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=path, file_mode=0o600))
+    publisher._process = context.Process(target=_slow_status_fsync_sidecar, args=(
+        sync_count, terminal_sync_entered, release, str(path), 0o600, publisher._tick_mailbox,
+        publisher._control_queue, publisher._result_queue, publisher._ready_event,
+        publisher._failed_event, None, False,
+    ))
+    publisher.start()
+    errors = []
+    finishing = None
+    try:
+        assert sync_count.value == 1  # BOOTING is durable before readiness.
+        clock = Clock()
+        for tick_id in range(1, 101):
+            clock.now += 20_000_000
+            latest = geometry_tick(clock, tick=tick_id, sequence=tick_id, cells=1)
+            publisher.publish_tick(latest, ready_for_active=True)
+        received = _wait_status(path, 100)
+        assert received == _tick_status(latest, ready_for_active=True)
+        assert sync_count.value == 1 and not terminal_sync_entered.is_set()
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert status_is_fresh(received, observed_ns=clock.now)
+        assert not status_is_fresh(received, observed_ns=clock.now + HOST_STATUS_MAX_AGE_NS)
+
+        def finish():
+            try:
+                publisher.finish()
+            except BaseException as exc:
+                errors.append(exc)
+
+        finishing = threading.Thread(target=finish)
+        finishing.start()
+        assert terminal_sync_entered.wait(3)
+        # The final durable write cannot expose a partial replacement.
+        assert json.loads(path.read_text()) == received
+        release.set()
+        finishing.join(3)
+        assert not finishing.is_alive() and not errors
+        terminal = json.loads(path.read_text())
+        assert terminal["state"] == "STOPPED" and sync_count.value == 2
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    finally:
+        release.set()
+        if finishing is not None:
+            finishing.join(3)
+        publisher.finish()
+
+
+def test_slow_process_writer_supersedes_backlog_and_preserves_final_tick(tmp_path):
+    context = multiprocessing.get_context("spawn")
+    entered, release = context.Event(), context.Event()
+    written = context.RawValue("I", 0)
+    path = tmp_path / "status.json"
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=path, file_mode=0o600))
+    publisher._process = context.Process(target=_blocked_status_sidecar, args=(
+        entered, release, written, str(path), 0o600, publisher._tick_mailbox,
+        publisher._control_queue, publisher._result_queue, publisher._ready_event,
+        publisher._failed_event, None, False,
+    ))
+    publisher.start()
+    clock = Clock()
+    try:
+        publisher.publish_tick(geometry_tick(clock, tick=1))
+        assert entered.wait(3)
+        started = time.monotonic()
+        for tick_id in range(2, 502):
+            clock.now += 20_000_000
+            latest = geometry_tick(clock, tick=tick_id, sequence=tick_id,
+                                   cells=4000 if tick_id == 501 else 1)
+            publisher.publish_tick(latest, ready_for_active=True)
+        assert time.monotonic() - started < 2
+        assert publisher.drop_count == 0 and not publisher.failed
+        release.set()
+        received = _wait_status(path, latest.trace.context.tick_id)
+        assert received == _tick_status(latest, ready_for_active=True)
+        assert written.value == 2  # In-flight tick, then the final pending tick.
+        assert status_is_fresh(received, observed_ns=clock.now)
+        assert not status_is_fresh(received, observed_ns=clock.now + HOST_STATUS_MAX_AGE_NS)
+        assert "occupied_cells" not in received["world"]["local_costmap"]
+        from v3_process_runtime import AsyncResidentStatusPublisher, ResidentStatusConfig
+        direct = AsyncResidentStatusPublisher(ResidentStatusConfig(path=tmp_path / "direct.json"))
+        direct.start()
+        try:
+            direct.publish_tick(latest, ready_for_active=True)
+            assert _wait_status(direct._config.path, latest.trace.context.tick_id) == received
+        finally:
+            direct.finish()
+    finally:
+        release.set()
+        publisher.finish()
+
+
+def test_status_publication_skips_contended_mailbox_without_waiting(tmp_path):
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=tmp_path / "status.json", file_mode=0o600))
+    publisher.start()
+    clock = Clock()
+    try:
+        first = geometry_tick(clock, tick=1)
+        publisher.publish_tick(first)
+        _wait_status(publisher._config.path, 1)
+        assert publisher._tick_mailbox._lock.acquire(timeout=1)
+        try:
+            started = time.monotonic()
+            for tick_id in range(2, 102):
+                publisher.publish_tick(geometry_tick(clock, tick=tick_id))
+            assert time.monotonic() - started < .5
+            assert publisher.drop_count == 100
+        finally:
+            publisher._tick_mailbox._lock.release()
+        final = geometry_tick(clock, tick=102)
+        publisher.publish_tick(final)
+        assert _wait_status(publisher._config.path, 102) == _tick_status(final)
+    finally:
+        publisher.finish()
+
+
+def test_status_sidecar_crash_is_observable_and_does_not_renew_last_tick(tmp_path):
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=tmp_path / "status.json", file_mode=0o600))
+    publisher.start()
+    clock = Clock()
+    tick = geometry_tick(clock)
+    publisher.publish_tick(tick)
+    last = _wait_status(publisher._config.path, tick.trace.context.tick_id)
+    publisher._process.terminate()
+    publisher._process.join(3)
+    try:
+        assert publisher.failed
+        assert "status sidecar exited" in str(publisher.error)
+        publisher.publish_tick(geometry_tick(clock, tick=2))
+        assert json.loads(publisher._config.path.read_text()) == last
+        assert not status_is_fresh(last, observed_ns=clock.now + HOST_STATUS_MAX_AGE_NS)
+    finally:
+        publisher.finish()
+
+
+def test_status_file_error_is_reported_by_the_sidecar(tmp_path):
+    path = tmp_path / "status.json"
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=path, file_mode=0o600))
+    publisher.start()
+    try:
+        path.unlink()
+        path.mkdir()
+        publisher.publish_tick(geometry_tick(Clock()))
+        deadline = time.monotonic() + 3
+        while publisher.error is None and time.monotonic() < deadline:
+            time.sleep(.005)
+        assert publisher.failed
+        assert "IsADirectoryError" in str(publisher.error)
+    finally:
+        publisher.finish()
+
+
+def test_unexpected_clean_sidecar_exit_is_a_failure_before_first_tick(tmp_path):
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=tmp_path / "status.json", file_mode=0o600))
+    publisher.start()
+    try:
+        publisher._control_queue.put(("finish", None, None, None), timeout=1)
+        publisher._process.join(3)
+        assert publisher._process.exitcode == 0
+        assert publisher.failed
+        assert "status sidecar exited:0" in str(publisher.error)
+    finally:
+        publisher.finish()
+
+
+def test_status_encoding_failure_is_reported_without_throwing_through_completed_tick(tmp_path, monkeypatch):
+    from v3 import process_sidecars
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=tmp_path / "status.json", file_mode=0o600))
+    publisher.start()
+    try:
+        tick = geometry_tick(Clock())
+        actuation = tick.final_actuation
+        monkeypatch.setattr(process_sidecars, "_tick_status", lambda *args: {"raw": b"x" * 70_000})
+        publisher.publish_tick(tick)
+        assert tick.final_actuation is actuation
+        assert publisher.failed and publisher.drop_count == 1
+        assert "compact status exceeds mailbox bound" in str(publisher.error)
+        assert json.loads(publisher._config.path.read_text())["state"] == "BOOTING"
+    finally:
+        publisher.finish()
+
+
+def test_status_mailbox_rejects_oversize_or_corrupt_values_without_partial_publication():
+    mailbox = _StatusMailbox(multiprocessing.get_context("spawn"))
+    assert mailbox.publish({"tick_id": 1, "monotonic_ns": 10})
+    with pytest.raises(ValueError, match="mailbox bound"):
+        mailbox.publish({"raw": b"x" * 70_000})
+    revision, snapshot = mailbox.latest(0)
+    assert revision == 1 and snapshot == {"tick_id": 1, "monotonic_ns": 10}
+    mailbox._revision.value = 2
+    mailbox._size.value = 0
+    with pytest.raises(ValueError, match="mailbox size"):
+        mailbox.latest(revision)
+
+
+@pytest.mark.parametrize("stamp, observed, expected", [
+    (10, 10, True), (10, 10 + HOST_STATUS_MAX_AGE_NS - 1, True),
+    (10, 10 + HOST_STATUS_MAX_AGE_NS, False), (10, 9, False),
+    (True, 10, False), (None, 10, False), ("10", 10, False),
+])
+def test_host_freshness_uses_original_tick_and_completed_observation(stamp, observed, expected):
+    assert status_is_fresh({"monotonic_ns": stamp}, observed_ns=observed) is expected

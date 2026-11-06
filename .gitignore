@@ -1,0 +1,46 @@
+# Generated runtime data
+
+/__pycache__/
+**/__pycache__/
+/.pytest_cache/
+/.upgrade_backups/
+
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.sw?
+
+# Local ML model binaries and camera evidence
+/models/*.tflite
+/pic/
+/video/
+/conf/.wake.env
+/conf/.chatgpt_oauth.json
+/home/alba/project_r2b4/tmp
+
+# Local authoritative robot captures; portable Test Hub evidence remains trackable
+/runtime/captures/**/*.sqlite
+/runtime/public_world/events.ndjson
+
+# Local secrets
+*.env
+.env
+.*.env
+
+tmp/
+replayer_data/
+*.mcap
+*.sqlite
+/runtime/slam_toolbox/
+/runtime/slam_toolbox.sock
+/runtime/deps/
+
+tmp/
+runtime/captures/
+replayer_data/
+*.mcap
+*.sqlite

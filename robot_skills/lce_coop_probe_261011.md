@@ -1,0 +1,1 @@
+Fél másodperces operator.status mintavétel, sikeres olvasások számlálása és HRI jelentés; mozgás nélkül.

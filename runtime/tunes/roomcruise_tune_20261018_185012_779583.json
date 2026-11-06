@@ -1,0 +1,556 @@
+{
+  "schema": "R2B4_ROOMCRUISE_TUNER_RESULT_V1",
+  "tuner_version": 3,
+  "project_root": "/home/alba/project_r2b4",
+  "git_head": "65e1dbd28efcae2f71b6ce4a842b87bf0dd93b9a",
+  "config_snapshot_id": "8c7eb106ebc21608aedee1beab46b52928b776b20e0a75fb5c4f04563c148ede",
+  "tick_period_ns": 20000000,
+  "baseline_overrides": {},
+  "configuration_diagnostics": {
+    "minimum_center_spin_rad_s": 0.8434073657576608,
+    "target_center_spin_rad_s": 1.0683159966263704,
+    "minimum_continuous_wheel_speed_mps": 0.15,
+    "minimum_target_wheel_speed_mps": 0.19,
+    "minimum_planning_speed_mps": 0.19,
+    "localization_recovery_omega_rad_s": 1.0683159966263704,
+    "roomcruise": {
+      "requested_max_v_mps": 0.45,
+      "requested_max_omega_rad_s": 1.4,
+      "mission_max_v_mps": 0.45,
+      "mission_max_omega_rad_s": 1.4,
+      "steady_straight_max_v_mps": 0.45,
+      "centered_spin_available": true
+    },
+    "followperson": {
+      "requested_max_v_mps": 0.25,
+      "requested_max_omega_rad_s": 0.3,
+      "mission_max_v_mps": 0.25,
+      "mission_max_omega_rad_s": 0.3,
+      "steady_straight_max_v_mps": 0.25,
+      "centered_spin_available": false
+    },
+    "knobs": [
+      {
+        "priority": "P1",
+        "path": "speed_map.curves.*.startup_pwm",
+        "state": "METADATA_ONLY",
+        "detail": "Validated calibration metadata; actuator realization uses calibrated speed curves, not startup_pwm."
+      },
+      {
+        "priority": "P1",
+        "path": "layers.mission.default_constraints.corridor_radius_m",
+        "state": "METADATA_ONLY",
+        "detail": "Carried as guidance metadata; it does not enforce a geometric corridor."
+      },
+      {
+        "priority": "P2",
+        "path": "fizika.encoder_impulzus_per_fordulat",
+        "state": "METADATA_ONLY",
+        "detail": "Distance estimation uses calibrated metres per pulse (lepes_hossz_m and side multipliers)."
+      },
+      {
+        "priority": "P2",
+        "path": "layers.navigation.follow_person_search_step_ns",
+        "state": "COMPATIBILITY_ONLY",
+        "detail": "Historical configuration field; current bounded FOLLOW search uses angular segments."
+      },
+      {
+        "priority": "P2",
+        "path": "layers.motion_realization.cruise_v_mps",
+        "state": "WAYPOINT_ONLY",
+        "detail": "Used by waypoint realization; it does not tune EXPLORE trajectory speed."
+      },
+      {
+        "priority": "P2",
+        "path": "layers.motion_realization.distance_gain",
+        "state": "WAYPOINT_ONLY",
+        "detail": "Used by waypoint realization; it does not tune EXPLORE trajectory speed."
+      },
+      {
+        "priority": "P1",
+        "path": "layers.motion_realization.max_requested_omega_rad_s",
+        "state": "SHADOWED_RANGE",
+        "detail": "Values above the mission angular cap cannot increase executable angular speed."
+      },
+      {
+        "priority": "P2",
+        "path": "layers.async_l6.release_tick_gap",
+        "state": "INACTIVE_IN_PRODUCTION_MODE",
+        "detail": "Completion-input mode uses measured completion/monotonic time; retained for alternate paths and replay."
+      },
+      {
+        "priority": "P2",
+        "path": "layers.async_l6.release_delay_ns",
+        "state": "INACTIVE_IN_PRODUCTION_MODE",
+        "detail": "Completion-input mode uses measured completion/monotonic time; retained for alternate paths and replay."
+      },
+      {
+        "priority": "P2",
+        "path": "layers.navigation.trajectory_replan_min_tick_gap",
+        "state": "INACTIVE_IN_PRODUCTION_MODE",
+        "detail": "Completion-input mode uses measured completion/monotonic time; retained for alternate paths and replay."
+      },
+      {
+        "priority": "P1",
+        "path": "behavior.followperson.max_omega_rad_s",
+        "state": "PARTIAL_CAPABILITY",
+        "detail": "The effective FOLLOW angular cap is below the calibrated centered-spin floor; pivot and search cannot turn in place."
+      },
+      {
+        "priority": "P2",
+        "path": "layers.navigation.follow_person_minimum_follow_speed_mps",
+        "state": "SHADOWED_RANGE",
+        "detail": "The heading slowdown floor does not lower the calibrated/planner nonzero rollout minimum; distance braking can still request a smaller cap and HOLD."
+      }
+    ]
+  },
+  "non_actuating": true,
+  "profile": "quick",
+  "ticks_per_scenario": 500,
+  "passes": 1,
+  "scenario_names": [
+    "asymmetric_opening"
+  ],
+  "baseline": {
+    "candidate": {
+      "command_max_v_mps": 0.45,
+      "command_max_omega_rad_s": 1.4,
+      "minimum_planning_speed_mps": 0.19,
+      "rollout_linear_samples": 6,
+      "rollout_angular_samples": 9,
+      "localization_degraded_speed_scale": 0.4,
+      "local_goal_novelty_weight": 0.02,
+      "local_goal_clearance_weight": 0.02,
+      "local_goal_forward_weight": 0.02,
+      "smoothness_weight": 0.2,
+      "novelty_weight": 0.1,
+      "localization_observability_weight": 0.2
+    },
+    "score": 4.157490992404361,
+    "hard_fail": false,
+    "scenarios": [
+      {
+        "scenario": "asymmetric_opening",
+        "ticks": 500,
+        "moving_ratio": 0.998,
+        "curved_ratio": 0.7369477911646586,
+        "straight_ratio": 0.26305220883534136,
+        "pivot_ratio": 0.0,
+        "reverse_ratio": 0.0,
+        "stopped_ratio": 0.002,
+        "heading_bin_ratio": 0.75,
+        "unique_coverage_cells": 15,
+        "distance_m": 3.4262539298671966,
+        "steering_reversals_per_m": 0.0,
+        "no_progress_events": 0,
+        "p05_clearance_m": 0.23683422162868817,
+        "minimum_clearance_m": 0.23141138273644035,
+        "collision": false,
+        "score": 4.157490992404361
+      }
+    ]
+  },
+  "winner": {
+    "candidate": {
+      "command_max_v_mps": 0.35,
+      "command_max_omega_rad_s": 1.4,
+      "minimum_planning_speed_mps": 0.19,
+      "rollout_linear_samples": 6,
+      "rollout_angular_samples": 9,
+      "localization_degraded_speed_scale": 0.7,
+      "local_goal_novelty_weight": 0.65,
+      "local_goal_clearance_weight": 0.15,
+      "local_goal_forward_weight": 0.02,
+      "smoothness_weight": 0.2,
+      "novelty_weight": 0.18,
+      "localization_observability_weight": 0.2
+    },
+    "score": 4.781986062431545,
+    "hard_fail": false,
+    "scenarios": [
+      {
+        "scenario": "asymmetric_opening",
+        "ticks": 500,
+        "moving_ratio": 0.998,
+        "curved_ratio": 0.5240963855421686,
+        "straight_ratio": 0.4759036144578313,
+        "pivot_ratio": 0.0,
+        "reverse_ratio": 0.0,
+        "stopped_ratio": 0.002,
+        "heading_bin_ratio": 0.9375,
+        "unique_coverage_cells": 13,
+        "distance_m": 2.7191908759370946,
+        "steering_reversals_per_m": 0.0,
+        "no_progress_events": 0,
+        "p05_clearance_m": 0.46791132219647413,
+        "minimum_clearance_m": 0.40167132219647406,
+        "collision": false,
+        "score": 4.781986062431545
+      }
+    ]
+  },
+  "delta_score": 0.6244950700271845,
+  "config_patch": {
+    "layers": {
+      "navigation": {
+        "localization_degraded_speed_scale": 0.7,
+        "novelty_weight": 0.18
+      }
+    },
+    "behavior": {
+      "roomcruise": {
+        "preferences": {
+          "local_goal_novelty_weight": 0.65,
+          "local_goal_clearance_weight": 0.15
+        },
+        "max_v_mps": 0.35
+      }
+    }
+  },
+  "ranking": [
+    {
+      "candidate": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.15,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.12,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "score": 4.781986062431545,
+      "hard_fail": false,
+      "scenarios": [
+        {
+          "scenario": "asymmetric_opening",
+          "ticks": 500,
+          "moving_ratio": 0.998,
+          "curved_ratio": 0.5240963855421686,
+          "straight_ratio": 0.4759036144578313,
+          "pivot_ratio": 0.0,
+          "reverse_ratio": 0.0,
+          "stopped_ratio": 0.002,
+          "heading_bin_ratio": 0.9375,
+          "unique_coverage_cells": 13,
+          "distance_m": 2.738990875937095,
+          "steering_reversals_per_m": 0.0,
+          "no_progress_events": 0,
+          "p05_clearance_m": 0.46791132219647413,
+          "minimum_clearance_m": 0.40167132219647406,
+          "collision": false,
+          "score": 4.781986062431545
+        }
+      ]
+    },
+    {
+      "candidate": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.15,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.15,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "score": 4.781986062431545,
+      "hard_fail": false,
+      "scenarios": [
+        {
+          "scenario": "asymmetric_opening",
+          "ticks": 500,
+          "moving_ratio": 0.998,
+          "curved_ratio": 0.5240963855421686,
+          "straight_ratio": 0.4759036144578313,
+          "pivot_ratio": 0.0,
+          "reverse_ratio": 0.0,
+          "stopped_ratio": 0.002,
+          "heading_bin_ratio": 0.9375,
+          "unique_coverage_cells": 13,
+          "distance_m": 2.738990875937095,
+          "steering_reversals_per_m": 0.0,
+          "no_progress_events": 0,
+          "p05_clearance_m": 0.46791132219647413,
+          "minimum_clearance_m": 0.40167132219647406,
+          "collision": false,
+          "score": 4.781986062431545
+        }
+      ]
+    },
+    {
+      "candidate": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.15,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "score": 4.781986062431545,
+      "hard_fail": false,
+      "scenarios": [
+        {
+          "scenario": "asymmetric_opening",
+          "ticks": 500,
+          "moving_ratio": 0.998,
+          "curved_ratio": 0.5240963855421686,
+          "straight_ratio": 0.4759036144578313,
+          "pivot_ratio": 0.0,
+          "reverse_ratio": 0.0,
+          "stopped_ratio": 0.002,
+          "heading_bin_ratio": 0.9375,
+          "unique_coverage_cells": 13,
+          "distance_m": 2.7191908759370946,
+          "steering_reversals_per_m": 0.0,
+          "no_progress_events": 0,
+          "p05_clearance_m": 0.46791132219647413,
+          "minimum_clearance_m": 0.40167132219647406,
+          "collision": false,
+          "score": 4.781986062431545
+        }
+      ]
+    }
+  ],
+  "search_history": [
+    {
+      "pass": 1,
+      "axis": "command_max_v_mps",
+      "winner_score": 4.392794717754425,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.4,
+        "local_goal_novelty_weight": 0.02,
+        "local_goal_clearance_weight": 0.02,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 2
+    },
+    {
+      "pass": 1,
+      "axis": "command_max_omega_rad_s",
+      "winner_score": 4.392794717754425,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.4,
+        "local_goal_novelty_weight": 0.02,
+        "local_goal_clearance_weight": 0.02,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 3
+    },
+    {
+      "pass": 1,
+      "axis": "minimum_planning_speed_mps",
+      "winner_score": 4.392794717754425,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.4,
+        "local_goal_novelty_weight": 0.02,
+        "local_goal_clearance_weight": 0.02,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 2
+    },
+    {
+      "pass": 1,
+      "axis": "rollout_shape",
+      "winner_score": 4.392794717754425,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.4,
+        "local_goal_novelty_weight": 0.02,
+        "local_goal_clearance_weight": 0.02,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 2
+    },
+    {
+      "pass": 1,
+      "axis": "localization_degraded_speed_scale",
+      "winner_score": 4.392794717754425,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.02,
+        "local_goal_clearance_weight": 0.02,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 3
+    },
+    {
+      "pass": 1,
+      "axis": "local_goal_forward_weight",
+      "winner_score": 4.392794717754425,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.02,
+        "local_goal_clearance_weight": 0.02,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 3
+    },
+    {
+      "pass": 1,
+      "axis": "local_goal_novelty_weight",
+      "winner_score": 4.392794717754425,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.02,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 3
+    },
+    {
+      "pass": 1,
+      "axis": "local_goal_clearance_weight",
+      "winner_score": 4.781986062431545,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.15,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 2
+    },
+    {
+      "pass": 1,
+      "axis": "smoothness_weight",
+      "winner_score": 4.781986062431545,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.15,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.1,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 3
+    },
+    {
+      "pass": 1,
+      "axis": "novelty_weight",
+      "winner_score": 4.781986062431545,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.15,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.18,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 3
+    },
+    {
+      "pass": 1,
+      "axis": "localization_observability_weight",
+      "winner_score": 4.781986062431545,
+      "winner": {
+        "command_max_v_mps": 0.35,
+        "command_max_omega_rad_s": 1.4,
+        "minimum_planning_speed_mps": 0.19,
+        "rollout_linear_samples": 6,
+        "rollout_angular_samples": 9,
+        "localization_degraded_speed_scale": 0.7,
+        "local_goal_novelty_weight": 0.65,
+        "local_goal_clearance_weight": 0.15,
+        "local_goal_forward_weight": 0.02,
+        "smoothness_weight": 0.2,
+        "novelty_weight": 0.18,
+        "localization_observability_weight": 0.2
+      },
+      "evaluated": 3
+    }
+  ],
+  "limitations": [
+    "Synthetic L5-L9 tuning does not replace live MCAP/evidence acceptance.",
+    "L0-L4 sensor/localization dynamics and L10-L12 actuator/safety dynamics are not simulated here.",
+    "The tuner never changes speed_map or encoder reliability authority."
+  ]
+}
