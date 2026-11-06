@@ -1,0 +1,14 @@
+--- a/solvers/ceres_solver.cpp
++++ b/solvers/ceres_solver.cpp
+@@ -171,7 +171,10 @@
+   options_.max_num_consecutive_invalid_steps = 3;
+   options_.max_consecutive_nonmonotonic_steps =
+     options_.max_num_consecutive_invalid_steps;
+-  options_.num_threads = 50;
++  options_.num_threads = 1;
++  RCLCPP_INFO(
++    node->get_logger(),
++    "CeresSolver: R2B4 solver thread limit: %d", options_.num_threads);
+   options_.use_nonmonotonic_steps = true;
+   options_.jacobi_scaling = true;
+ 

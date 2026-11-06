@@ -25,6 +25,7 @@ def _paths(root: Path) -> dict[str, Path]:
     return {"work": work, "state": work / "supervisor.json",
             "bridge": work / "bridge_status.json", "socket": root / "runtime" / "slam_toolbox.sock",
             "prefix": root / "runtime" / "deps" / "slam-toolbox",
+            "solver": root / "runtime" / "deps" / "slam-toolbox-solver",
             "params": root / "conf" / "slam_toolbox.yaml", "maps": work / "maps"}
 
 
@@ -52,6 +53,13 @@ def _process_start(pid: int) -> str | None:
         return None if fields[0] == "Z" else fields[19]
     except (OSError, IndexError):
         return None
+
+
+def _resident_bytes(pid: int) -> int:
+    try:
+        return int(Path(f"/proc/{pid}/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, ValueError, IndexError):
+        return 0
 
 
 def _owned_supervisor(state: dict, root: Path) -> bool:
@@ -90,6 +98,8 @@ def _ros_environment(root: Path, prefix: Path) -> dict[str, str]:
                              str(prefix), str(prefix / "bin" / "python"), str(setup) if setup else ""],
                             env=env, capture_output=True, text=True, timeout=10, check=True)
     env = json.loads(result.stdout)
+    overlay = root / "runtime" / "deps" / "slam-toolbox-solver"
+    env["AMENT_PREFIX_PATH"] = str(overlay) + os.pathsep + env.get("AMENT_PREFIX_PATH", "")
     env.update({"PYTHONPATH": str(root) + os.pathsep + env.get("PYTHONPATH", ""),
                 "ROS_LOCALHOST_ONLY": "1", "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
                 "ROS_DOMAIN_ID": "74", "ROS_LOG_DIR": str(root / "runtime" / "slam_toolbox" / "ros_logs"),
@@ -117,6 +127,7 @@ def start(root: Path) -> dict:
             return status(root)
         for dependency in (paths["prefix"] / "bin" / "python",
                            paths["prefix"] / "lib" / "slam_toolbox" / "async_slam_toolbox_node",
+                           paths["solver"] / "lib" / "libr2b4_ceres_solver_plugin.so",
                            paths["params"]):
             if not dependency.is_file():
                 raise RuntimeError(f"SLAM dependency/configuration missing: {dependency}")
@@ -206,6 +217,9 @@ def _supervise(root: Path) -> int:
             cpus = allowed - set(control)
         if not cpus:
             raise RuntimeError("No CPU available outside the configured control CPU")
+        # The sidecar has one compute thread and a few I/O threads. Bound its
+        # total schedulable CPU capacity as well as its priority.
+        cpus = {min(cpus)}
         os.sched_setaffinity(0, cpus)
         state["cpus"] = sorted(cpus)
         env = _ros_environment(root, paths["prefix"])
@@ -229,6 +243,8 @@ def _supervise(root: Path) -> int:
             failed = next((child for child in children if child.poll() is not None), None)
             if failed is not None:
                 raise RuntimeError(f"SLAM child exited: pid={failed.pid} exit={failed.returncode}")
+            if sum(_resident_bytes(child.pid) for child in children) > 768 * 1024 * 1024:
+                raise RuntimeError("SLAM resident memory budget exceeded (768 MiB)")
             if state["state"] == "STARTING":
                 if paths["socket"].exists():
                     state["state"] = "RUNNING"
