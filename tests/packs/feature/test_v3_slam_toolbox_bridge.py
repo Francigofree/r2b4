@@ -6,7 +6,7 @@ import math
 import pytest
 
 from v3.adapters.slam_toolbox_transport import SlamOdometryPacket, SlamScanPacket
-from v3.slam_toolbox_bridge import MAX_ODOM_BRACKET_NS, align_scan
+from v3.slam_toolbox_bridge import MAX_ODOM_BRACKET_NS, align_scan, conservative_covariance
 
 
 MEASURED_NS = 2_000_000_000
@@ -72,3 +72,72 @@ def test_large_integer_measurement_clock_keeps_exact_bracket_selection():
     before = _odometry(monotonic_ns=measured-1, x_m=0.)
     after = _odometry(monotonic_ns=measured+3, x_m=4.)
     assert align_scan(scan, [before, after]).x_m == pytest.approx(1.)
+
+
+def _covariance(matrix):
+    result = [0.] * 36
+    for index, value in zip((0, 1, 5, 6, 7, 11, 30, 31, 35), matrix):
+        result[index] = value
+    return result
+
+
+def test_identity_first_scan_uncertainty_is_preserved_without_clipping():
+    assert conservative_covariance(_covariance((1., 0., 0., 0., 1., 0., 0., 0., 1.))) == (1., 1., 1.)
+
+
+@pytest.mark.parametrize("matrix", (
+    (0., 0., 0., 0., 1., 0., 0., 0., 1.),
+    (1., 0., 0., 0., -1., 0., 0., 0., 1.),
+    (1., math.nan, 0., math.nan, 1., 0., 0., 0., 1.),
+    (1., 0., 0., 0., math.inf, 0., 0., 0., 1.),
+    (1., .1, 0., .2, 1., 0., 0., 0., 1.),
+    (1., 1.01, 0., 1.01, 1., 0., 0., 0., 1.),
+    # Every 2x2 principal minor is positive, but the 3x3 determinant is negative.
+    (1., -.9, -.9, -.9, 1., -.9, -.9, -.9, 1.),
+))
+def test_nonphysical_covariance_is_rejected(matrix):
+    with pytest.raises(ValueError):
+        conservative_covariance(_covariance(matrix))
+
+
+def test_correlated_covariance_diagonal_bound_dominates_full_matrix():
+    matrix = (.04, .01, -.02, .01, .09, .03, -.02, .03, .16)
+    bound = conservative_covariance(_covariance(matrix))
+    assert bound == pytest.approx((.07, .13, .21))
+    # Include directions whose uncertainty is understated by dropping xy/yaw.
+    for vector in ((1., 1., 1.), (1., -1., 1.), (1., 0., -1.), (0., 1., 1.)):
+        full = sum(vector[row] * matrix[3*row+column] * vector[column]
+                   for row in range(3) for column in range(3))
+        conservative = sum(bound[row] * vector[row]**2 for row in range(3))
+        assert conservative >= full - 1e-15
+
+
+@pytest.mark.parametrize("scale", (1e-200, 1e-12, 1., 1e200))
+def test_psd_validation_is_scale_independent_and_accepts_singular_covariance(scale):
+    # Perfectly correlated x/y is semidefinite rather than definite.
+    matrix = tuple(scale*value for value in (1., 1., 0., 1., 1., 0., 0., 0., 1.))
+    bound = conservative_covariance(_covariance(matrix))
+    expected = (2*scale, 2*scale, scale)
+    assert bound == pytest.approx(expected, rel=1e-12, abs=0.)
+    assert all(actual >= lower for actual, lower in zip(bound, expected))
+
+
+def test_roundoff_asymmetry_is_accepted_and_larger_cross_term_bounds_both_rows():
+    covariance = _covariance((1., .2, 0., .2+1e-9, 1., 0., 0., 0., 1.))
+    bound = conservative_covariance(covariance)
+    assert bound[0] >= 1 + covariance[1]
+    assert bound[1] >= 1 + covariance[6]
+
+
+def test_unequal_scales_do_not_round_cross_term_out_of_upper_bound():
+    covariance = _covariance((1e-200, .5, 0., .5, 1e200, 0., 0., 0., 1.))
+    bound = conservative_covariance(covariance)
+    assert bound[0] > .5
+    assert bound[1] > 1e200
+    assert bound[2] == 1.
+
+
+@pytest.mark.parametrize("invalid", ([], [0.] * 35, None))
+def test_covariance_schema_is_validated_before_indexing(invalid):
+    with pytest.raises(ValueError):
+        conservative_covariance(invalid)

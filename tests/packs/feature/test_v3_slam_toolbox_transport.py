@@ -214,6 +214,7 @@ def test_slam_lineage_survives_backend_source_and_canonical_capture_encoding():
     class Port:
         def get_matcher_result(self): return result
         def get_raw_scan_snapshot(self): return raw
+        def stop(self): pass
         def get_runtime_status(self):
             return dict(matcher_contract_id=SLAM_CONTRACT_ID,
                 matcher_confidence_model=SLAM_CONFIDENCE_MODEL,

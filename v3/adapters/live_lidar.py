@@ -638,12 +638,15 @@ class NativeLidarSource:
                     kind="lidar_matcher_diagnostics",
                     sequence=reading.revision,
                     captured_monotonic_ns=reading.captured_monotonic_ns,
-                    values=(
+                    values=tuple(
+                        DataField(name, value) for name, value in (
+                            ("matcher_contract_id", diagnostics.matcher_contract_id),
+                            ("slam_session_id", diagnostics.slam_session_id),
+                            ("slam_generation", diagnostics.slam_generation),
+                            ("slam_bridge_generation", diagnostics.slam_bridge_generation),
+                        ) if value is not None
+                    ) + (
                         DataField("candidate_id", diagnostics.candidate_id),
-                        DataField("matcher_contract_id", diagnostics.matcher_contract_id),
-                        DataField("slam_session_id", diagnostics.slam_session_id),
-                        DataField("slam_generation", diagnostics.slam_generation),
-                        DataField("slam_bridge_generation", diagnostics.slam_bridge_generation),
                         DataField(
                             "source_raw_scan_id",
                             diagnostics.source_raw_scan_id,

@@ -66,6 +66,60 @@ def align_scan(scan: SlamScanPacket, history) -> ScanPose | None:
     return None
 
 
+def conservative_covariance(covariance) -> tuple[float, float, float]:
+    """Validate planar ROS covariance and bound its full correlated matrix.
+
+    Positive diagonal scaling produces a unit-diagonal correlation matrix,
+    making the symmetry/minor tolerances independent of variance magnitude.
+    Absolute row sums provide a diagonal upper bound in the PSD ordering;
+    dropping cross-covariances would not provide that guarantee.
+    """
+    try:
+        if len(covariance) != 36:
+            raise ValueError("SLAM covariance must contain 36 ROS entries")
+        planar = tuple(float(covariance[index]) for index in (0, 1, 5, 6, 7, 11, 30, 31, 35))
+    except (TypeError, IndexError, OverflowError) as exc:
+        raise ValueError("SLAM covariance must contain finite numeric entries") from exc
+    if any(not math.isfinite(value) for value in planar):
+        raise ValueError("SLAM planar covariance must be finite")
+    diagonal = planar[0], planar[4], planar[8]
+    if min(diagonal) <= 0:
+        raise ValueError("SLAM covariance diagonal must be positive")
+    roots = tuple(math.sqrt(value) for value in diagonal)
+    correlations = []
+    envelopes = []
+    for row, column in ((0, 1), (0, 2), (1, 2)):
+        forward, reverse = planar[3*row+column], planar[3*column+row]
+        large, small = max(roots[row], roots[column]), min(roots[row], roots[column])
+        normalized_forward, normalized_reverse = (forward / large) / small, (reverse / large) / small
+        if (not math.isfinite(normalized_forward) or not math.isfinite(normalized_reverse)
+                or abs(normalized_forward-normalized_reverse)
+                > 1e-7 * max(1., abs(normalized_forward), abs(normalized_reverse))):
+            raise ValueError("SLAM covariance must be symmetric")
+        correlation = (normalized_forward + normalized_reverse) / 2
+        if not math.isfinite(correlation) or 1 - correlation*correlation < -1e-10:
+            raise ValueError("SLAM covariance has a negative principal minor")
+        correlations.append(correlation)
+        envelopes.append(max(abs(forward), abs(reverse)))
+    xy, xyaw, yyaw = correlations
+    determinant = 1 + 2*xy*xyaw*yyaw - xy*xy - xyaw*xyaw - yyaw*yyaw
+    if determinant < -1e-10:
+        raise ValueError("SLAM covariance is not positive semidefinite")
+    exy, exyaw, eyyaw = envelopes
+    try:
+        rows = ((diagonal[0], exy, exyaw), (diagonal[1], exy, eyyaw),
+                (diagonal[2], exyaw, eyyaw))
+        # A correctly rounded sum can still round downward. With strongly
+        # unequal scales that could erase a cross-term from the upper bound.
+        bounded = tuple(math.nextafter(math.fsum(row), math.inf) if any(row[1:]) else row[0]
+                        for row in rows)
+    except OverflowError as exc:
+        raise ValueError("SLAM covariance bound overflow") from exc
+    if any(not math.isfinite(value) for value in bounded):
+        raise ValueError("SLAM covariance bound must be finite")
+    return bounded
+
+
 def _write_status(path: Path, value: dict) -> None:
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(value, sort_keys=True, allow_nan=False) + "\n")
@@ -153,11 +207,12 @@ def run(args) -> int:
         p = message.pose.pose.position
         c = message.pose.covariance
         try:
+            variance_x, variance_y, variance_yaw = conservative_covariance(c)
             # SLAM Toolbox publishes Karto GetCorrectedPose, the robot base
             # pose; the laser extrinsics have already been applied by Karto.
             result = SlamPosePacket(scan.session_id, scan.source_sequence,
                 scan.measurement_ns, aligned.generation, p.x, p.y,
-                math.atan2(2*q.w*q.z, 1 - 2*q.z*q.z), c[0], c[7], c[35],
+                math.atan2(2*q.w*q.z, 1 - 2*q.z*q.z), variance_x, variance_y, variance_yaw,
                 bridge_generation)
             ingress.sendto(encode_pose(result), address)
         except (ValueError, OSError):
@@ -167,7 +222,8 @@ def run(args) -> int:
         state["last_pose_measurement_ns"] = scan.measurement_ns
         state["last_pose_sequence"] = scan.source_sequence
         state["last_pose"] = [p.x, p.y, result.yaw_rad]
-        state["last_pose_covariance"] = [c[0], c[7], c[35]]
+        state["last_pose_covariance"] = [variance_x, variance_y, variance_yaw]
+        state["last_pose_source_covariance"] = [float(c[index]) for index in (0, 1, 5, 6, 7, 11, 30, 31, 35)]
         state["max_pose_age_ns"] = max(state["max_pose_age_ns"], age)
 
     def map_callback(message):
@@ -230,7 +286,7 @@ def run(args) -> int:
                         state["generation"] = packet.generation
                     elif state["generation"] != packet.generation:
                         raise RuntimeError("ODOMETRY_GENERATION_CHANGED_RESTART_SLAM")
-                    if 0 <= now - packet.monotonic_ns <= 2_000_000_000:
+                    if 0 <= time.monotonic_ns() - packet.monotonic_ns <= 2_000_000_000:
                         if not history or packet.monotonic_ns > history[-1].monotonic_ns:
                             history.append(packet)
                 else:
