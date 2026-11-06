@@ -138,4 +138,3 @@ A helyi mérési/evidence artifactok:
 
 Ezek fejlesztői diagnosztikai outputok; a `/tmp` tartalma nem tartós regressziós
 követelmény vagy új workflow authority.
- 
