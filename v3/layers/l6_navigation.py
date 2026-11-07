@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Protocol
 
-from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest, TrajectoryRolloutResult
+from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest, TrajectoryRolloutResult, GlobalPlanStatus
 from v3.contracts.temporal import source_is_stale
 from v3.wheel_motion import WheelMotionLimits
 
@@ -1513,6 +1513,7 @@ class TrajectoryNavigator:
                 local_goal,
                 mission.constraints.max_v_mps,
                 mission.constraints.max_omega_rad_s,
+                global_goal=(mission.target_pose if mission.target_frame_id != LOCAL_FRAME_ID else None),
             )
         if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
             return (self._local_continuation(mission, estimate, world)
@@ -2679,6 +2680,7 @@ class TrajectoryNavigator:
         alternate_goals: tuple[Waypoint, ...] = (),
         select_local_goal: bool = False,
         explore_preferences: ExplorePreferences | None = None,
+        global_goal: Waypoint | None = None,
     ) -> None:
         if estimate.localization_quality.local_translation is QualityState.DEGRADED or estimate.localization_quality.heading is QualityState.DEGRADED:
             max_v_mps = self._config.wheel_limits.degraded_linear_cap(
@@ -2696,6 +2698,7 @@ class TrajectoryNavigator:
             goal_handoff_ns=self._goal_handoff_ns(),
             excluded_exit_mask=((self._explore_reachable_exit_mask or 0)
                                 if goal_selection_reason == "EXHAUSTED_EXIT_PROBE" else 0),
+            global_goal=global_goal,
         )
         backend = self._rollout_backend
         # Direct/replay mode computes the identical kernel synchronously.
@@ -2873,6 +2876,21 @@ class TrajectoryNavigator:
                 selection_reason = "NEW_EXIT_RETRY"
         goal = result.selected_goal or request.goal
         options = result.goal_options if request.select_local_goal else (request.goal, *request.alternate_goals)
+        guidance = result.global_guidance
+        if guidance is not None:
+            if (request.global_goal is None or guidance.source_context != request.context
+                    or guidance.frame_id != request.world.frame_id
+                    or guidance.odom_generation != request.estimate.localization_quality.generation
+                    or guidance.transform_revision != request.estimate.transform_revision):
+                raise RuntimeError("ASYNC_L6_GLOBAL_GUIDANCE_LINEAGE_MISMATCH")
+            if guidance.status is GlobalPlanStatus.READY:
+                if (guidance.local_goal != result.selected_goal
+                        or math.hypot(goal.x_m-request.estimate.x_m, goal.y_m-request.estimate.y_m)
+                        > self._config.local_goal_distance_m + 1e-6):
+                    raise RuntimeError("ASYNC_L6_GLOBAL_GUIDANCE_GOAL_MISMATCH")
+                options = (goal,)
+            elif any(candidate.progress_viable for candidate in result.trajectory_candidates):
+                raise RuntimeError("ASYNC_L6_GLOBAL_GUIDANCE_FAILURE_WITH_MOTION")
         recovery_without_exit = False
         if request.select_local_goal and not options:
             viable = tuple(c for c in result.trajectory_candidates if not c.collision and c.progress_viable)

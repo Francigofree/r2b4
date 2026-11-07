@@ -468,16 +468,16 @@ class NativeLatestLidarBackend:
             )
         )
         r_scale = self._config.pose_r_scale
+        pose_variance = None
         if self._config.global_backend == "slam_toolbox":
-            # L3 represents covariance with its canonical base variances and
-            # one scale/quality factor. Conservatively dominate every diagonal
-            # supplied by the SLAM edge without changing the estimator schema.
+            # Preserve the edge's independent planar uncertainty axes. A single
+            # worst-axis scale would also weaken well-observed x/y or yaw.
             covariance = tuple(_finite(summary.get(key), key) for key in (
                 "variance_x_m2", "variance_y_m2", "variance_yaw_rad2"))
             if any(value <= 0 for value in covariance):
                 raise ValueError("SLAM covariance must be positive")
-            r_scale = max(r_scale, *(value / base for value, base in zip(
-                covariance, self._config.pose_measurement_variance)))
+            pose_variance = tuple(max(value, base * r_scale) for value, base in zip(
+                covariance, self._config.pose_measurement_variance))
         pose = LidarPoseReading(
             x_m=_finite(summary.get("lidar_pose_x"), "lidar_pose_x"),
             y_m=_finite(summary.get("lidar_pose_y"), "lidar_pose_y"),
@@ -485,6 +485,7 @@ class NativeLatestLidarBackend:
                 _finite(summary.get("lidar_pose_theta"), "lidar_pose_theta")
             ),
             r_scale=r_scale,
+            pose_variance=pose_variance,
         )
         quality_value = summary.get("matcher_quality")
         if quality_value is None:

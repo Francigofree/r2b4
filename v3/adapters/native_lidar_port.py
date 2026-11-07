@@ -238,6 +238,61 @@ class TimedPoseReference:
         return (float(self.x_m), float(self.y_m), float(self.yaw_rad))
 
 
+def rotation_deskew_points(
+    points: tuple[RplidarPoint, ...], *, scan_start_ns: int, scan_end_ns: int,
+    measurement_ns: int, pose_provider: Callable[[int], TimedPoseReference | None],
+    lidar_x_m: float, lidar_y_m: float,
+) -> tuple[tuple[RplidarPoint, ...], str]:
+    """Rotate a scan to its midpoint using bracketed local heading only.
+
+    The source times are host packet receipt times, not a sensor hardware
+    clock. Serial batching therefore limits accuracy. Missing timing/heading
+    retains the complete physical geometry; it never invents free rays or
+    extrapolates a pose. Translation is deliberately not corrected with wheel
+    odometry, preserving the relative matcher's independent slip evidence.
+    """
+    if not points or any(point.received_monotonic_ns is None for point in points):
+        return points, "POINT_TIMING_UNAVAILABLE"
+    times = tuple(point.received_monotonic_ns for point in points)
+    if (scan_end_ns - scan_start_ns > MATCHER_MAX_AGE_NS
+            or any(not scan_start_ns <= value <= scan_end_ns for value in times)):
+        return points, "POINT_TIMING_INVALID"
+    first_ns, last_ns = min(times), max(times)
+    references = {value: pose_provider(value) for value in (first_ns, measurement_ns, last_ns)}
+    if any(value is None for value in references.values()):
+        return points, "HEADING_BRACKET_UNAVAILABLE"
+    midpoint_yaw = references[measurement_ns].yaw_rad
+    def angle_delta(yaw, reference):
+        return math.atan2(math.sin(yaw-reference), math.cos(yaw-reference))
+    before = angle_delta(references[first_ns].yaw_rad, midpoint_yaw)
+    after = angle_delta(references[last_ns].yaw_rad, midpoint_yaw)
+    # A generation reset or a global-frame jump cannot serve as scan motion.
+    for delta, duration in ((before, abs(measurement_ns-first_ns)),
+                            (after, abs(last_ns-measurement_ns))):
+        if abs(delta) > 3.0 * duration / 1e9 + 0.01:
+            return points, "HEADING_DISCONTINUITY"
+    corrected = []
+    for point in points:
+        source_ns = point.received_monotonic_ns
+        if source_ns < measurement_ns:
+            delta = before * (measurement_ns-source_ns) / (measurement_ns-first_ns)
+        elif source_ns > measurement_ns:
+            delta = after * (source_ns-measurement_ns) / (last_ns-measurement_ns)
+        else:
+            delta = 0.0
+        # Rotate at the differential-drive origin, including the sensor lever
+        # arm, then re-express as a laser-origin polar return for existing users.
+        angle = -math.radians(point.angle_deg)
+        x = point.distance_m*math.cos(angle) + lidar_x_m
+        y = point.distance_m*math.sin(angle) + lidar_y_m
+        c, s = math.cos(delta), math.sin(delta)
+        laser_x, laser_y = c*x-s*y-lidar_x_m, s*x+c*y-lidar_y_m
+        corrected.append(RplidarPoint(
+            (-math.degrees(math.atan2(laser_y, laser_x))) % 360.0,
+            math.hypot(laser_x, laser_y), point.quality, measurement_ns))
+    return tuple(corrected), "APPLIED"
+
+
 @dataclass(frozen=True, slots=True)
 class NativeMatcherResult:
     matcher_result_id: int
@@ -593,6 +648,15 @@ class NativeLidarPort:
                 alignment_delta_ns = (
                     pose_reference.monotonic_ns - scan.measurement_monotonic_ns
                 )
+                matcher_points = scan.points
+                if self._config.global_backend == "slam_toolbox":
+                    matcher_points, _ = rotation_deskew_points(
+                        scan.points, scan_start_ns=scan.scan_start_monotonic_ns,
+                        scan_end_ns=scan.scan_end_monotonic_ns,
+                        measurement_ns=scan.measurement_monotonic_ns,
+                        pose_provider=self._pose_provider,
+                        lidar_x_m=self._config.matcher.lidar_x_offset_m,
+                        lidar_y_m=self._config.matcher.lidar_y_offset_m)
                 packet: dict[str, object] = {
                     "kind": "scan",
                     "matcher_contract_id": MATCHER_CONTRACT_ID,
@@ -617,7 +681,7 @@ class NativeLidarPort:
                             "dist": point.distance_m * 1_000.0,
                             "quality": point.quality,
                         }
-                        for point in scan.points
+                        for point in matcher_points
                     ],
                     "driver_status": dict(self._driver.get_runtime_status()),
                 }

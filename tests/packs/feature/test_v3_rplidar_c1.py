@@ -34,6 +34,7 @@ def test_native_driver_recovers_alignment_and_publishes_only_complete_scan():
     assert scan.measurement_monotonic_ns == 950000000
     assert scan.scan_start_monotonic_ns <= scan.measurement_monotonic_ns <= scan.scan_end_monotonic_ns
     assert tuple(((point.angle_deg, point.distance_m) for point in scan.points)) == ((0.0, 1.0), (90.0, 1.5))
+    assert tuple(point.received_monotonic_ns for point in scan.points) == (900000000, 930000000)
     assert driver.get_runtime_status()['invalid_packet_count'] == 1
 
 def test_mid_revolution_join_waits_for_two_boundaries_before_first_scan():

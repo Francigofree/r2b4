@@ -215,7 +215,7 @@ class SlamToolboxSender:
         self._reply_address = (None if reply_session_id is None
                                else f"\0r2b4-slam-{os.getpid()}-{reply_session_id}")
         self._next_probe_ns = 0
-        self._last_scan_bucket: int | None = None
+        self._last_scan_measurement_ns: int | None = None
         self.active = False
         self.sent_packets = 0
         self.dropped_packets = 0
@@ -254,10 +254,10 @@ class SlamToolboxSender:
                      maximum_age_ns: int) -> bool:
         if snapshot is None or not self.available(now_ns):
             return False
-        bucket = snapshot.measurement_monotonic_ns // SCAN_PERIOD_NS
-        if self._last_scan_bucket is not None and bucket <= self._last_scan_bucket:
+        measured = snapshot.measurement_monotonic_ns
+        if (self._last_scan_measurement_ns is not None
+                and measured-self._last_scan_measurement_ns < SCAN_PERIOD_NS):
             return False
-        self._last_scan_bucket = bucket
         if snapshot.health != "OK" or not 0 <= now_ns-snapshot.measurement_monotonic_ns <= maximum_age_ns:
             self.dropped_packets += 1
             return False
@@ -270,7 +270,10 @@ class SlamToolboxSender:
         except (ValueError, TypeError, OverflowError, struct.error):
             self.dropped_packets += 1
             return False
-        return self._send(payload)
+        sent = self._send(payload)
+        if sent:
+            self._last_scan_measurement_ns = measured
+        return sent
 
     def publish_odometry(self, packet: SlamOdometryPacket, *, now_ns: int) -> bool:
         if not self.available(now_ns):

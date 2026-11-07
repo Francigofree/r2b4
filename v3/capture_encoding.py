@@ -266,6 +266,7 @@ def encode_raw_lidar_snapshot(snapshot: object, point_limit: int) -> dict[str, o
 
     selected_points = points[:point_limit]
     compact_points: list[list[float | int]] = []
+    point_receipt_times: list[int | None] = []
     for point in selected_points:
         angle_deg = getattr(point, "angle_deg", None)
         distance_m = getattr(point, "distance_m", None)
@@ -282,6 +283,11 @@ def encode_raw_lidar_snapshot(snapshot: object, point_limit: int) -> dict[str, o
         ):
             raise CaptureEncodingError("raw lidar point has an invalid native contract")
         compact_points.append([float(angle_deg), float(distance_m), quality])
+        received = getattr(point, "received_monotonic_ns", None)
+        if received is not None and (type(received) is not int
+                or not scan_start_ns <= received <= scan_end_ns):
+            raise CaptureEncodingError("raw lidar point receipt timestamp is outside the scan")
+        point_receipt_times.append(received)
 
     return {
         "revision": revision,
@@ -294,6 +300,7 @@ def encode_raw_lidar_snapshot(snapshot: object, point_limit: int) -> dict[str, o
         "points_truncated": len(selected_points) != len(points),
         "point_encoding": "ANGLE_DEG_DISTANCE_M_QUALITY",
         "points": compact_points,
+        "point_received_monotonic_ns": point_receipt_times,
         "summary": encode_value(summary),
     }
 

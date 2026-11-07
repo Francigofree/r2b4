@@ -110,6 +110,7 @@ def command_entries() -> list[dict[str, object]]:
                     ("commands", [], "r commands [--json]", "Teljes, source-ból követett parancskatalógus."),
                     ("maplive", [], "r maplive [--hz 5]", "Passzív V3 L4 ASCII mini térkép."),
                     ("slam", [], "r slam {start|status|stop|save} [--output NAME]", "SLAM Toolbox térképezés és térképmentés."),
+                    ("nav2", [], "r nav2 {start|status|stop}", "Nav2 globális Planner Server; V3 helyi mozgásvezérléssel."),
                 ))
     return sorted(rows, key=lambda row: row["name"])
 
@@ -380,6 +381,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args[0] == "slam":
             from tools.slam_toolbox import main as slam_main
             return slam_main(args[1:], project_root=root)
+        if args[0] == "nav2":
+            from tools.nav2_planner import main as nav2_main
+            return nav2_main(args[1:], project_root=root)
         if args[0] == "evi":
             from tools.mcap_evidence.cli import main as evidence_main
             return evidence_main(args[1:], project_root=root)

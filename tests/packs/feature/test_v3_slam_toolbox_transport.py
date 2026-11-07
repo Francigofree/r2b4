@@ -154,6 +154,25 @@ def test_full_socket_drops_without_waiting_and_scan_health_is_independent(tmp_pa
         server.close()
 
 
+def test_scan_throttle_uses_measurement_spacing_across_clock_bucket_boundary(tmp_path):
+    path = tmp_path / "slam.sock"
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    server.bind(str(path))
+    sender = SlamToolboxSender(path)
+    options = dict(session_id=11, source_pid=22, minimum_range_m=.08,
+                   maximum_range_m=12., lidar_x_m=0., lidar_y_m=0., maximum_age_ns=250_000_000)
+    try:
+        assert sender.publish_scan(_scan(7, 2_190_000_000), now_ns=2_230_000_000, **options)
+        # Adjacent 200 ms clock buckets are only 20 ms apart here. Exporting
+        # both caused SLAM Toolbox's 180 ms gate to silently drop the latter.
+        assert not sender.publish_scan(_scan(8, 2_210_000_000), now_ns=2_250_000_000, **options)
+        assert sender.publish_scan(_scan(9, 2_390_000_000), now_ns=2_430_000_000, **options)
+        assert sender.sent_packets == 2
+    finally:
+        sender.close()
+        server.close()
+
+
 @pytest.mark.parametrize("change,reason", [
     ({"session_id": 12}, "SESSION"), ({"source_sequence": 8}, "UNKNOWN_SCAN"),
     ({"measurement_ns": 2_000_000_001}, "UNKNOWN_SCAN"),

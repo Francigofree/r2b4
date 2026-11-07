@@ -96,6 +96,7 @@ class LidarPoseReading:
     y_m: float
     yaw_rad: float
     r_scale: float = 1.0
+    pose_variance: tuple[float, float, float] | None = None
 
     def __post_init__(self) -> None:
         _finite(self.x_m, "x_m")
@@ -104,6 +105,11 @@ class LidarPoseReading:
         r_scale = _finite(self.r_scale, "r_scale")
         if not 0.05 <= r_scale <= 20.0:
             raise ValueError("r_scale must be within [0.05, 20]")
+        if self.pose_variance is not None:
+            if not isinstance(self.pose_variance, tuple) or len(self.pose_variance) != 3:
+                raise ValueError("pose_variance must contain three variances")
+            if any(_finite(value, "pose variance") <= 0 for value in self.pose_variance):
+                raise ValueError("pose variances must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -778,7 +784,12 @@ class NativeLidarSource:
                         DataField("yaw_rad", reading.pose.yaw_rad),
                         DataField("confidence", reading.confidence),
                         DataField("r_scale", reading.pose.r_scale),
-                    ),
+                    ) + (() if reading.pose.pose_variance is None else tuple(
+                        DataField(name, value)
+                        for name, value in zip((
+                            "variance_x_m2", "variance_y_m2", "variance_yaw_rad2",
+                        ), reading.pose.pose_variance)
+                    )),
                 )
             )
         return LiveDeviceSnapshot(context, health, tuple(samples))

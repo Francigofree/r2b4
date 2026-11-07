@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 import math
 
 from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest
+from v3.adapters.nav2_planner import compute_recorded_planner_result
 from v3.contracts import DeviceHealth, LifecycleState, TickContext
 from v3.engine import PipelineLayers, TickEngine, TickInputs, TickResult
 from v3.layers.l1_acquisition import acquire
@@ -543,7 +544,7 @@ class NativeControlComposition:
         event = inputs.planner_input
         request = self._navigation.pending_rollout_request
         if event is not None and event.result is not None and request is not None and event.request_context == request.context:
-            expected = TrajectoryRolloutComputer(self._planner_config).compute(request)
+            expected = compute_recorded_planner_result(self._planner_config, request, event.result)
             if event.result != expected:
                 raise ValueError("PLANNER_PURE_RESULT_MISMATCH")
 

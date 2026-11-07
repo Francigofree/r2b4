@@ -8,6 +8,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Protocol
 
@@ -29,6 +30,7 @@ from v3.composition.live_inputs import (
     LiveInputCompositionConfig,
 )
 from v3.adapters.recovering_l6_planner import RecoveringTrajectoryRolloutBackend
+from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
 from v3.adapters.process_encoder_backend import ProcessEncoderSource
 from v3.adapters.process_vision_port import ProcessVisionPort, UnavailableVisionPort
 from v3.composition.native_sensor_inputs import (
@@ -523,12 +525,21 @@ class NativeHardwareSensorOwner:
                 None,
             )
             if callable(publish_pose_reference):
+                # SLAM scan alignment uses continuous local odometry. Global
+                # map corrections must never become apparent motion within a
+                # scan. The native scan-to-map matcher retains its map prior.
+                lidar_config = getattr(self._lidar_port, "config", None)
+                scan_estimate = (
+                    estimate.in_local_frame()
+                    if getattr(lidar_config, "global_backend", None) == "slam_toolbox"
+                    else estimate
+                )
                 publish_pose_reference(
                     TimedPoseReference(
-                        estimate.context.monotonic_ns,
-                        estimate.x_m,
-                        estimate.y_m,
-                        estimate.yaw_rad,
+                        scan_estimate.context.monotonic_ns,
+                        scan_estimate.x_m,
+                        scan_estimate.y_m,
+                        scan_estimate.yaw_rad,
                     )
                 )
             publish_slam_odometry = getattr(self._lidar_port, "publish_slam_odometry", None)
@@ -793,6 +804,9 @@ def run_native_hardware_resident_control(
             rollout_backend = RecoveringTrajectoryRolloutBackend(
                 config.composition.live_control.control.navigation,
                 **({"recovery_policy": runtime_edges.planner_recovery, "process_config": runtime_edges.planner_process} if runtime_edges is not None else {}),
+                **({"backend_factory": partial(
+                    ProcessTrajectoryRolloutBackend, nav2_config=runtime_edges.nav2_planner,
+                )} if runtime_edges is not None and runtime_edges.nav2_planner is not None else {}),
                 worker_cpus=(affinity.planner_cpus if affinity.enabled else None),
                 strict_affinity=(affinity.strict if affinity.enabled else False),
             )

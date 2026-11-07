@@ -157,6 +157,7 @@ def run(args) -> int:
              "bridge_generation": bridge_generation, "ros_offset_ns": ros_offset_ns,
              "scans_received": 0, "scans_published": 0, "poses_received": 0,
              "poses_returned": 0, "rejected": 0, "superseded": 0,
+             "rejected_by_reason": {}, "last_rejection": None,
              "map_messages": 0, "map_frame": MAP_FRAME,
              "max_scan_age_ns": 0, "max_pose_age_ns": 0,
              "session_id": None, "generation": None, "error": None}
@@ -188,26 +189,41 @@ def run(args) -> int:
         ros_ns = monotonic_ns + ros_offset_ns
         message.header.stamp.sec, message.header.stamp.nanosec = divmod(ros_ns, 1_000_000_000)
 
+    def reject(reason):
+        state["rejected"] += 1
+        counts = state["rejected_by_reason"]
+        counts[reason] = counts.get(reason, 0) + 1
+        state["last_rejection"] = reason
+
     def pose_callback(message):
         state["poses_received"] += 1
         ros_ns = message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec
         context = associations.pop(ros_ns, None)
-        if context is None or message.header.frame_id != MAP_FRAME:
-            state["rejected"] += 1
+        if context is None:
+            reject("POSE_SCAN_ASSOCIATION_MISSING")
+            return
+        if message.header.frame_id != MAP_FRAME:
+            reject("POSE_FRAME_MISMATCH")
             return
         scan, aligned, address = context
         age = time.monotonic_ns() - scan.measurement_ns
         q = message.pose.pose.orientation
         norm = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w
-        if (not 0 <= age <= MAX_SOURCE_AGE_NS or not address
-                or not math.isfinite(norm) or abs(norm - 1.0) > 0.01
+        if not 0 <= age <= MAX_SOURCE_AGE_NS:
+            reject("POSE_MEASUREMENT_STALE")
+            return
+        if (not address or not math.isfinite(norm) or abs(norm - 1.0) > 0.01
                 or abs(q.x) > 0.01 or abs(q.y) > 0.01):
-            state["rejected"] += 1
+            reject("POSE_ORIENTATION_OR_REPLY_INVALID")
             return
         p = message.pose.pose.position
         c = message.pose.covariance
         try:
             variance_x, variance_y, variance_yaw = conservative_covariance(c)
+        except ValueError:
+            reject("POSE_COVARIANCE_INVALID")
+            return
+        try:
             # SLAM Toolbox publishes Karto GetCorrectedPose, the robot base
             # pose; the laser extrinsics have already been applied by Karto.
             result = SlamPosePacket(scan.session_id, scan.source_sequence,
@@ -215,8 +231,11 @@ def run(args) -> int:
                 math.atan2(2*q.w*q.z, 1 - 2*q.z*q.z), variance_x, variance_y, variance_yaw,
                 bridge_generation)
             ingress.sendto(encode_pose(result), address)
-        except (ValueError, OSError):
-            state["rejected"] += 1
+        except ValueError:
+            reject("POSE_VALUE_INVALID")
+            return
+        except OSError:
+            reject("POSE_REPLY_TRANSPORT_FAILED")
             return
         state["poses_returned"] += 1
         state["last_pose_measurement_ns"] = scan.measurement_ns
@@ -272,10 +291,10 @@ def run(args) -> int:
                 try:
                     packet = decode_packet(data)
                 except ValueError:
-                    state["rejected"] += 1
+                    reject("INGRESS_PACKET_INVALID")
                     continue
                 if not isinstance(packet, (SlamScanPacket, SlamOdometryPacket)):
-                    state["rejected"] += 1
+                    reject("INGRESS_PACKET_KIND_INVALID")
                     continue
                 if state["session_id"] is None:
                     state["session_id"] = packet.session_id
@@ -301,7 +320,7 @@ def run(args) -> int:
                 age = time.monotonic_ns() - scan.measurement_ns
                 aligned = align_scan(scan, history)
                 if age < 0 or age > MAX_SOURCE_AGE_NS:
-                    state["rejected"] += 1
+                    reject("SCAN_MEASUREMENT_STALE_OR_POSE_UNALIGNED")
                     pending = None
                 elif aligned is not None:
                     new_geometry = (len(scan.ranges_m), scan.minimum_range_m,

@@ -1,7 +1,9 @@
 """Bounded scan-to-scan submap registration, exclusively in the LiDAR worker.
 
-The preceding scan is a short lived submap. No global map, EKF pose or rolling
-obstacle map enters the registration, so its residual can detect wheel slip.
+The preceding scan is a short lived submap. Scans may be rotation-deskewed at
+the acquisition edge using bracketed local heading. No global map, absolute
+pose or wheel-translation prior enters this inter-scan registration, so its
+translation residual can detect wheel slip.
 """
 from __future__ import annotations
 

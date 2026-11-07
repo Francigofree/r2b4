@@ -34,6 +34,7 @@ from .native_lidar_port import (
     NativeRawLidarSnapshot,
     TimedPoseReference,
     open_native_lidar_port,
+    rotation_deskew_points,
 )
 from .rplidar_c1 import RplidarPoint
 from .slam_toolbox_transport import (
@@ -156,7 +157,8 @@ def _wire_raw(snapshot: NativeRawLidarSnapshot | None) -> object | None:
         snapshot.scan_end_monotonic_ns,
         snapshot.measurement_monotonic_ns,
         snapshot.health,
-        tuple((p.angle_deg, p.distance_m, p.quality) for p in snapshot.raw_scan),
+        tuple((p.angle_deg, p.distance_m, p.quality, p.received_monotonic_ns)
+              for p in snapshot.raw_scan),
         _plain(snapshot.summary),
         snapshot.observed_monotonic_ns,
     )
@@ -212,8 +214,9 @@ def _unwire_raw(value: object | None) -> NativeRawLidarSnapshot | None:
         measurement_monotonic_ns=int(measurement_ns),
         health=str(health),
         raw_scan=tuple(
-            RplidarPoint(float(angle), float(distance), int(quality))
-            for angle, distance, quality in points
+            RplidarPoint(float(point[0]), float(point[1]), int(point[2]),
+                         None if len(point) == 3 or point[3] is None else int(point[3]))
+            for point in points
         ),
         summary=dict(summary),
         observed_monotonic_ns=(None if observed_ns is None else int(observed_ns)),
@@ -339,7 +342,7 @@ class _SharedPoseHistory:
             return None
         before, after = poses[index - 1], poses[index]
         span = after.monotonic_ns - before.monotonic_ns
-        if span <= 0:
+        if not 0 < span <= 100_000_000:
             return None
         fraction = (monotonic_ns - before.monotonic_ns) / span
         yaw_delta = math.atan2(math.sin(after.yaw_rad - before.yaw_rad), math.cos(after.yaw_rad - before.yaw_rad))
@@ -440,6 +443,30 @@ def _lidar_owner_process_main(
         slam_socket_path, reply_session_id=slam_session_id if slam_enabled else None)
     slam_receiver = SlamLocalizationReceiver(slam_session_id, config.maximum_result_age_ns)
     slam_result = None
+    deskew_reason = "NO_SCAN"
+    deskew_applied_scans = 0
+    deskew_uncompensated_scans = 0
+
+    def derived_scan(raw):
+        nonlocal deskew_reason, deskew_applied_scans, deskew_uncompensated_scans
+        if raw is None or not slam_enabled:
+            return raw
+        from dataclasses import replace
+        points, deskew_reason = rotation_deskew_points(
+            raw.raw_scan, scan_start_ns=raw.scan_start_monotonic_ns,
+            scan_end_ns=raw.scan_end_monotonic_ns,
+            measurement_ns=raw.measurement_monotonic_ns,
+            pose_provider=pose_history.lookup,
+            lidar_x_m=config.matcher.lidar_x_offset_m,
+            lidar_y_m=config.matcher.lidar_y_offset_m)
+        deskew_applied_scans += int(deskew_reason == "APPLIED")
+        deskew_uncompensated_scans += int(deskew_reason != "APPLIED")
+        return replace(raw, raw_scan=points, summary=MappingProxyType({
+            **raw.summary, "rotation_deskew": deskew_reason,
+            "deskew_time_basis": "HOST_PACKET_RECEIPT",
+            "serial_chunk_wire_time_ns": math.ceil(
+                config.driver.read_chunk_size * 10 * 1e9 / config.driver.baudrate),
+        }))
 
     def publish_slam_scan(raw, now_ns):
         if slam_session_id:
@@ -489,6 +516,12 @@ def _lidar_owner_process_main(
                 slam_pose_reason=slam_receiver.last_reason,
                 slam_pose_accepted=slam_receiver.accepted_packets,
                 slam_pose_dropped=slam_receiver.dropped_packets,
+                rotation_deskew=deskew_reason,
+                rotation_deskew_applied_scans=deskew_applied_scans,
+                rotation_deskew_uncompensated_scans=deskew_uncompensated_scans,
+                rotation_deskew_time_basis="HOST_PACKET_RECEIPT",
+                serial_chunk_wire_time_ns=math.ceil(
+                    config.driver.read_chunk_size * 10 * 1e9 / config.driver.baudrate),
             )
         return status
 
@@ -524,11 +557,12 @@ def _lidar_owner_process_main(
             matcher_cpus=matcher_cpus, strict_affinity=strict_affinity,
         )
         initial_raw = port.get_raw_scan_snapshot()
+        initial_geometry = derived_scan(initial_raw)
         initial_matcher = slam_result if slam_enabled else port.get_matcher_result()
         initial_relative = port.get_relative_result()
         initial_status = runtime_status()
         control_raw = _wire_control_raw(
-            initial_raw,
+            initial_geometry,
             minimum_range_m=control_minimum_range_m,
             maximum_range_m=control_maximum_range_m,
             maximum_points=control_maximum_points,
@@ -544,7 +578,7 @@ def _lidar_owner_process_main(
             ),
         )
         publish_evidence(initial_raw, control_raw)
-        publish_slam_scan(initial_raw, time.monotonic_ns())
+        publish_slam_scan(initial_geometry, time.monotonic_ns())
         ready_event.set()
         last_raw_revision = int(getattr(initial_raw, "raw_scan_id", 0) or 0)
         last_matcher_revision = int(getattr(initial_matcher, "matcher_result_id", 0) or 0)
@@ -560,9 +594,10 @@ def _lidar_owner_process_main(
             relative_revision = int(getattr(relative, "source_sequence", 0) or 0)
             raw_changed = raw_revision != last_raw_revision
             if raw_changed and raw is not None:
-                publish_slam_scan(raw, now_ns)
+                geometry = derived_scan(raw)
+                publish_slam_scan(geometry, now_ns)
                 control_raw = _wire_control_raw(
-                    raw,
+                    geometry,
                     minimum_range_m=control_minimum_range_m,
                     maximum_range_m=control_maximum_range_m,
                     maximum_points=control_maximum_points,

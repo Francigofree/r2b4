@@ -19,6 +19,7 @@ from v3.adapters.camera_geometry import camera_geometry_config_from_mapping
 from v3.adapters.gpio_motor import GpioMotorFrameSinkConfig
 from v3.adapters.multirate_inputs import MultiRateInputConfig
 from v3.adapters.native_lidar_port import NativeLidarPortConfig
+from v3.adapters.nav2_planner import Nav2PlannerConfig
 from v3.adapters.recovering_l6_planner import PlannerRecoveryPolicy
 from v3.adapters.rplidar_c1 import RplidarC1Config
 from v3.capture_encoding import encode_value
@@ -149,10 +150,13 @@ class RuntimeEdgeConfig:
     lidar_process: LidarProcessConfig
     planner_process: PlannerProcessConfig
     pose_history_capacity: int
+    nav2_planner: Nav2PlannerConfig | None = None
 
     def __post_init__(self):
         if type(self.pose_history_capacity) is not int or self.pose_history_capacity <= 0:
             raise ValueError("pose_history_capacity must be a positive integer")
+        if self.nav2_planner is not None and not isinstance(self.nav2_planner, Nav2PlannerConfig):
+            raise TypeError("nav2_planner must be Nav2PlannerConfig or None")
 
 
 @dataclass(frozen=True, slots=True)

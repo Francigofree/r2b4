@@ -46,11 +46,16 @@ class _WorkResult:
     worker_completed_ns: int = 0
 
 
-def _worker_main(generation, config, request_queue, result_queue, worker_cpus, strict_affinity):
+def _worker_main(generation, config, request_queue, result_queue, worker_cpus, strict_affinity, nav2_config=None):
     try:
         if worker_cpus is not None:
             apply_process_cpuset(worker_cpus, role="l6-planner", strict=strict_affinity)
         computer = TrajectoryRolloutComputer(config)
+        if nav2_config is not None:
+            from v3.adapters.nav2_planner import Nav2PlannerClient, compute_with_guidance
+            global_planner = Nav2PlannerClient(nav2_config)
+        else:
+            global_planner = None
         result_queue.put(("ready", generation))
         while True:
             item = request_queue.get()
@@ -66,7 +71,11 @@ def _worker_main(generation, config, request_queue, result_queue, worker_cpus, s
                 continue
             started_ns = time.monotonic_ns()
             try:
-                result = computer.compute(item.request)
+                if global_planner is not None and item.request.global_goal is not None:
+                    guidance = global_planner.plan(item.request, config)
+                    result = compute_with_guidance(config, item.request, guidance, computer=computer)
+                else:
+                    result = computer.compute(item.request)
             except BaseException as exc:
                 completed_ns = time.monotonic_ns()
                 result_queue.put(_WorkResult(generation, item.request_id, None, f"{type(exc).__name__}:{exc}"[:256], started_ns, completed_ns))
@@ -96,7 +105,7 @@ class ProcessTrajectoryRolloutBackend:
         "_accepted_count", "_process_config",
     )
 
-    def __init__(self, config: NavigationConfig, *, worker_cpus: int | CpuSet | None = None, strict_affinity=True, ready_timeout_s, process_config: PlannerProcessConfig):
+    def __init__(self, config: NavigationConfig, *, worker_cpus: int | CpuSet | None = None, strict_affinity=True, ready_timeout_s, process_config: PlannerProcessConfig, nav2_config=None):
         if worker_cpus is not None:
             worker_cpus = normalize_cpus(worker_cpus)
         if type(strict_affinity) is not bool:
@@ -112,7 +121,7 @@ class ProcessTrajectoryRolloutBackend:
         self._result_queue = context.Queue(maxsize=self._process_config.result_buffer_capacity)
         self._process = context.Process(
             target=_worker_main,
-            args=(self._generation, config, self._request_queue, self._result_queue, worker_cpus, strict_affinity),
+            args=(self._generation, config, self._request_queue, self._result_queue, worker_cpus, strict_affinity, nav2_config),
             name="r2b4-l6plan",
             daemon=False,
         )

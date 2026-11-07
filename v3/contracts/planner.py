@@ -3,9 +3,48 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from enum import Enum
 from .base import TickContext
 from .messages import ExplorePreferences, RobotEstimate, WorldSnapshot, Waypoint, TrajectoryEvaluation
 from .async_runtime import CompletionTiming, WorkerIdentity
+
+
+class GlobalPlanStatus(str, Enum):
+    READY = "READY"
+    UNAVAILABLE = "UNAVAILABLE"
+    NO_PATH = "NO_PATH"
+    TIMEOUT = "TIMEOUT"
+    STALE = "STALE"
+    INVALID = "INVALID"
+
+
+@dataclass(frozen=True, slots=True)
+class GlobalPlanGuidance:
+    """Compact external suggestion; V3 still proves every local trajectory.
+
+    map_stamp_ns is the map publisher's ROS timestamp, not a physical scan
+    measurement. No map cells or complete ROS path cross the control boundary.
+    """
+
+    source_context: TickContext
+    status: GlobalPlanStatus
+    frame_id: str
+    odom_generation: int
+    transform_revision: int
+    local_goal: Waypoint | None = None
+    map_revision: int = 0
+    map_stamp_ns: int = 0
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_context, TickContext) or not isinstance(self.status, GlobalPlanStatus):
+            raise TypeError("global plan requires typed source and status")
+        if self.frame_id != "R2B4_ODOM_LOCAL":
+            raise ValueError("global guidance must use the odometry frame")
+        if any(type(value) is not int or value < 0 for value in (
+                self.odom_generation, self.transform_revision, self.map_revision, self.map_stamp_ns)):
+            raise ValueError("global plan lineage must be non-negative integers")
+        if (self.status is GlobalPlanStatus.READY) != isinstance(self.local_goal, Waypoint):
+            raise ValueError("only ready global guidance has a local goal")
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,12 +65,17 @@ class TrajectoryRolloutRequest:
     failed_goals: tuple[tuple[int, int, int], ...] = ()
     goal_handoff_ns: int = 0
     excluded_exit_mask: int = 0
+    # Original map-frame NAVIGATE target. Local Room Cruise never sets this.
+    global_goal: Waypoint | None = None
 
     def __post_init__(self) -> None:
         if self.estimate.context != self.context or self.world.context != self.context:
             raise ValueError("rollout request inputs must share one TickContext")
         if not isinstance(self.goal, Waypoint):
             raise TypeError("goal must be Waypoint")
+        if self.global_goal is not None and (
+                not isinstance(self.global_goal, Waypoint) or self.allow_exploration_detour):
+            raise ValueError("global_goal is only available to global navigation")
         if type(self.allow_exploration_detour) is not bool:
             raise TypeError("allow_exploration_detour must be bool")
         if type(self.select_local_goal) is not bool:
@@ -86,10 +130,15 @@ class TrajectoryRolloutResult:
     # Fixed odometry-frame heading bins with a full footprint-proven exit.
     # Worker-side computation ignores ranking and failed-goal cooldowns.
     reachable_exit_mask: int = 0
+    global_guidance: GlobalPlanGuidance | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_context, TickContext):
             raise TypeError("source_context must be TickContext")
+        if self.global_guidance is not None and (
+                not isinstance(self.global_guidance, GlobalPlanGuidance)
+                or self.global_guidance.source_context != self.source_context):
+            raise ValueError("global guidance source context mismatch")
         if self.selected_goal is not None and not isinstance(self.selected_goal, Waypoint):
             raise TypeError("selected_goal must be a Waypoint or None")
         if type(self.goal_reachable) is not bool:

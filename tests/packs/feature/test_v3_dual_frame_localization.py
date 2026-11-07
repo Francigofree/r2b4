@@ -46,6 +46,38 @@ def layers(config):
             OperationalConstraintLayer(config.operational_constraints))
 
 
+def test_global_yaw_correction_survives_absolute_imu_updates_without_rotating_local_map():
+    config = resolved_config().runtime.composition.live_control.control
+    corrected, baseline = (NativeStateEstimator(config.estimation) for _ in range(2))
+    corrected_world, baseline_world = (ShadowWorldModel(config.world_model) for _ in range(2))
+    for tick in range(11):
+        f = frame(tick)
+        ns = f.context.monotonic_ns
+        f = replace(f, accepted=f.accepted + (scan(tick, ns),))
+        baseline_estimate = baseline(f)
+        baseline_world(f, baseline_estimate)
+        if tick == 10:
+            f = replace(f, accepted=f.accepted + (observation(
+                "lidar_pose", tick, ns, frame_id=GLOBAL_FRAME_ID,
+                x_m=.8, y_m=-.4, yaw_rad=.2, confidence=1.0, r_scale=.05),))
+        fixed = corrected(f)
+        corrected_world(f, fixed)
+    assert fixed.localization_quality.global_fix_status == "ACCEPTED"
+    map_yaw = fixed.map_to_odom.yaw_rad
+    assert map_yaw > .15
+    restored = NativeStateEstimator(config.estimation)
+    restored.restore(corrected.checkpoint())
+    for tick in range(11, 61):
+        f = frame(tick)
+        f = replace(f, accepted=f.accepted + (scan(tick, f.context.monotonic_ns),))
+        fixed, original = corrected(f), baseline(f)
+        assert restored(f) == fixed
+        assert fixed.map_to_odom.yaw_rad == pytest.approx(map_yaw, abs=1e-10)
+        assert fixed.local_pose == original.local_pose
+        fixed_map, original_map = corrected_world(f, fixed), baseline_world(f, original)
+        assert fixed_map.local_costmap.occupied_cells == original_map.local_costmap.occupied_cells
+
+
 def test_localization_global_loss_and_relocalization_preserve_local_map_follow_and_motion():
     config = resolved_config().runtime.composition.live_control.control
     estimator = NativeStateEstimator(config.estimation)

@@ -1095,6 +1095,17 @@ class _PoseFilter:
             )
         self._stabilize_covariance()
 
+    def _lidar_variances(self, observation: Observation) -> tuple[float, ...]:
+        names = ("variance_x_m2", "variance_y_m2", "variance_yaw_rad2")
+        fields = {value.key for value in observation.values}
+        if any(name in fields for name in names):
+            # Explicit covariance is an atomic planar measurement contract.
+            # Partial, zero or non-finite values cannot fall back to a scalar.
+            return tuple(_finite_positive(_numeric_value(observation, name), name)
+                         for name in names)
+        r_scale = _numeric_value(observation, "r_scale")
+        return tuple(base * r_scale for base in self._config.lidar_measurement_variance)
+
     def _update_lidar(self, observation: Observation) -> bool:
         frame_id = _field_value(observation, "frame_id")
         if frame_id != self._config.frame_id:
@@ -1112,10 +1123,7 @@ class _PoseFilter:
             raise ValueError("lidar_pose.r_scale must be within [0.05, 20]")
 
         quality = max(self._config.minimum_measurement_quality, confidence)
-        variances = tuple(
-            base * r_scale / quality
-            for base in self._config.lidar_measurement_variance
-        )
+        variances = tuple(value / quality for value in self._lidar_variances(observation))
         innovation = [
             measurement[self._X] - self._state[self._X],
             measurement[self._Y] - self._state[self._Y],
@@ -1406,6 +1414,10 @@ class NativeStateEstimator:
         previous = self._local._last_context
         previous_encoder = self._local._encoder_anchor
         previous_pose = self._history[-1].pose if self._history else None
+        map_heading_offset = _normalize_angle(
+            self._global._state[_PoseFilter._YAW]
+            - self._local._state[_PoseFilter._YAW]
+        )
         continuous = previous is None or (
             frame.context.tick_id == previous.tick_id+1
             and 0 < now-previous.monotonic_ns <= self._config.max_dt_ns)
@@ -1519,6 +1531,20 @@ class NativeStateEstimator:
                 observed = Pose2D(self._config.frame_id, values["x_m"], values["y_m"], values["yaw_rad"])
                 x, y, yaw = observed.apply(*delta)
                 values.update(x_m=x, y_m=y, yaw_rad=yaw)
+                if lidar.captured_monotonic_ns < now:
+                    # Pose composition couples scan-time yaw uncertainty into
+                    # the displacement since that scan. Bound J R J^T by its
+                    # absolute row sums to retain a conservative diagonal
+                    # contract rather than silently discarding those terms.
+                    vx, vy, vyaw = self._global._lidar_variances(lidar)
+                    c, s = math.cos(observed.yaw_rad), math.sin(observed.yaw_rad)
+                    jx, jy = -s * delta[0] - c * delta[1], c * delta[0] - s * delta[1]
+                    cross = abs(jx * jy)
+                    values.update(zip(("variance_x_m2", "variance_y_m2", "variance_yaw_rad2"), (
+                        vx + vyaw * (jx * jx + cross + abs(jx)),
+                        vy + vyaw * (jy * jy + cross + abs(jy)),
+                        vyaw * (1.0 + abs(jx) + abs(jy)),
+                    )))
                 projected = replace(lidar, values=tuple(DataField(k, v) for k, v in values.items()))
                 frame = replace(frame, accepted=tuple(projected if o is lidar else o for o in frame.accepted))
 
@@ -1542,6 +1568,20 @@ class NativeStateEstimator:
                 cfg.max_yaw_variance,
             )
 
+        if heading is not None:
+            # IMU absolute yaw belongs to the local odometry reference. A SLAM
+            # correction changes map_T_odom, not that physical measurement.
+            # Carry its existing map rotation into the global filter; otherwise
+            # each following calibrated IMU update undoes the accepted map yaw.
+            map_heading = replace(heading, values=tuple(
+                DataField(value.key, _normalize_angle(value.value + map_heading_offset))
+                if value.key == "yaw_rad" else value
+                for value in heading.values
+            ))
+            frame = replace(frame, accepted=tuple(
+                map_heading if observation is heading else observation
+                for observation in frame.accepted
+            ))
         global_estimate = self._global(frame)
         correction = next((e for e in self.last_update_evidence if e.update_type == "LIDAR_POSE"), None)
         if correction is not None:

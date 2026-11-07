@@ -101,6 +101,9 @@ class RplidarPoint:
     angle_deg: float
     distance_m: float
     quality: int
+    # Host packet receipt, not a hardware acquisition clock. Retained only at
+    # the LiDAR edge for bounded scan-motion compensation and raw evidence.
+    received_monotonic_ns: int | None = None
 
     def __post_init__(self) -> None:
         angle = _positive_float(self.angle_deg + 360.0, "angle_deg") - 360.0
@@ -117,6 +120,10 @@ class RplidarPoint:
             raise ValueError("quality must be an integer")
         if not 0 <= self.quality <= 63:
             raise ValueError("quality must be within [0, 63]")
+        if self.received_monotonic_ns is not None and (
+            type(self.received_monotonic_ns) is not int or self.received_monotonic_ns < 0
+        ):
+            raise ValueError("received_monotonic_ns must be a non-negative integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -538,7 +545,8 @@ class NativeRplidarC1:
                 elif self._building_start_ns is None:
                     # Discard packets until the first real revolution boundary.
                     continue
-                point = decoded.point
+                point = RplidarPoint(decoded.point.angle_deg, decoded.point.distance_m,
+                                     decoded.point.quality, packet_ns)
                 if (
                     self._config.minimum_distance_m
                     <= point.distance_m

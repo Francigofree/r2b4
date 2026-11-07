@@ -1,0 +1,14 @@
+[WARN] [1794076246.622943979] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794076246.622986794] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_planner_bridge.py", line 251, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_planner_bridge.py", line 247, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_planner_bridge.py", line 143, in run
+    raise RuntimeError("NAV2_LIFECYCLE_TRANSITION_FAILED")
+RuntimeError: NAV2_LIFECYCLE_TRANSITION_FAILED
