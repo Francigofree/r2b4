@@ -915,11 +915,24 @@ class ProcessLidarPort:
             if not self._process.is_alive() and not self._stopped:
                 self._fatal_error = self._fatal_error or "LIDAR_OWNER_PROCESS_EXITED"
             return
-        if newest[1] is not None and (  # type: ignore[index]
-            self._raw_snapshot is None
-            or newest[1][0] != self._raw_snapshot.raw_scan_id  # type: ignore[index]
-        ):
-            self._raw_snapshot = _unwire_raw(newest[1])  # type: ignore[index]
+        wire = newest[1]  # type: ignore[index]
+        if wire is not None:
+            previous = self._raw_snapshot
+            same_scan = previous is not None and wire[0] == previous.raw_scan_id
+            if same_scan and tuple(wire[1:5]) != (
+                previous.raw_scan_timestamp, previous.scan_start_monotonic_ns,
+                previous.scan_end_monotonic_ns, previous.measurement_monotonic_ns,
+            ):
+                self._fatal_error = "LIDAR_PHYSICAL_SCAN_IDENTITY_REWRITTEN"
+                return
+            geometry_completed = (same_scan
+                and previous.summary.get("local_geometry_pending", False)
+                and not wire[7].get("local_geometry_pending", False))
+            if not same_scan or geometry_completed:
+                # Physical scan identity is immutable, but a deferred first
+                # local geometry can complete after immediate raw safety. The
+                # first local sample must reach L2 under that original identity.
+                self._raw_snapshot = _unwire_raw(wire)
         self._matcher_result = _unwire_matcher(newest[2])  # type: ignore[index]
         self._relative_result = _unwire_relative(newest[4] if len(newest) > 4 else None)  # type: ignore[arg-type,index]
         status = dict(newest[3])  # type: ignore[index]

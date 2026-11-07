@@ -9,10 +9,10 @@ from types import SimpleNamespace
 import pytest
 
 from v3.adapters.native_lidar_port import (
-    NativeRawLidarSnapshot, TimedPoseReference, rotation_deskew_points,
+    NativeRawLidarSnapshot, TimedPoseReference, rotation_deskew_points, _sector_summary,
 )
 from v3.adapters.process_lidar_port import _wire_control_raw, _wire_raw, _unwire_raw
-from v3.adapters.rplidar_c1 import RplidarPoint
+from v3.adapters.rplidar_c1 import RplidarPoint, RplidarScan
 from v3.adapters.slam_toolbox_transport import encode_scan, decode_packet
 from v3.capture_encoding import encode_raw_lidar_snapshot
 from v3.lidar_geometry import lidar_point_xy
@@ -46,7 +46,9 @@ def _spinning_room_scan():
                    if abs(velocity) > 1e-12 for wall in walls
                    if (wall-origin)/velocity > 0]
         points.append(RplidarPoint(angle, min(lengths), 15, timestamp))
-    return NativeRawLidarSnapshot(7, END/1e9, START, END, MID, "OK", tuple(points), {}, END)
+    physical = RplidarScan(7, END, START, END, MID, tuple(points))
+    return NativeRawLidarSnapshot(7, END/1e9, START, END, MID, "OK", tuple(points),
+                                  _sector_summary(physical), END)
 
 
 def _deskew(raw, provider=_heading):
@@ -179,3 +181,76 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     assert observation[0] == "navigation_map"
     assert observation[1]["rotation_deskew"] == "APPLIED"
     assert observation[1]["measurement_monotonic_ns"] == MID
+
+    # Exercise the actual receiving collector cache too: a producer-only
+    # assertion misses a pending->ready update discarded under the same scan ID.
+    from rig import healthy_localization
+    from v3.adapters.latest_lidar import (
+        LatestLidarBackendConfig, NativeLatestLidarBackend, SLAM_CONTRACT_ID,
+        SLAM_CONFIDENCE_MODEL, SLAM_TRANSPORT,
+    )
+    from v3.adapters.live_lidar import NativeLidarConfig, NativeLidarSource
+    from v3.contracts import (
+        AcquisitionFrame, AdmittedFrame, DataField, LOCAL_FRAME_ID, Observation,
+        RejectionReason, RobotEstimate, TickContext,
+    )
+    from v3.layers.l2_admission import AdmissionConfig, InputAdmission
+    from v3.layers.l4_world_model import ShadowWorldModel
+    collector = owner.ProcessLidarPort.__new__(owner.ProcessLidarPort)
+    collector._state_queue = queue.Queue(8)
+    collector._process_config = resolved.edges.lidar_process
+    collector._process = SimpleNamespace(is_alive=lambda: True)
+    collector._stopped, collector._fatal_error = False, None
+    collector._raw_snapshot = collector._matcher_result = collector._relative_result = None
+    collector._status, collector._raw_queue = {}, None
+    collector._slam_sender = SimpleNamespace(sent_packets=0, dropped_packets=0)
+    backend = NativeLatestLidarBackend(collector, LatestLidarBackendConfig(
+        250_000_000, global_backend="slam_toolbox", matcher_contract_id=SLAM_CONTRACT_ID,
+        matcher_confidence_model=SLAM_CONFIDENCE_MODEL, matcher_transport=SLAM_TRANSPORT,
+        pose_measurement_variance=(.01, .01, .01)))
+    source = NativeLidarSource(backend, NativeLidarConfig(
+        "RPLIDAR_C1", .18, 250_000_000, lidar_x_offset_m=OFFSET[0], lidar_y_offset_m=OFFSET[1]))
+    admission = InputAdmission(AdmissionConfig(250_000_000, 0))
+    model = ShadowWorldModel(resolved.runtime.composition.live_control.control.world_model)
+    def update_world(context, accepted):
+        estimate = RobotEstimate(context, LOCAL_FRAME_ID, 0., 0., _heading(context.monotonic_ns).yaw_rad,
+                                 0., 1.2, (0.,)*25, localization_quality=healthy_localization(generation=3))
+        return model(AdmittedFrame(context, accepted, ()), estimate)
+    health = Observation("lidar_health", "RPLIDAR_C1", 0, START,
+                         (DataField("age_ns", 0), DataField("point_count", len(raw.raw_scan))))
+    for timestamp in range(START, END, 20_000_000):
+        update_world(TickContext(timestamp, timestamp), (health,) if timestamp == START else ())
+    collector._state_queue.put(initial)
+    collector._drain_state()
+    context = TickContext(100, END+10_000_000)
+    pending_sample = source.read(context)
+    assert "lidar_safety_clearance" in {sample.kind for sample in pending_sample.samples}
+    assert "lidar_local_points" not in {sample.kind for sample in pending_sample.samples}
+    admitted = admission(AcquisitionFrame(context, pending_sample.samples, (pending_sample.health,)))
+    assert update_world(context, admitted.accepted).local_costmap is None
+    collector._state_queue.put(ready)
+    collector._drain_state()
+    context = TickContext(101, END+30_000_000)
+    ready_sample = source.read(context)
+    admitted = admission(AcquisitionFrame(context, ready_sample.samples, (ready_sample.health,)))
+    local = next(item for item in admitted.accepted if item.kind == "lidar_local_points")
+    assert local.source_sequence == raw.raw_scan_id and local.captured_monotonic_ns == MID
+    world = update_world(context, admitted.accepted)
+    assert world.local_costmap.source_sequence == raw.raw_scan_id
+    assert world.local_costmap.freshness_ns == context.monotonic_ns-MID
+    assert world.local_costmap.occupied_cells
+    context = TickContext(102, END+50_000_000)
+    duplicate = source.read(context)
+    admitted = admission(AcquisitionFrame(context, duplicate.samples, (duplicate.health,)))
+    assert not any(item.kind == "lidar_local_points" for item in admitted.accepted)
+    assert admitted.rejected
+    assert all(item.reason is RejectionReason.DUPLICATE for item in admitted.rejected)
+    unchanged = update_world(context, admitted.accepted)
+    assert unchanged.local_costmap.revision == world.local_costmap.revision
+
+    changed_time = list(ready[1])
+    changed_time[4] += 1
+    collector._state_queue.put((ready[0], tuple(changed_time), *ready[2:]))
+    collector._drain_state()
+    assert collector._fatal_error == "LIDAR_PHYSICAL_SCAN_IDENTITY_REWRITTEN"
+    assert collector.get_raw_scan_snapshot().measurement_monotonic_ns == MID
