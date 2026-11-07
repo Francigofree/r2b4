@@ -355,8 +355,9 @@ def run(args) -> int:
                     message.range_min = scan.minimum_range_m
                     message.range_max = scan.maximum_range_m
                     message.scan_time = (scan.scan_end_ns - scan.scan_start_ns) / 1e9
-                    # Angular rebinned scans have no per-ray timing. The whole
-                    # scan uses its canonical midpoint, with no invented deskew.
+                    # Producer rotation compensation, when available, already
+                    # expresses returns at the canonical midpoint. Angular
+                    # rebinning has no per-ray ordering to expose to ROS.
                     message.time_increment = 0.0
                     message.ranges = list(scan.ranges_m)
                     ros_ns = scan.measurement_ns + ros_offset_ns

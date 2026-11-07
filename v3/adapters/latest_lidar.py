@@ -304,7 +304,14 @@ class NativeLatestLidarBackend:
         # rebuilding hundreds of Python point objects for duplicate polls.
         # Freshness/health below are still recomputed from the current context.
         cache_key = (revision, captured_ns)
-        if self._raw_point_cache_key == cache_key:
+        geometry_pending = summary.get("local_geometry_pending", False)
+        if type(geometry_pending) is not bool:
+            raise ValueError("local_geometry_pending must be bool")
+        if geometry_pending:
+            # Safety can arrive before the bounded odometry bracket needed for
+            # deskew. Do not freeze an empty geometry cache for this revision.
+            local_points = ()
+        elif self._raw_point_cache_key == cache_key:
             local_points = self._raw_point_cache
         else:
             raw_points = tuple(getattr(snapshot, "raw_scan", ()) or ())
@@ -347,6 +354,7 @@ class NativeLatestLidarBackend:
             left_observation_count=count("left_observation_count"),
             right_observation_count=count("right_observation_count"),
             local_points=local_points,
+            local_points_available=not geometry_pending,
         )
 
     def read(self, context: TickContext) -> LidarHealthReading:

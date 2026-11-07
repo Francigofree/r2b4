@@ -32,6 +32,8 @@ class Nav2PlannerConfig:
         for value in (self.request_timeout_s, self.max_map_age_s):
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
                 raise ValueError("Nav2 deadlines must be finite and positive")
+        if self.request_timeout_s > 1. or self.max_map_age_s > 30.:
+            raise ValueError("Nav2 timeout/map age exceed bridge bounds")
 
 
 def encode_packet(value):
@@ -76,7 +78,8 @@ def compute_with_guidance(config, request, guidance, *, computer=None):
     result = kernel.compute(local)
     if guidance.status is not GlobalPlanStatus.READY:
         result = replace(result, trajectory_candidates=tuple(
-            replace(candidate, progress_viable=False) for candidate in result.trajectory_candidates))
+            replace(candidate, progress_viable=False) for candidate in result.trajectory_candidates),
+            goal_reachable=False)
     return replace(result, global_guidance=guidance,
                    selected_goal=guidance.local_goal or request.goal)
 
@@ -84,6 +87,8 @@ def compute_with_guidance(config, request, guidance, *, computer=None):
 def compute_recorded_planner_result(config, request, recorded):
     """Recompute V3 local proof from the closed external waypoint suggestion."""
     if recorded.global_guidance is None:
+        if config.global_planner_enabled and request.global_goal is not None:
+            raise ValueError("NAV2_GUIDANCE_MISSING")
         return TrajectoryRolloutComputer(config).compute(request)
     return compute_with_guidance(config, request, recorded.global_guidance)
 
@@ -123,7 +128,7 @@ class Nav2PlannerClient:
             channel.connect(self.config.socket_path)
             channel.send(encode_packet(packet))
             reply = decode_packet(channel.recv(MAX_PACKET_BYTES + 1))
-            if (any(reply.get(key) != value for key, value in identity.items())
+            if (any(type(reply.get(key)) is not int or reply[key] != value for key, value in identity.items())
                     or reply.get("frame_id") != LOCAL_FRAME_ID):
                 return guidance_for(request, GlobalPlanStatus.INVALID)
             status = GlobalPlanStatus(reply["status"])

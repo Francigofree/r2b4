@@ -222,8 +222,12 @@ class NavigationConfig:
     explore_local_goal_distance_weight: float = 0.0
     # Axle-frame rectangle center; zero decodes historical centered captures.
     footprint_center_x_m: float = 0.0
+    # Derived by composition/config from the optional global compute edge.
+    global_planner_enabled: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.global_planner_enabled) is not bool:
+            raise TypeError("global_planner_enabled must be bool")
         if (type(self.motion_proof_horizon_ns) is not int or self.motion_proof_horizon_ns <= 0
                 or any(math.isnan(cap) or cap <= 0 for cap in (
                     self.operational_max_v_mps, self.operational_max_omega_rad_s,
@@ -2408,6 +2412,12 @@ class TrajectoryNavigator:
             self._clear_escape_phase()
             return None
         goal = self._escape_goal or self._local_goal
+        if (self._config.global_planner_enabled and mission.mode is CommandMode.NAVIGATE
+                and mission.target_frame_id != LOCAL_FRAME_ID
+                and self._escape_candidate is None and self._local_goal is None):
+            # The first global route has no committed local segment to prove.
+            # A direct seed here would bypass an unavailable global planner.
+            return None
         if self._escape_candidate is None and not self._goal_reachable:
             return None
         if (self._escape_candidate is None and self._pending_rollout_request is not None
@@ -2847,6 +2857,9 @@ class TrajectoryNavigator:
         self, request: TrajectoryRolloutRequest, result: TrajectoryRolloutResult,
         selected_ns: int | None, selection_reason: str | None,
     ) -> None:
+        if (self._config.global_planner_enabled and request.global_goal is not None
+                and result.global_guidance is None):
+            raise RuntimeError("ASYNC_L6_GLOBAL_GUIDANCE_MISSING")
         if request.select_local_goal:
             previous_exits = self._explore_reachable_exit_mask
             self._explore_reachable_exit_mask = (previous_exits or 0) | result.reachable_exit_mask
@@ -2885,12 +2898,16 @@ class TrajectoryNavigator:
                 raise RuntimeError("ASYNC_L6_GLOBAL_GUIDANCE_LINEAGE_MISMATCH")
             if guidance.status is GlobalPlanStatus.READY:
                 if (guidance.local_goal != result.selected_goal
+                        or guidance.map_revision <= 0 or guidance.map_stamp_ns <= 0
                         or math.hypot(goal.x_m-request.estimate.x_m, goal.y_m-request.estimate.y_m)
                         > self._config.local_goal_distance_m + 1e-6):
                     raise RuntimeError("ASYNC_L6_GLOBAL_GUIDANCE_GOAL_MISMATCH")
                 options = (goal,)
-            elif any(candidate.progress_viable for candidate in result.trajectory_candidates):
+            elif (result.goal_reachable
+                  or any(candidate.progress_viable for candidate in result.trajectory_candidates)):
                 raise RuntimeError("ASYNC_L6_GLOBAL_GUIDANCE_FAILURE_WITH_MOTION")
+            else:
+                self._clear_escape_phase()
         recovery_without_exit = False
         if request.select_local_goal and not options:
             viable = tuple(c for c in result.trajectory_candidates if not c.collision and c.progress_viable)
@@ -2920,7 +2937,8 @@ class TrajectoryNavigator:
                     or distance < policy.explore_local_goal_min_distance_m - 1e-9
                     or failed.get(self._coverage_key(goal.x_m, goal.y_m), 0) > request.context.monotonic_ns):
                 raise RuntimeError("ASYNC_L6_SELECTED_GOAL_MISMATCH")
-        if not result.goal_reachable and not request.allow_exploration_detour:
+        if (not result.goal_reachable and not request.allow_exploration_detour
+                and not (guidance is not None and guidance.status is not GlobalPlanStatus.READY)):
             raise RuntimeError("ASYNC_L6_GOAL_REACHABILITY_MISMATCH")
         self._goal_reachable = result.goal_reachable
         if selected_ns is not None:

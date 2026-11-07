@@ -650,47 +650,57 @@ class NativeLidarPort:
                 )
                 matcher_points = scan.points
                 if self._config.global_backend == "slam_toolbox":
-                    matcher_points, _ = rotation_deskew_points(
+                    matcher_points, deskew_reason = rotation_deskew_points(
                         scan.points, scan_start_ns=scan.scan_start_monotonic_ns,
                         scan_end_ns=scan.scan_end_monotonic_ns,
                         measurement_ns=scan.measurement_monotonic_ns,
                         pose_provider=self._pose_provider,
                         lidar_x_m=self._config.matcher.lidar_x_offset_m,
                         lidar_y_m=self._config.matcher.lidar_y_offset_m)
-                packet: dict[str, object] = {
-                    "kind": "scan",
-                    "matcher_contract_id": MATCHER_CONTRACT_ID,
-                    "source_scan_revision": scan.revision,
-                    "scan_revision": scan.revision,
-                    # Compatibility timestamp: scan completion only.
-                    "captured_monotonic_ns": scan.captured_monotonic_ns,
-                    "scan_start_monotonic_ns": scan.scan_start_monotonic_ns,
-                    "scan_end_monotonic_ns": scan.scan_end_monotonic_ns,
-                    "measurement_monotonic_ns": scan.measurement_monotonic_ns,
-                    "maximum_input_age_ns": self._config.maximum_input_age_ns,
-                    "danger_zone_m": self._config.danger_zone_m,
-                    "matcher_config": self._config.matcher,
-                    "global_matching_enabled": self._config.global_backend != "slam_toolbox",
-                    "pose_reference": pose_reference.pose,
-                    "pose_reference_monotonic_ns": pose_reference.monotonic_ns,
-                    "scan_pose_alignment_delta_ns": alignment_delta_ns,
-                    "scan": [
-                        {
-                            "angle": point.angle_deg,
-                            "angle_rad": math.radians(point.angle_deg),
-                            "dist": point.distance_m * 1_000.0,
-                            "quality": point.quality,
-                        }
-                        for point in matcher_points
-                    ],
-                    "driver_status": dict(self._driver.get_runtime_status()),
-                }
-                input_queue = self._input_queue
-                if input_queue is None:
-                    raise RuntimeError("native LiDAR input queue is unavailable")
-                self._queue_drops += put_latest(input_queue, packet)
-                self._last_queued_scan_revision = scan.revision
-                self._last_matcher_reason = ""
+                geometry_unavailable = (self._config.global_backend == "slam_toolbox"
+                                        and deskew_reason not in {"APPLIED", "POINT_TIMING_UNAVAILABLE"})
+                if geometry_unavailable:
+                    self._last_matcher_reason = deskew_reason
+                    if deskew_reason != "HEADING_BRACKET_UNAVAILABLE":
+                        self._last_queued_scan_revision = scan.revision
+                    elif self._checked_clock() - scan.scan_end_monotonic_ns > 40_000_000:
+                        self._last_queued_scan_revision = scan.revision
+                        self._last_matcher_reason = "HEADING_BRACKET_TIMEOUT"
+                else:
+                    packet: dict[str, object] = {
+                        "kind": "scan",
+                        "matcher_contract_id": MATCHER_CONTRACT_ID,
+                        "source_scan_revision": scan.revision,
+                        "scan_revision": scan.revision,
+                        # Compatibility timestamp: scan completion only.
+                        "captured_monotonic_ns": scan.captured_monotonic_ns,
+                        "scan_start_monotonic_ns": scan.scan_start_monotonic_ns,
+                        "scan_end_monotonic_ns": scan.scan_end_monotonic_ns,
+                        "measurement_monotonic_ns": scan.measurement_monotonic_ns,
+                        "maximum_input_age_ns": self._config.maximum_input_age_ns,
+                        "danger_zone_m": self._config.danger_zone_m,
+                        "matcher_config": self._config.matcher,
+                        "global_matching_enabled": self._config.global_backend != "slam_toolbox",
+                        "pose_reference": pose_reference.pose,
+                        "pose_reference_monotonic_ns": pose_reference.monotonic_ns,
+                        "scan_pose_alignment_delta_ns": alignment_delta_ns,
+                        "scan": [
+                            {
+                                "angle": point.angle_deg,
+                                "angle_rad": math.radians(point.angle_deg),
+                                "dist": point.distance_m * 1_000.0,
+                                "quality": point.quality,
+                            }
+                            for point in matcher_points
+                        ],
+                        "driver_status": dict(self._driver.get_runtime_status()),
+                    }
+                    input_queue = self._input_queue
+                    if input_queue is None:
+                        raise RuntimeError("native LiDAR input queue is unavailable")
+                    self._queue_drops += put_latest(input_queue, packet)
+                    self._last_queued_scan_revision = scan.revision
+                    self._last_matcher_reason = ""
 
         result_queue = self._result_queue
         if result_queue is None:

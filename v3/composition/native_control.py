@@ -38,7 +38,6 @@ from v3.layers.l6_navigation import (
     NavigationConfig,
     NavigationStateCheckpoint,
     TrajectoryNavigator,
-    TrajectoryRolloutComputer,
 )
 from v3.layers.l7_motion_selection import (
     MotionSelectionConfig,

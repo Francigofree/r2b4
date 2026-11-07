@@ -278,6 +278,7 @@ class LidarScanReading:
     left_observation_count: int
     right_observation_count: int
     local_points: tuple[LidarPointReading, ...] = ()
+    local_points_available: bool = True
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.revision, "revision")
@@ -303,6 +304,8 @@ class LidarScanReading:
             raise ValueError("health must be OK, STALE or ERROR")
         if type(self.stale) is not bool or type(self.timing_valid) is not bool:
             raise ValueError("stale and timing_valid must be bool")
+        if type(self.local_points_available) is not bool:
+            raise ValueError("local_points_available must be bool")
         for value, name in (
             (self.point_count, "point_count"),
             (self.front_observation_count, "front_observation_count"),
@@ -566,6 +569,8 @@ class NativeLidarSource:
                     ),
                 )
             )
+        if (scan.revision > 0 and health.state is DeviceHealthState.OK
+                and scan.local_points_available):
             # The geometry payload is immutable for one physical revision. Reuse
             # the already-built typed sample on duplicate 20 ms polls instead of
             # rebuilding ~3 DataFields per retained point. Dynamic age/stale and

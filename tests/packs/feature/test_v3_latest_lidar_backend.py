@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import pytest
 from v3.adapters.latest_lidar import LatestLidarBackendConfig, NativeLatestLidarBackend
 from v3.adapters.live_lidar import LidarRelativeMotionReading, NativeLidarConfig, NativeLidarSource
@@ -288,3 +288,30 @@ def test_independent_relative_cannot_publish_after_its_own_expiry_or_worker_fail
     source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', .3, 250_000_000))
     snapshot = source.read(TickContext(7, now))
     assert 'lidar_relative_motion' not in {s.kind for s in snapshot.samples}
+
+
+def test_pending_deskew_publishes_safety_then_first_local_geometry_for_same_scan():
+    from v3.contracts import AcquisitionFrame, RejectionReason
+    from v3.layers.l2_admission import AdmissionConfig, InputAdmission
+
+    ready = RawSnapshot()
+    pending = replace(ready, raw_scan=(),
+                      summary={**ready.summary, 'local_geometry_pending': True})
+    port = Port(raw=pending)
+    source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', .3, 100_000_000))
+    admission = InputAdmission(AdmissionConfig(100_000_000, 0))
+    first = source.read(TickContext(7, 1_000_000_000))
+    assert first.health.state is DeviceHealthState.OK
+    assert 'lidar_safety_clearance' in {sample.kind for sample in first.samples}
+    assert 'lidar_local_points' not in {sample.kind for sample in first.samples}
+    admission(AcquisitionFrame(first.context, first.samples, (first.health,)))
+
+    port.raw = replace(ready, summary={**ready.summary, 'local_geometry_pending': False})
+    second = source.read(TickContext(8, 1_020_000_000))
+    local = next(sample for sample in second.samples if sample.kind == 'lidar_local_points')
+    assert local.sequence == ready.raw_scan_id
+    assert local.captured_monotonic_ns == ready.measurement_monotonic_ns
+    assert next(field.value for field in local.values if field.key == 'point_count') > 0
+    admitted = admission(AcquisitionFrame(second.context, second.samples, (second.health,)))
+    assert next(item for item in admitted.accepted if item.kind == 'lidar_local_points').source_sequence == ready.raw_scan_id
+    assert all(item.reason is RejectionReason.DUPLICATE for item in admitted.rejected)

@@ -120,10 +120,22 @@ def _supervise(root, ros_domain_id):
     _write_json(paths["state"], state)
     children, logs = [], []
     try:
+        os.nice(10)
+        allowed = os.sched_getaffinity(0)
+        control = _read_json(root / "conf" / "vezerles.json").get("runtime_affinity", {}).get("control_cpus", [3])
+        cpus = (allowed & {1, 2}) - set(control)
+        if not cpus:
+            cpus = allowed - set(control)
+        if not cpus:
+            raise RuntimeError("No CPU available outside the configured control CPU")
+        cpus = {min(cpus)}
+        os.sched_setaffinity(0, cpus)
+        state["cpus"] = sorted(cpus)
         from v3.config import ConfigResolver
         conf = root / "conf"
         navigation = ConfigResolver(conf/"hardver.json", conf/"fizika.json", conf/"speed_map.json", conf/"vezerles.json").resolve().runtime.composition.live_control.control.navigation
-        radius = math.hypot(navigation.footprint_length_m, navigation.footprint_width_m)/2 + navigation.footprint_safety_margin_m
+        radius = math.hypot(navigation.footprint_length_m/2 + abs(navigation.footprint_center_x_m),
+                            navigation.footprint_width_m/2) + navigation.footprint_safety_margin_m
         paths["geometry"].write_text("global_costmap:\n  global_costmap:\n    ros__parameters:\n"
             f"      robot_radius: {radius}\n      inflation_layer:\n        inflation_radius: {radius+.10}\n")
         env = _ros_environment(root, paths["prefix"])

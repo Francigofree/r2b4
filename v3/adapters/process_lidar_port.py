@@ -447,10 +447,12 @@ def _lidar_owner_process_main(
     deskew_applied_scans = 0
     deskew_uncompensated_scans = 0
 
-    def derived_scan(raw):
+    pending_geometry = None
+
+    def derived_scan(raw, now_ns):
         nonlocal deskew_reason, deskew_applied_scans, deskew_uncompensated_scans
         if raw is None or not slam_enabled:
-            return raw
+            return raw, False
         from dataclasses import replace
         points, deskew_reason = rotation_deskew_points(
             raw.raw_scan, scan_start_ns=raw.scan_start_monotonic_ns,
@@ -459,17 +461,24 @@ def _lidar_owner_process_main(
             pose_provider=pose_history.lookup,
             lidar_x_m=config.matcher.lidar_x_offset_m,
             lidar_y_m=config.matcher.lidar_y_offset_m)
-        deskew_applied_scans += int(deskew_reason == "APPLIED")
-        deskew_uncompensated_scans += int(deskew_reason != "APPLIED")
-        return replace(raw, raw_scan=points, summary=MappingProxyType({
+        pending = (deskew_reason == "HEADING_BRACKET_UNAVAILABLE"
+                   and now_ns-raw.scan_end_monotonic_ns <= 40_000_000)
+        unavailable = deskew_reason not in {"APPLIED", "POINT_TIMING_UNAVAILABLE"}
+        if deskew_reason == "HEADING_BRACKET_UNAVAILABLE" and not pending:
+            deskew_reason = "HEADING_BRACKET_TIMEOUT"
+        if not pending:
+            deskew_applied_scans += int(deskew_reason == "APPLIED")
+            deskew_uncompensated_scans += int(deskew_reason != "APPLIED")
+        return replace(raw, raw_scan=() if unavailable else points, summary=MappingProxyType({
             **raw.summary, "rotation_deskew": deskew_reason,
+            "local_geometry_pending": unavailable,
             "deskew_time_basis": "HOST_PACKET_RECEIPT",
             "serial_chunk_wire_time_ns": math.ceil(
                 config.driver.read_chunk_size * 10 * 1e9 / config.driver.baudrate),
-        }))
+        })), pending
 
     def publish_slam_scan(raw, now_ns):
-        if slam_session_id:
+        if slam_session_id and raw is not None and not raw.summary.get("local_geometry_pending", False):
             sent = slam_sender.publish_scan(
                 raw, now_ns=now_ns, session_id=slam_session_id, source_pid=os.getpid(),
                 minimum_range_m=config.driver.minimum_distance_m,
@@ -530,6 +539,8 @@ def _lidar_owner_process_main(
         if raw_queue is None or raw is None:
             return
         if capture_map_hz:
+            if compact is None or compact[7].get("local_geometry_pending", False):
+                return
             measured = raw.measurement_monotonic_ns
             period = 1_000_000_000 // capture_map_hz
             if (last_map_measurement_ns is not None
@@ -537,11 +548,14 @@ def _lidar_owner_process_main(
                          or measured // period == last_map_measurement_ns // period)):
                 return
             last_map_measurement_ns = measured
-            payload = ("navigation_map", navigation_map_observation(
+            observation = navigation_map_observation(
                 raw, compact[6], minimum_range_m=control_minimum_range_m,
                 maximum_range_m=control_maximum_range_m,
                 x_offset_m=config.matcher.lidar_x_offset_m,
-                y_offset_m=config.matcher.lidar_y_offset_m))
+                y_offset_m=config.matcher.lidar_y_offset_m)
+            observation["rotation_deskew"] = compact[7].get("rotation_deskew", "NOT_REQUESTED")
+            observation["point_timing_basis"] = compact[7].get("deskew_time_basis", "UNAVAILABLE")
+            payload = ("navigation_map", observation)
         else:
             payload = ("raw", _wire_raw(raw))
         raw_produced_count += 1
@@ -557,7 +571,8 @@ def _lidar_owner_process_main(
             matcher_cpus=matcher_cpus, strict_affinity=strict_affinity,
         )
         initial_raw = port.get_raw_scan_snapshot()
-        initial_geometry = derived_scan(initial_raw)
+        initial_geometry, geometry_pending = derived_scan(initial_raw, time.monotonic_ns())
+        pending_geometry = initial_raw if geometry_pending else None
         initial_matcher = slam_result if slam_enabled else port.get_matcher_result()
         initial_relative = port.get_relative_result()
         initial_status = runtime_status()
@@ -593,8 +608,10 @@ def _lidar_owner_process_main(
             matcher_revision = int(getattr(matcher, "matcher_result_id", 0) or 0)
             relative_revision = int(getattr(relative, "source_sequence", 0) or 0)
             raw_changed = raw_revision != last_raw_revision
+            geometry_changed = False
             if raw_changed and raw is not None:
-                geometry = derived_scan(raw)
+                geometry, geometry_pending = derived_scan(raw, now_ns)
+                pending_geometry = raw if geometry_pending else None
                 publish_slam_scan(geometry, now_ns)
                 control_raw = _wire_control_raw(
                     geometry,
@@ -603,11 +620,23 @@ def _lidar_owner_process_main(
                     maximum_points=control_maximum_points,
                 )
                 publish_evidence(raw, control_raw)
+            elif pending_geometry is not None:
+                geometry, geometry_pending = derived_scan(pending_geometry, now_ns)
+                if not geometry_pending:
+                    control_raw = _wire_control_raw(
+                        geometry, minimum_range_m=control_minimum_range_m,
+                        maximum_range_m=control_maximum_range_m,
+                        maximum_points=control_maximum_points)
+                    geometry_changed = True
+                    publish_slam_scan(geometry, now_ns)
+                    if capture_map_hz:
+                        publish_evidence(pending_geometry, control_raw)
+                    pending_geometry = None
             receive_slam_pose(now_ns)
             if slam_enabled:
                 matcher = slam_result
                 matcher_revision = int(getattr(matcher, "matcher_result_id", 0) or 0)
-            if (raw_changed or matcher_revision != last_matcher_revision
+            if (raw_changed or geometry_changed or matcher_revision != last_matcher_revision
                     or relative_revision != last_relative_revision
                     or now_ns - last_status_ns >= process_config.state_heartbeat_ns):
                 status = runtime_status()

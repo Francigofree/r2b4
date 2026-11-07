@@ -208,8 +208,13 @@ def test_real_producer_uses_control_points_physical_5hz_buckets_and_no_full_raw_
     by_revision = {value[1][0]: value[1] for value in states}
     assert len(by_revision) == 6
     for scan, state in zip(scans, states):
-        assert state[1] == process_lidar_port._wire_control_raw(scan,
+        expected = process_lidar_port._wire_control_raw(scan,
             minimum_range_m=.08, maximum_range_m=3., maximum_points=96)
+        assert state[1][:7] == expected[:7]
+        assert state[1][8:] == expected[8:]
+        assert all(state[1][7][key] == value for key, value in scan.summary.items())
+        assert state[1][7]["rotation_deskew"] == "POINT_TIMING_UNAVAILABLE"
+        assert state[1][7]["local_geometry_pending"] is False
         assert len(state) == 5 and len(state[1][6]) <= 96
     for observation in maps:
         compact = by_revision[observation["source_sequence"]]

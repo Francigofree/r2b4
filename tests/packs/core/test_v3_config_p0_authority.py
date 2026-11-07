@@ -85,3 +85,25 @@ def test_l7_reversal_threshold_conflict_fails_closed():
     )
     with pytest.raises(ValueError, match='reversal threshold exceeds operational omega limit'):
         ConfigResolver.from_documents(hardware, physics, speed_map, invalid)
+
+
+def test_nav2_requires_off_control_completion_and_local_rollout_budget():
+    hardware, physics, speed_map, control = _documents()
+    control['runtime']['nav2_planner'] = {
+        'socket_path': '/tmp/r2b4-nav2-test.sock',
+        'request_timeout_s': .18,
+        'max_map_age_s': 6.0,
+    }
+    resolved = ConfigResolver.from_documents(hardware, physics, speed_map, control)
+    assert resolved.edges.nav2_planner.request_timeout_s == .18
+    assert resolved.runtime.composition.live_control.control.navigation.global_planner_enabled
+    assert resolved.as_dict()['edges']['nav2_planner']['socket_path'] == '/tmp/r2b4-nav2-test.sock'
+
+    for changes, reason in (
+        ({'enabled': False, 'completion_inputs': False}, 'isolated async planner'),
+        ({'request_timeout_ns': 180_000_000}, 'leave time'),
+    ):
+        invalid = deepcopy(control)
+        invalid['layers']['async_l6'].update(changes)
+        with pytest.raises(ValueError, match=reason):
+            ConfigResolver.from_documents(hardware, physics, speed_map, invalid)

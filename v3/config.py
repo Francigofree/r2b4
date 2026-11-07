@@ -174,6 +174,16 @@ class ResolvedRobotConfig:
     def __post_init__(self) -> None:
         control = self.runtime.composition.live_control.control
         sensors = self.runtime.sensor_inputs
+        nav2 = self.edges.nav2_planner
+        if control.navigation.global_planner_enabled != (nav2 is not None):
+            raise ValueError("global planner policy must match the resolved Nav2 edge")
+        if nav2 is not None:
+            if not control.async_l6.enabled or not control.async_l6.completion_inputs:
+                raise ValueError("Nav2 requires the isolated async planner completion path")
+            if nav2.request_timeout_s * 1e9 >= control.async_l6.request_timeout_ns:
+                raise ValueError("Nav2 deadline must leave time for the V3 local rollout")
+            if self.lidar.global_backend != "slam_toolbox":
+                raise ValueError("Nav2 requires the current SLAM Toolbox map source")
         if self.roomcruise is not None:
             if any(getattr(control.navigation, field.key) != field.value for field in self.roomcruise.preferences.as_fields()):
                 raise ValueError("navigation fallback preferences differ from the resolved RoomCruise profile")
@@ -383,7 +393,7 @@ class ConfigResolver:
         for section, derived_names in {
             "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps"},
             "wheel_pi": {"minimum_reliable_speed_mps", "velocity_unreliable_below_mps"},
-            "navigation": {"footprint_length_m", "footprint_width_m", "footprint_center_x_m", "wheel_limits", "localization_recovery_omega_rad_s",
+            "navigation": {"footprint_length_m", "footprint_width_m", "footprint_center_x_m", "wheel_limits", "localization_recovery_omega_rad_s", "global_planner_enabled",
                            "operational_max_v_mps", "operational_max_omega_rad_s",
                            "operational_max_curvature_rad_per_m", "motion_proof_horizon_ns"} | ExplorePreferences.field_names(),
             "motion_realization": {"wheel_limits", "max_world_freshness_ns"},
@@ -431,6 +441,7 @@ class ConfigResolver:
                                 "operational_max_v_mps": layers["operational_constraints"]["max_v_mps"],
                                 "operational_max_omega_rad_s": layers["operational_constraints"]["max_omega_rad_s"],
                                 "operational_max_curvature_rad_per_m": layers["operational_constraints"]["max_curvature_rad_per_m"],
+                                "global_planner_enabled": edges.nav2_planner is not None,
                                 "motion_proof_horizon_ns": max(layers["motion_realization"]["max_control_gap_ns"],
                                                                layers["wheel_pi"]["max_control_gap_ns"]),
                                 **{field.key: field.value for field in roomcruise.preferences.as_fields()}}

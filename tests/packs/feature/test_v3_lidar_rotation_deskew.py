@@ -1,6 +1,10 @@
 """A rotating physical scan stays sharp in both local and SLAM geometries."""
 from dataclasses import replace
 import math
+import queue
+import sys
+import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -106,3 +110,72 @@ def test_raw_evidence_retains_receipt_times_without_changing_measurement_identit
     assert encoded["point_received_monotonic_ns"] == [point.received_monotonic_ns for point in raw.raw_scan]
     assert encoded["measurement_monotonic_ns"] == MID
     assert encoded["point_encoding"] == "ANGLE_DEG_DISTANCE_M_QUALITY"
+
+
+@pytest.mark.parametrize("heading_ready", (True, False))
+def test_production_process_publishes_safety_before_bracket_then_completes_or_expires(monkeypatch, heading_ready):
+    import v3.adapters.process_lidar_port as owner
+    from rig import resolved_config
+    resolved = resolved_config()
+    raw = _spinning_room_scan()
+    stop = threading.Event()
+    class History:
+        calls = 0
+        def __init__(self, *args): pass
+        def lookup(self, timestamp):
+            self.calls += 1
+            return None if self.calls <= 3 or not heading_ready else _heading(timestamp)
+    class Port:
+        calls = 0
+        def get_raw_scan_snapshot(self):
+            self.calls += 1
+            if self.calls == 3:
+                stop.set()
+            return raw
+        def get_matcher_result(self): return None
+        def get_relative_result(self): return None
+        def get_runtime_status(self):
+            return dict(running=True, health="OK", driver_connected=True, matcher_process_alive=True)
+        def stop(self): pass
+    exported = []
+    class Sender:
+        sent_packets, dropped_packets = 0, 0
+        def __init__(self, *args, **kw): pass
+        def publish_scan(self, snapshot, **kw):
+            exported.append(snapshot)
+            return True
+        def receive(self): return ()
+        def close(self): pass
+    monkeypatch.setitem(sys.modules, "serial", SimpleNamespace(Serial=None))
+    monkeypatch.setattr(owner, "_SharedPoseHistory", History)
+    monkeypatch.setattr(owner, "SlamToolboxSender", Sender)
+    port = Port()
+    monkeypatch.setattr(owner, "open_native_lidar_port", lambda *a, **kw: port)
+    monkeypatch.setattr(owner.time, "monotonic_ns", lambda: END+(10_000_000 if port.calls == 1 else 60_000_000))
+    output, evidence = queue.Queue(8), queue.Queue(8)
+    config = replace(resolved.lidar, global_backend="slam_toolbox", matcher=replace(
+        resolved.lidar.matcher, lidar_x_offset_m=OFFSET[0], lidar_y_offset_m=OFFSET[1]))
+    owner._lidar_owner_process_main(config, None, None, None, None, output, evidence,
+        threading.Event(), stop, None, None, False, .08, 6., 96,
+        resolved.edges.lidar_process, capture_map_hz=5, slam_session_id=11)
+    initial, ready = output.get_nowait(), output.get_nowait()
+    assert initial[1][0] == ready[1][0] == raw.raw_scan_id
+    assert initial[1][7]["local_geometry_pending"] is True
+    assert initial[1][6] == ()
+    if not heading_ready:
+        assert ready[1][7]["local_geometry_pending"] is True
+        assert ready[1][6] == ()
+        assert ready[3]["rotation_deskew"] == "HEADING_BRACKET_TIMEOUT"
+        assert exported == []
+        assert evidence.get_nowait()[0] == "raw_end"
+        return
+    assert ready[1][7]["local_geometry_pending"] is False
+    assert _wall_error(_unwire_raw(ready[1]).raw_scan) < 1e-12
+    assert ready[3]["rotation_deskew_applied_scans"] == 1
+    assert ready[3]["rotation_deskew_time_basis"] == "HOST_PACKET_RECEIPT"
+    assert len(exported) == 1
+    assert _wall_error(exported[0].raw_scan) < 1e-12
+    observation = evidence.get_nowait()
+    assert observation[0] == "navigation_map"
+    assert observation[1]["rotation_deskew"] == "APPLIED"
+    assert observation[1]["measurement_monotonic_ns"] == MID
