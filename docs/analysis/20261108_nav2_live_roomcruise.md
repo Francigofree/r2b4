@@ -15,8 +15,8 @@ marad; a control kizárólag kis, lezárt guidance-completiont kap.
 
 A korábbi LiDAR-javítás végellenőrzése igazolta a deskew utáni measurement-age
 guardot mindkét adatúton, a hiányzó midpoint-póz lejáratát, az egyetlen latest
-pending scan határát és a változatlan scan-azonosságot. Új freshness- vagy
-encoder-watchdog lazítás nincs. A felhasználó szerint az encoder kis,
+pending scan határát és a változatlan scan-azonosságot. Az első két próbakörben
+a freshness- és encoder-watchdog limitek változatlanok voltak. A felhasználó szerint az encoder kis,
 0,15 m/s körüli sebességnél bizonytalan; emiatt az új Room Cruise próba
 0,30 m/s / 0,80 rad/s felső korláttal készül. A tényleges sebességet az
 akadályok és a V3 továbbra is csökkenthetik; a gyorsítási átmenet nem kerülhető meg.
@@ -117,3 +117,32 @@ L1–L12 eltérés nélkül. Ez motormentes determinisztikai bizonyítás.
 
 **Nem bizonyított:** 120 s elfogadás, folyamatos AMR-szerű haladás,
 teljes fizikai globális NAVIGATE mission, külső referenciához mért térképpontosság.
+
+## Javított fordulási korlátú élő próba
+
+A felhasználó új, egyszeri próbát engedélyezett 0,30 m/s / 1,40 rad/s
+korlátokkal. Motormentes readiness PASS, maximális térképkor 141,33 ms.
+Forrás: `runtime/captures/v3_20261108_144925_31926_capture.mcap`.
+A próba 19,940 s aktív idő után L11 faulttal leállt. A minősített mintavett
+lokális pózokból becsült út 6,766 m; ez becslés, nem fizikai ground truth.
+
+Az első fault tick3142 / 15850216225690 ns:
+`MISSING_EDGE:left;MISSING_EDGE:right`. A kerékcélok +0,2725 / +0,2725 m/s,
+a legutolsó elfogadott élek kora 255,06 / 253,91 ms. Az encoder-snapshot friss
+és érvényes. A megelőző másodperc 37 navigációs eseményében nincs STOP,
+zéró motor-output, irányváltás vagy L9/L10/L11 átmeneti határidő.
+Ez a megállás ezért nem a 0,15 m/s körüli sebességfit vagy egy újrainduló rámpa
+következményeként bizonyított. A felhasználó szerint a robot szabadon haladt
+a leállásig. A fizikai megállás és a közös GPIO-értesítési út kiesése továbbra
+sem különíthető el biztosan; konkrét encoder-hardverhibát nem állítunk.
+Artifact: `corrected/terminal_l11_summary.json` és `terminal_l11_boundary.json`.
+
+## Kért 500 ms-os élvédelem
+
+A felhasználó kifejezetten kérte a 250 ms-os védelem 500 ms-ra emelését és
+az élő teszt folytatását. A `wheel_pi.max_feedback_uncertainty_ns` 500 ms lett.
+Az L11 accepted-edge liveness most kizárólag ebből a fizikai élidőből számolt
+budgetből dolgozik. A korábbi `min(max_feedback_age, max_feedback_uncertainty)`
+250 ms-nál továbbra is elvette volna az élbizonyítékot, még friss acquisition
+esetén is. Az acquisition-age külön ellenőrzésének 250 ms-os határa és az L2
+admission freshness megmarad. Snapshot-publikálás nem újítja meg az él határidejét.

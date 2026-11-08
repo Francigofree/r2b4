@@ -126,7 +126,8 @@ def test_motion_low_speed_feedback_uses_feedforward_recovers_and_preserves_watch
     controller = WheelActuatorController(config.speed_map, config.wheel_pi)
     restored = None
     fault_tick = None
-    for tick in range(24):
+    uncertainty_ticks = (config.wheel_pi.max_feedback_uncertainty_ns+19_999_999)//20_000_000
+    for tick in range(uncertainty_ticks+4):
         f = _feedback(tick, reliable)
         values = {v.key: v.value for v in f.accepted[0].values}
         if tick < 2:
@@ -167,22 +168,23 @@ def test_motion_low_speed_feedback_uses_feedforward_recovers_and_preserves_watch
             restored = WheelActuatorController(config.speed_map, config.wheel_pi)
             restored.restore(controller.checkpoint())
     assert fault_tick is not None
-    assert (fault_tick - 3) * 20_000_000 < 800_000_000
+    assert (fault_tick - 3) * 20_000_000 <= config.wheel_pi.max_feedback_uncertainty_ns+40_000_000
 
     # The live failure changed from weak fit to edge loss after spending the
     # ordinary budget. Do not forgive that time or label the healthy wheel lost.
     controller = WheelActuatorController(config.speed_map, config.wheel_pi)
-    for tick in range(19):
+    weak_fit_end_tick = uncertainty_ticks+1
+    for tick in range(weak_fit_end_tick+1):
         f = _feedback(tick, below)
         values = {v.key: v.value for v in f.accepted[0].values}
         values['right_mps'] = reliable
-        if tick == 18:
+        if tick == weak_fit_end_tick:
             values.update(left_mps=0.0, left_estimation_timebase="TICK_SNAPSHOT")
         f = replace(f, accepted=(replace(f.accepted[0], values=tuple(
             DataField(k, v) for k, v in values.items())),))
         wheels = WheelVelocitySetpoint(f.context, .19, .19,
                                        velocity_transition_until_ns=1_800_000_000)
-        if tick == 18:
+        if tick == weak_fit_end_tick:
             with pytest.raises(ValueError, match="MISSING_EDGE:left$"):
                 controller(wheels, f)
         else:
@@ -412,6 +414,84 @@ def _warm_native_feedback(resolved, deadline, *, side=None, sign=1):
     return native, controller
 
 
+@pytest.mark.parametrize('side', ('left', 'right'))
+@pytest.mark.parametrize('sign', (1, -1))
+def test_native_500ms_signed_edge_budget_preserves_feedforward_and_acquisition_age(side, sign):
+    resolved = resolved_config()
+    control = resolved.runtime.composition.live_control.control
+    # These independent bounds describe different evidence: physical signed
+    # edge liveness and freshness of the acquisition containing that history.
+    policy = replace(control.wheel_pi, max_feedback_uncertainty_ns=500_000_000,
+                     max_feedback_age_ns=250_000_000)
+    native = _NativeFeedback(resolved)
+    controller = WheelActuatorController(control.speed_map, policy)
+    other = 'right' if side == 'left' else 'left'
+    targets = {side:sign*.3, other:.3}
+    for tick in range(31):
+        measured = {side:sign*.25, other:.25}
+        frame = native.frame(tick, measured['left'], measured['right'])
+        controller(WheelVelocitySetpoint(frame.context, targets['left'], targets['right'],
+            velocity_transition_until_ns=2_000_000_000), frame)
+    last_edge_ns = native.counters[side].value.edge_history[-1].timestamp_ns
+    deadline = last_edge_ns + policy.max_feedback_uncertainty_ns
+    assert getattr(controller.feedback_evidence, f'{side}_motion_live')
+
+    # Keep publishing fresh native snapshots, callbacks and the other wheel's
+    # edges. None supplies a replacement accepted edge for the quiet wheel.
+    times = sorted(set(range(native.previous_ns+20_000_000, deadline, 20_000_000))
+                   | {last_edge_ns+300_000_000, deadline-1, deadline})
+    source_sequences = []
+    for tick, now_ns in enumerate(times, 31):
+        measured = {side:0., other:.25}
+        frame = native.frame(tick, measured['left'], measured['right'], now_ns=now_ns)
+        observation = frame.accepted[0]
+        values = {field.key:field.value for field in observation.values}
+        assert observation.captured_monotonic_ns == now_ns
+        assert values[f'{side}_last_accepted_edge_timestamp_ns'] == last_edge_ns
+        assert values['measurement_timing_valid'] is True
+        assert values['measurement_stale'] is False
+        source_sequences.append(observation.source_sequence)
+        wheels = WheelVelocitySetpoint(frame.context, targets['left'], targets['right'])
+        if now_ns == deadline:
+            with pytest.raises(ValueError, match=f'MISSING_EDGE:{side}$'):
+                controller(wheels, frame)
+            evidence = controller.feedback_evidence
+            assert evidence.feedback_uncertain_since_ns == last_edge_ns
+            assert evidence.feedback_deadline_ns == deadline
+            from v3.adapters.fake_edges import FakeHal
+            from v3.contracts import LifecycleState, SafetyDecision
+            from v3.layers.l12_safety_final import FinalSafetyGate
+            writer = FakeHal()
+            final = FinalSafetyGate(writer).finalize(frame.context, None, (), LifecycleState.ACTIVE, 'L11_ERROR')
+            assert final.safety_decision is SafetyDecision.FAULT
+            assert not final.enabled and final.left_output == final.right_output == 0.
+        else:
+            output = controller(wheels, frame)
+            if now_ns-last_edge_ns >= 300_000_000:
+                assert values[f'{side}_estimation_timebase'] == 'TICK_SNAPSHOT'
+                assert getattr(output, f'{side}_normalized') == pytest.approx(
+                    control.speed_map.lookup(side, targets[side])[0])
+                assert getattr(controller.feedback_evidence, f'{side}_motion_live')
+                assert not getattr(controller.feedback_evidence, f'{side}_velocity_feedback_ready')
+    assert source_sequences == sorted(set(source_sequences))
+
+    # A stale acquisition still holds immediately after 250 ms, even when its
+    # last physical edge remains inside the separate 500 ms motion budget.
+    native = _NativeFeedback(resolved)
+    controller = WheelActuatorController(control.speed_map, policy)
+    for tick in range(31):
+        frame = native.frame(tick, .25, .25)
+        controller(WheelVelocitySetpoint(frame.context, .3, .3), frame)
+    captured_ns = frame.accepted[0].captured_monotonic_ns
+    context = TickContext(31, captured_ns+policy.max_feedback_age_ns+1)
+    stale = replace(frame, context=context)
+    assert context.monotonic_ns-native.counters[side].value.edge_history[-1].timestamp_ns < policy.max_feedback_uncertainty_ns
+    output = controller(WheelVelocitySetpoint(context, .3, .3), stale)
+    assert output.left_normalized == output.right_normalized == 0.
+    assert controller.feedback_evidence.captured_monotonic_ns == captured_ns
+    assert controller.feedback_evidence.feedback_uncertain_since_ns == context.monotonic_ns
+
+
 def test_motion_native_reversal_pause_continues_and_recovers_per_wheel_pi():
     resolved = resolved_config()
     config = resolved.runtime.composition.live_control.control
@@ -581,7 +661,8 @@ def test_motion_native_degraded_start_hold_resume_and_edge_watchdogs():
     # deadlines cannot renew it; the real L12 error path writes zero FAULT.
     last_edge = native.counters['left'].value.edge_history[-1].timestamp_ns
     deadline = last_edge + config.wheel_pi.max_feedback_uncertainty_ns
-    for tick in range(500, 520):
+    uncertainty_ticks = (config.wheel_pi.max_feedback_uncertainty_ns+19_999_999)//20_000_000
+    for tick in range(500, 500+uncertainty_ticks+3):
         now = min(1_000_000_000 + tick * 20_000_000, deadline)
         frame = native.frame(tick, 0., .02, now_ns=now)
         wheels = WheelVelocitySetpoint(frame.context, -.19, .19,
@@ -645,7 +726,9 @@ def test_motion_native_degraded_start_hold_resume_and_edge_watchdogs():
                                    old.pulse_count - 1)
             counter.value = replace(old, pulse_count=edge.pulse_count,
                                     edge_history=old.edge_history + (edge,))
-        now = 1_900_000_000 if failure == 'stale_edges' else 1_600_000_000
+        now = (counter.value.edge_history[-1].timestamp_ns
+               + config.wheel_pi.max_feedback_uncertainty_ns + 1
+               if failure == 'stale_edges' else 1_600_000_000)
         frame = native.frame(30, 0., 0., now_ns=now)
         if failure == 'stale_acquisition':
             context = TickContext(31, now + config.wheel_pi.max_feedback_age_ns + 1)

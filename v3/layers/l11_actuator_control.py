@@ -946,8 +946,10 @@ class WheelActuatorController:
             and self._counter_diagnostics_are_clean(values)
             and values.get(f"{side}_counter_running") is True
             and type(edge_ns) is int
-            and 0 <= now_ns - edge_ns < min(self._config.max_feedback_age_ns,
-                                           self._config.max_feedback_uncertainty_ns)
+            # Acquisition freshness is checked separately. An accepted edge
+            # keeps its own non-renewable liveness budget even as fresh
+            # snapshots report that same physical edge.
+            and 0 <= now_ns - edge_ns < self._config.max_feedback_uncertainty_ns
             and (not native or (started_ns is not None and edge_ns >= started_ns))
             and (not native or direction_epoch_ns is None or edge_ns >= direction_epoch_ns)
             and type(direction) is int and direction * target_mps > 0.0
