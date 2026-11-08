@@ -37,6 +37,17 @@ class ScanPose:
     yaw_rad: float
 
 
+def ros_scan_ranges(scan: SlamScanPacket) -> list[float]:
+    """Keep missing wire bins out of Karto's unfiltered scan matcher.
+
+    Zero is the compact transport's missing-return sentinel. Karto's matcher
+    does not apply LaserScan.range_min to its lookup points, so forwarding zero
+    would create repeated points at the laser origin. NaN is explicitly ignored
+    by both its matching and occupancy paths.
+    """
+    return [value if value != 0.0 else math.nan for value in scan.ranges_m]
+
+
 def align_scan(scan: SlamScanPacket, history) -> ScanPose | None:
     """Interpolate qualified local odometry; never extrapolate across a reset."""
     previous = None
@@ -359,7 +370,7 @@ def run(args) -> int:
                     # expresses returns at the canonical midpoint. Angular
                     # rebinning has no per-ray ordering to expose to ROS.
                     message.time_increment = 0.0
-                    message.ranges = list(scan.ranges_m)
+                    message.ranges = ros_scan_ranges(scan)
                     ros_ns = scan.measurement_ns + ros_offset_ns
                     associations[ros_ns] = scan, aligned, address
                     while len(associations) > 32:

@@ -6,7 +6,9 @@ import math
 import pytest
 
 from v3.adapters.slam_toolbox_transport import SlamOdometryPacket, SlamScanPacket
-from v3.slam_toolbox_bridge import MAX_ODOM_BRACKET_NS, align_scan, conservative_covariance
+from v3.slam_toolbox_bridge import (
+    MAX_ODOM_BRACKET_NS, align_scan, conservative_covariance, ros_scan_ranges,
+)
 
 
 MEASURED_NS = 2_000_000_000
@@ -20,6 +22,17 @@ def _scan(**changes):
 def _odometry(delta=0, **changes):
     return replace(SlamOdometryPacket(11, 33, 8, MEASURED_NS + delta,
         3, 1., 2., .3, True, True), **changes)
+
+
+def test_ros_missing_returns_cannot_become_finite_laser_origin_points():
+    scan = _scan(ranges_m=(0., .08, 1.25, -0., 12., 0.))
+    ranges = ros_scan_ranges(scan)
+    assert len(ranges) == len(scan.ranges_m)
+    assert [index for index, value in enumerate(ranges) if math.isfinite(value)] == [1, 2, 4]
+    assert [ranges[index] for index in (1, 2, 4)] == [.08, 1.25, 12.]
+    assert all(math.isnan(ranges[index]) for index in (0, 3, 5))
+    # Keep the compact producer/transport evidence and its geometry unchanged.
+    assert scan.ranges_m == (0., .08, 1.25, -0., 12., 0.)
 
 
 def test_exact_scan_time_preserves_generation_and_pose_without_future_sample():
