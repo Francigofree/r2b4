@@ -537,7 +537,11 @@
       "ready_timeout_s": 1.25
     },
     "pose_history_capacity": 64,
-    "nav2_planner": null,
+    "nav2_planner": {
+      "socket_path": "/home/alba/project_r2b4/runtime/nav2_planner.sock",
+      "request_timeout_s": 0.18,
+      "max_map_age_s": 6.0
+    },
     "encoder_process": {
       "sample_period_ns": 20000000,
       "queue_capacity": 2,

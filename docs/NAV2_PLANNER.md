@@ -32,15 +32,10 @@ map/TF hiányában az aktiválás 15 s után időtúllépéssel leáll.
 A ROS supervisor és gyermekei nice 10 prioritáson, egy control CPU-n kívüli
 háttér CPU-ra korlátozva futnak.
 
-## V3 opt-in
+## V3 konfiguráció
 
-Az aktív `conf/vezerles.json` alapértelmezetten:
-
-```json
-"nav2_planner": null
-```
-
-Az opcionális `runtime.nav2_planner` értéke bekapcsoláshoz:
+Az aktív `conf/vezerles.json` bekapcsolja a globális NAVIGATE Nav2-adapterét.
+A `runtime.nav2_planner` értéke:
 
 ```json
 {
@@ -49,6 +44,10 @@ Az opcionális `runtime.nav2_planner` értéke bekapcsoláshoz:
   "max_map_age_s": 6.0
 }
 ```
+
+A sidecart a fenti `./r nav2 start` indítja. Elérhetetlen Planner Server mellett
+a globális NAVIGATE HOLD-ot ad; Room Cruise ettől függetlenül a helyi V3
+tervezőt használja. Az adapter `null` értékkel kikapcsolható.
 
 Ehhez SLAM Toolbox backend és aszinkron, lezárt completion-inputos L6 szükséges.
 A resolver a globális planner elérhetőségi követelményét a replayhez is rögzített
@@ -100,6 +99,16 @@ Ez nem bizonyít valós helyiségben teljesített Nav2 NAVIGATE missiont vagy
 ```bash
 ./r test tests/packs/feature/test_nav2_planner.py
 ```
+
+2026-11-08-án a valós robot motormentes IDLE állapotában, a tényleges SLAM
+18 000 cellás térképével és a V3 valódi GOOD pozícióminőségével a Nav2 READY
+útjavaslatot adott. Az izolált worker és a helyi geometriai kernel együtt
+50,14 ms alatt végzett, 26 ütközésmentes jelölttel; a lezárt guidance-ból
+végzett helyi újraszámolás egyezett. A diagnosztikai lokális geometria a SLAM
+gridből, bounded környezetben készült, mert a státusz nem exportálja a teljes
+production L4-et. A mérési freshness ismeretlenként maradt, ezért ez nem
+production L6 motion-authority vagy végrehajtott NAVIGATE mission bizonyítása.
+A [mérési jelentés](analysis/20261108_nav2_live_roomcruise.md) ezt külön jelöli.
 
 A Planner Server action és Jazzy konfiguráció elsődleges forrásai:
 [ComputePathToPose](https://api.nav2.org/actions/jazzy/computepathtopose.html),
