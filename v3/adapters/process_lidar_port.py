@@ -448,8 +448,9 @@ def _lidar_owner_process_main(
     deskew_uncompensated_scans = 0
 
     pending_geometry = None
+    geometry_maximum_age_ns = min(config.maximum_input_age_ns, config.maximum_result_age_ns)
 
-    def derived_scan(raw, now_ns):
+    def derived_scan(raw):
         nonlocal deskew_reason, deskew_applied_scans, deskew_uncompensated_scans
         if raw is None or not slam_enabled:
             return raw, False
@@ -461,11 +462,15 @@ def _lidar_owner_process_main(
             pose_provider=pose_history.lookup,
             lidar_x_m=config.matcher.lidar_x_offset_m,
             lidar_y_m=config.matcher.lidar_y_offset_m)
-        pending = (deskew_reason == "HEADING_BRACKET_UNAVAILABLE"
-                   and now_ns-raw.scan_end_monotonic_ns <= 40_000_000)
-        unavailable = deskew_reason not in {"APPLIED", "POINT_TIMING_UNAVAILABLE"}
-        if deskew_reason == "HEADING_BRACKET_UNAVAILABLE" and not pending:
+        # A completed control pose can reach the edge after 40 ms without
+        # making this measurement stale. Keep only the latest physical scan,
+        # bounded by its original midpoint and the existing admission budget.
+        age_ns = time.monotonic_ns()-raw.measurement_monotonic_ns
+        measurement_fresh = 0 <= age_ns <= geometry_maximum_age_ns
+        pending = deskew_reason == "HEADING_BRACKET_UNAVAILABLE" and measurement_fresh
+        if not measurement_fresh:
             deskew_reason = "HEADING_BRACKET_TIMEOUT"
+        unavailable = deskew_reason not in {"APPLIED", "POINT_TIMING_UNAVAILABLE"}
         if not pending:
             deskew_applied_scans += int(deskew_reason == "APPLIED")
             deskew_uncompensated_scans += int(deskew_reason != "APPLIED")
@@ -571,7 +576,7 @@ def _lidar_owner_process_main(
             matcher_cpus=matcher_cpus, strict_affinity=strict_affinity,
         )
         initial_raw = port.get_raw_scan_snapshot()
-        initial_geometry, geometry_pending = derived_scan(initial_raw, time.monotonic_ns())
+        initial_geometry, geometry_pending = derived_scan(initial_raw)
         pending_geometry = initial_raw if geometry_pending else None
         initial_matcher = slam_result if slam_enabled else port.get_matcher_result()
         initial_relative = port.get_relative_result()
@@ -610,7 +615,7 @@ def _lidar_owner_process_main(
             raw_changed = raw_revision != last_raw_revision
             geometry_changed = False
             if raw_changed and raw is not None:
-                geometry, geometry_pending = derived_scan(raw, now_ns)
+                geometry, geometry_pending = derived_scan(raw)
                 pending_geometry = raw if geometry_pending else None
                 publish_slam_scan(geometry, now_ns)
                 control_raw = _wire_control_raw(
@@ -621,7 +626,7 @@ def _lidar_owner_process_main(
                 )
                 publish_evidence(raw, control_raw)
             elif pending_geometry is not None:
-                geometry, geometry_pending = derived_scan(pending_geometry, now_ns)
+                geometry, geometry_pending = derived_scan(pending_geometry)
                 if not geometry_pending:
                     control_raw = _wire_control_raw(
                         geometry, minimum_range_m=control_minimum_range_m,

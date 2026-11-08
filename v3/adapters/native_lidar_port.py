@@ -640,6 +640,12 @@ class NativeLidarPort:
             pose_reference = self._pose_provider(scan.measurement_monotonic_ns)
             if pose_reference is None:
                 self._last_matcher_reason = "POSE_REFERENCE_UNAVAILABLE"
+                if self._config.global_backend == "slam_toolbox":
+                    age_ns = self._checked_clock() - scan.measurement_monotonic_ns
+                    if not 0 <= age_ns <= min(self._config.maximum_input_age_ns,
+                                             self._config.maximum_result_age_ns):
+                        self._last_queued_scan_revision = scan.revision
+                        self._last_matcher_reason = "HEADING_BRACKET_TIMEOUT"
             else:
                 if not isinstance(pose_reference, TimedPoseReference):
                     raise TypeError("pose_provider must return TimedPoseReference or None")
@@ -657,15 +663,21 @@ class NativeLidarPort:
                         pose_provider=self._pose_provider,
                         lidar_x_m=self._config.matcher.lidar_x_offset_m,
                         lidar_y_m=self._config.matcher.lidar_y_offset_m)
+                    # A delayed heading bracket may arrive while the measured
+                    # scan is still usable. Its wait shares the existing input
+                    # and result budgets, both measured from the scan midpoint.
+                    # Check after deskew: newly available heading must not
+                    # revive a scan whose measurement budget has expired.
+                    age_ns = self._checked_clock() - scan.measurement_monotonic_ns
+                    if not 0 <= age_ns <= min(self._config.maximum_input_age_ns,
+                                             self._config.maximum_result_age_ns):
+                        deskew_reason = "HEADING_BRACKET_TIMEOUT"
                 geometry_unavailable = (self._config.global_backend == "slam_toolbox"
                                         and deskew_reason not in {"APPLIED", "POINT_TIMING_UNAVAILABLE"})
                 if geometry_unavailable:
                     self._last_matcher_reason = deskew_reason
                     if deskew_reason != "HEADING_BRACKET_UNAVAILABLE":
                         self._last_queued_scan_revision = scan.revision
-                    elif self._checked_clock() - scan.scan_end_monotonic_ns > 40_000_000:
-                        self._last_queued_scan_revision = scan.revision
-                        self._last_matcher_reason = "HEADING_BRACKET_TIMEOUT"
                 else:
                     packet: dict[str, object] = {
                         "kind": "scan",

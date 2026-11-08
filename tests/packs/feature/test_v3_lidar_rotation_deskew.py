@@ -28,7 +28,7 @@ def _heading(timestamp):
     return TimedPoseReference(timestamp, 0., 0., math.atan2(math.sin(yaw), math.cos(yaw)))
 
 
-def _spinning_room_scan():
+def _spinning_room_scan(revision=7):
     points = []
     for index in range(72):
         angle = index * 5.
@@ -46,8 +46,8 @@ def _spinning_room_scan():
                    if abs(velocity) > 1e-12 for wall in walls
                    if (wall-origin)/velocity > 0]
         points.append(RplidarPoint(angle, min(lengths), 15, timestamp))
-    physical = RplidarScan(7, END, START, END, MID, tuple(points))
-    return NativeRawLidarSnapshot(7, END/1e9, START, END, MID, "OK", tuple(points),
+    physical = RplidarScan(revision, END, START, END, MID, tuple(points))
+    return NativeRawLidarSnapshot(revision, END/1e9, START, END, MID, "OK", tuple(points),
                                   _sector_summary(physical), END)
 
 
@@ -114,26 +114,39 @@ def test_raw_evidence_retains_receipt_times_without_changing_measurement_identit
     assert encoded["point_encoding"] == "ANGLE_DEG_DISTANCE_M_QUALITY"
 
 
-@pytest.mark.parametrize("heading_ready", (True, False))
-def test_production_process_publishes_safety_before_bracket_then_completes_or_expires(monkeypatch, heading_ready):
+@pytest.mark.parametrize("outcome", ("late_ready", "expired_missing", "expired_ready",
+                                     "expired_during_lookup", "superseded"))
+def test_production_process_publishes_safety_before_bracket_then_completes_or_expires(monkeypatch, outcome):
     import v3.adapters.process_lidar_port as owner
     from rig import resolved_config
     resolved = resolved_config()
-    raw = _spinning_room_scan()
+    raw = _spinning_room_scan(774)
+    if outcome == "superseded":
+        shift_ns = 100_000_000
+        points = tuple(replace(point, received_monotonic_ns=point.received_monotonic_ns+shift_ns)
+                       for point in raw.raw_scan)
+        physical = RplidarScan(775, END+shift_ns, START+shift_ns, END+shift_ns, MID+shift_ns, points)
+        replacement = NativeRawLidarSnapshot(775, (END+shift_ns)/1e9,
+            START+shift_ns, END+shift_ns, MID+shift_ns, "OK", points,
+            _sector_summary(physical), END+shift_ns)
     stop = threading.Event()
     class History:
-        calls = 0
+        attempted_at = []
         def __init__(self, *args): pass
         def lookup(self, timestamp):
-            self.calls += 1
-            return None if self.calls <= 3 or not heading_ready else _heading(timestamp)
+            self.attempted_at.append(owner.time.monotonic_ns())
+            if (outcome == "expired_during_lookup" and port.calls >= 3
+                    and timestamp == raw.raw_scan[-1].received_monotonic_ns):
+                port.lookup_advanced = True
+            return _heading(timestamp) if port.calls >= 3 and outcome != "expired_missing" else None
     class Port:
         calls = 0
+        lookup_advanced = False
         def get_raw_scan_snapshot(self):
             self.calls += 1
             if self.calls == 3:
                 stop.set()
-            return raw
+            return replacement if outcome == "superseded" and self.calls >= 3 else raw
         def get_matcher_result(self): return None
         def get_relative_result(self): return None
         def get_runtime_status(self):
@@ -153,18 +166,27 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     monkeypatch.setattr(owner, "SlamToolboxSender", Sender)
     port = Port()
     monkeypatch.setattr(owner, "open_native_lidar_port", lambda *a, **kw: port)
-    monkeypatch.setattr(owner.time, "monotonic_ns", lambda: END+(10_000_000 if port.calls == 1 else 60_000_000))
     output, evidence = queue.Queue(8), queue.Queue(8)
     config = replace(resolved.lidar, global_backend="slam_toolbox", matcher=replace(
         resolved.lidar.matcher, lidar_x_offset_m=OFFSET[0], lidar_y_offset_m=OFFSET[1]))
+    maximum_age_ns = min(config.maximum_input_age_ns, config.maximum_result_age_ns)
+    final_ns = (END+80_000_000 if outcome in {"late_ready", "expired_during_lookup"} else END+120_000_000
+                if outcome == "superseded" else MID+maximum_age_ns+1)
+    monkeypatch.setattr(owner.time, "monotonic_ns", lambda: (
+        MID+maximum_age_ns+1 if port.lookup_advanced else END+10_000_000
+        if port.calls == 1 else END+60_000_000 if port.calls == 2 else final_ns))
     owner._lidar_owner_process_main(config, None, None, None, None, output, evidence,
         threading.Event(), stop, None, None, False, .08, 6., 96,
         resolved.edges.lidar_process, capture_map_hz=5, slam_session_id=11)
     initial, ready = output.get_nowait(), output.get_nowait()
-    assert initial[1][0] == ready[1][0] == raw.raw_scan_id
+    # The bracket is still absent on a retry after the former 40 ms deadline.
+    # Becoming ready on the *first* attempt after 40 ms would miss that bug.
+    assert END+60_000_000 in History.attempted_at
+    assert initial[1][0] == raw.raw_scan_id
     assert initial[1][7]["local_geometry_pending"] is True
     assert initial[1][6] == ()
-    if not heading_ready:
+    if outcome.startswith("expired"):
+        assert ready[1][0] == raw.raw_scan_id
         assert ready[1][7]["local_geometry_pending"] is True
         assert ready[1][6] == ()
         assert ready[3]["rotation_deskew"] == "HEADING_BRACKET_TIMEOUT"
@@ -180,7 +202,14 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     observation = evidence.get_nowait()
     assert observation[0] == "navigation_map"
     assert observation[1]["rotation_deskew"] == "APPLIED"
-    assert observation[1]["measurement_monotonic_ns"] == MID
+    assert observation[1]["measurement_monotonic_ns"] == (replacement.measurement_monotonic_ns
+        if outcome == "superseded" else MID)
+    if outcome == "superseded":
+        assert ready[1][0] == replacement.raw_scan_id
+        assert exported[0].raw_scan_id == replacement.raw_scan_id
+        assert output.empty()
+        return
+    assert ready[1][0] == raw.raw_scan_id
 
     # Exercise the actual receiving collector cache too: a producer-only
     # assertion misses a pending->ready update discarded under the same scan ID.
@@ -230,7 +259,7 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     assert update_world(context, admitted.accepted).local_costmap is None
     collector._state_queue.put(ready)
     collector._drain_state()
-    context = TickContext(101, END+30_000_000)
+    context = TickContext(101, END+80_000_000)
     ready_sample = source.read(context)
     admitted = admission(AcquisitionFrame(context, ready_sample.samples, (ready_sample.health,)))
     local = next(item for item in admitted.accepted if item.kind == "lidar_local_points")
@@ -239,7 +268,7 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     assert world.local_costmap.source_sequence == raw.raw_scan_id
     assert world.local_costmap.freshness_ns == context.monotonic_ns-MID
     assert world.local_costmap.occupied_cells
-    context = TickContext(102, END+50_000_000)
+    context = TickContext(102, END+100_000_000)
     duplicate = source.read(context)
     admitted = admission(AcquisitionFrame(context, duplicate.samples, (duplicate.health,)))
     assert not any(item.kind == "lidar_local_points" for item in admitted.accepted)
