@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol, TypeVar
 
 from .contracts.planner import PlannerInput
+from .contracts.navigation import Nav2NavigationInput
 
 from .contracts import (
     AcquisitionFrame,
@@ -77,6 +78,7 @@ class PipelineLayers:
     actuator_control: Callable[[WheelVelocitySetpoint, AdmittedFrame], ActuatorRequest]
     final_safety: FinalSafety
     navigation_with_completion: Callable[[MissionIntent, RobotEstimate, WorldSnapshot, PlannerInput | None], NavigationPlan] | None = None
+    navigation_with_nav2: Callable[[MissionIntent, RobotEstimate, WorldSnapshot, Nav2NavigationInput | None], NavigationPlan] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,8 +88,11 @@ class TickInputs:
     command: CommandRequest
     lifecycle: LifecycleState
     planner_input: PlannerInput | None = None
+    navigation_input: Nav2NavigationInput | None = None
 
     def __post_init__(self) -> None:
+        if self.navigation_input is not None and (not isinstance(self.navigation_input, Nav2NavigationInput) or self.navigation_input.context != self.context):
+            raise ValueError("navigation input must use the tick context")
         if self.planner_input is not None and (not isinstance(self.planner_input, PlannerInput) or self.planner_input.context != self.context):
             raise ValueError("planner input must use the tick context")
         if self.raw_devices.context != self.context:
@@ -261,11 +266,12 @@ class TickEngine:
                     "L6",
                     NavigationPlan,
                     inputs.context,
-                    self._layers.navigation_with_completion or self._layers.navigation,
+                    self._layers.navigation_with_nav2 or self._layers.navigation_with_completion or self._layers.navigation,
                     mission,
                     estimate,
                     world,
-                    *((inputs.planner_input,) if self._layers.navigation_with_completion else ()),
+                    *((inputs.navigation_input,) if self._layers.navigation_with_nav2 else
+                      (inputs.planner_input,) if self._layers.navigation_with_completion else ()),
                 )
                 objective = self._evaluate(
                     records,

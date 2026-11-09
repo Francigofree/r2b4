@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 import math
 
 from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest
+from v3.contracts.navigation import Nav2NavigationInput
 from v3.adapters.nav2_planner import compute_recorded_planner_result
 from v3.contracts import DeviceHealth, LifecycleState, TickContext
 from v3.engine import PipelineLayers, TickEngine, TickInputs, TickResult
@@ -267,6 +268,8 @@ class NativeControlComposition:
         "_transport_timeout_ns",
         "_request_timeout_ns",
         "_world_model",
+        "_navigation_backend",
+        "_full_nav2_enabled",
     )
 
     def __init__(
@@ -275,6 +278,7 @@ class NativeControlComposition:
         config: NativeControlCompositionConfig,
         *,
         trajectory_rollout_backend: object | None = None,
+        navigation_backend: object | None = None,
     ) -> None:
         if not callable(getattr(motor_writer, "write", None)):
             raise TypeError("motor_writer must provide a callable write method")
@@ -283,9 +287,14 @@ class NativeControlComposition:
 
         admission = InputAdmission(config.admission)
         estimator = NativeStateEstimator(config.estimation)
-        world_model = ShadowWorldModel(config.world_model)
+        world_model = ShadowWorldModel(config.world_model, mapping_enabled=not config.navigation.full_nav2_enabled)
         mission = MissionManager(config.mission)
-        if config.async_l6.enabled:
+        if config.navigation.full_nav2_enabled:
+            if trajectory_rollout_backend is not None:
+                raise ValueError("full Nav2 mode cannot run the legacy L6 planner")
+            backend = None
+            navigation = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
+        elif config.async_l6.enabled:
             backend = trajectory_rollout_backend
             if backend is None:
                 backend = InlineTrajectoryRolloutBackend(config.navigation)
@@ -314,12 +323,14 @@ class NativeControlComposition:
             critical_device_ids=config.critical_device_ids,
         )
         self._admission = admission
+        self._navigation_backend = navigation_backend
+        self._full_nav2_enabled = config.navigation.full_nav2_enabled
         self._estimator = estimator
         self._world_model = world_model
         self._mission = mission
         self._navigation = navigation
         self._motion_selection = motion_selection
-        self._closed_planner_mode = config.async_l6.enabled and config.async_l6.completion_inputs
+        self._closed_planner_mode = not self._full_nav2_enabled and config.async_l6.enabled and config.async_l6.completion_inputs
         self._planner_config = config.navigation
         self._transport_request = None
         self._transport_id = None
@@ -341,6 +352,7 @@ class NativeControlComposition:
                 command_mission=mission.evaluate,
                 navigation=navigation.evaluate,
                 navigation_with_completion=navigation.evaluate if self._closed_planner_mode else None,
+                navigation_with_nav2=navigation.evaluate_with_nav2 if self._full_nav2_enabled else None,
                 motion_selection=motion_selection.evaluate,
                 motion_realization=motion_realization.evaluate,
                 constraints=operational_constraints.evaluate,
@@ -442,6 +454,12 @@ class NativeControlComposition:
         runtime transport edge after L1-L12 has completed; worker output can still
         become visible only through a later ``close_inputs`` call.
         """
+        if self._full_nav2_enabled:
+            backend = self._navigation_backend
+            if backend is not None:
+                backend.submit(self._navigation.pending_navigation_request)
+                return True
+            return False
         if not self._closed_planner_mode:
             return False
         if (
@@ -463,6 +481,12 @@ class NativeControlComposition:
         fails closed on missing delivery. Replay consumes the frozen result/error
         and never re-evaluates worker scheduling.
         """
+        if self._full_nav2_enabled:
+            if inputs.navigation_input is not None:
+                return inputs
+            backend = self._navigation_backend
+            event = Nav2NavigationInput(inputs.context) if backend is None else backend.poll(inputs.context)
+            return replace(inputs, navigation_input=event)
         if not self._closed_planner_mode or inputs.planner_input is not None:
             return inputs
         event = PlannerInput(inputs.context)
@@ -553,6 +577,10 @@ class NativeControlComposition:
         return self._engine.run_tick(inputs)
 
     def close(self) -> None:
+        navigation_backend = self._navigation_backend
+        self._navigation_backend = None
+        if navigation_backend is not None:
+            navigation_backend.close()
         backend = self._rollout_backend
         self._rollout_backend = None
         if backend is not None:

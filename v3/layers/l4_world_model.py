@@ -334,6 +334,7 @@ class ShadowWorldModel:
     """Own one bounded temporal world model and emit the unchanged WorldSnapshot."""
 
     __slots__ = (
+        "_mapping_enabled",
         "_global_visited_cells", "_last_global_visit",
         "_config",
         "_costmap_revision",
@@ -358,7 +359,8 @@ class ShadowWorldModel:
         "_track_store",
     )
 
-    def __init__(self, config: WorldModelConfig) -> None:
+    def __init__(self, config: WorldModelConfig, *, mapping_enabled: bool = True) -> None:
+        self._mapping_enabled = mapping_enabled
         self._global_visited_cells = ()
         self._last_global_visit = None
         self._config = config
@@ -470,6 +472,8 @@ class ShadowWorldModel:
         self._pending_local_scan = checkpoint.pending_local_scan
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
+        if not self._mapping_enabled:
+            return self._without_mapping(frame, estimate.in_local_frame())
         if frame.context == estimate.context and estimate.localization_quality.global_position is QualityState.GOOD:
             self._update_global_coverage(estimate)
         estimate = estimate.in_local_frame()
@@ -625,6 +629,56 @@ class ShadowWorldModel:
                 None,
             ),
         )
+
+    def _without_mapping(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
+        """Nav2 owns occupancy; retain only bounded health and person tracking.
+
+        Scan history stores the existing compact immutable observation for
+        person ranging. No rays, grid cells, structural memory, coverage or
+        robot-relative geometry are constructed here.
+        """
+        if frame.context != estimate.context:
+            raise ValueError("L4 inputs must use the same tick context")
+        broken = self._pose_discontinuity(estimate) or estimate.localization_quality.pose_discontinuity
+        if broken:
+            self._pose_history.clear()
+        changed_frame = self._pose_history.add(estimate)
+        if broken or changed_frame:
+            self._reset_spatial_state()
+        self._last_continuity_pose = PoseSample(estimate.frame_id,
+            estimate.context.monotonic_ns, estimate.x_m, estimate.y_m, estimate.yaw_rad)
+        self._update_lidar_health(frame)
+        changed = False
+        if self._config.person_tracking_enabled:
+            for observation in frame.accepted:
+                if observation.kind == "lidar_local_points":
+                    pose = self._pose_history.lookup(observation.captured_monotonic_ns, estimate.frame_id)
+                    if pose is not None:
+                        self._scan_history.add(LidarScanSnapshot(observation.source_sequence,
+                            observation.captured_monotonic_ns, estimate.frame_id, observation.values, pose))
+                elif observation.kind == "obstacle_track":
+                    values = _values(observation)
+                    changed = self._track_store.upsert_external(ObstacleTrack(
+                        track_id=values["track_id"], x_m=_number(values, "x_m"),
+                        y_m=_number(values, "y_m"), radius_m=_number(values, "radius_m"),
+                        vx_mps=_number(values, "vx_mps"), vy_mps=_number(values, "vy_mps"),
+                        confidence=_number(values, "confidence")), observation.captured_monotonic_ns,
+                        observed_ns=frame.context.monotonic_ns) or changed
+            if estimate.localization_quality.local_translation is not QualityState.LOST:
+                for observation in frame.accepted:
+                    if observation.kind == "person_detection":
+                        changed = self._update_person_tracks(observation, estimate) or changed
+        changed = self._track_store.expire(frame.context.monotonic_ns,
+            person_max_age_ns=self._config.person_track_max_age_ns,
+            other_max_age_ns=self._config.max_track_age_ns) or changed
+        if changed:
+            self._map_revision += 1
+        freshness = (frame.context.monotonic_ns if self._last_lidar_measurement_ns is None
+            else max(0, frame.context.monotonic_ns - self._last_lidar_measurement_ns))
+        return WorldSnapshot(frame.context, estimate.frame_id, self._map_revision,
+            self._track_store.projected_tracks(frame.context.monotonic_ns), freshness,
+            person_detection_state=next((health.state for health in frame.device_health
+                if health.device_id == "PERSON_DETECTOR_FRONT"), None))
 
     def _reset_spatial_state(self) -> None:
         self._pending_local_scan = None

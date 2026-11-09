@@ -9,6 +9,8 @@ from enum import Enum
 from typing import Protocol
 
 from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest, TrajectoryRolloutResult, GlobalPlanStatus
+from v3.contracts.navigation import Nav2NavigationInput
+from v3.layers._l6_nav2 import Nav2GuidanceState, accept_nav2_guidance
 from v3.contracts.temporal import source_is_stale
 from v3.wheel_motion import WheelMotionLimits
 
@@ -224,10 +226,13 @@ class NavigationConfig:
     footprint_center_x_m: float = 0.0
     # Derived by composition/config from the optional global compute edge.
     global_planner_enabled: bool = False
+    full_nav2_enabled: bool = False
 
     def __post_init__(self) -> None:
-        if type(self.global_planner_enabled) is not bool:
-            raise TypeError("global_planner_enabled must be bool")
+        if type(self.global_planner_enabled) is not bool or type(self.full_nav2_enabled) is not bool:
+            raise TypeError("navigation backend flags must be bool")
+        if self.global_planner_enabled and self.full_nav2_enabled:
+            raise ValueError("Nav2 controller and legacy waypoint planner are exclusive")
         if (type(self.motion_proof_horizon_ns) is not int or self.motion_proof_horizon_ns <= 0
                 or any(math.isnan(cap) or cap <= 0 for cap in (
                     self.operational_max_v_mps, self.operational_max_omega_rad_s,
@@ -597,6 +602,7 @@ class NavigationStateCheckpoint:
     explore_reachable_exit_mask: int | None = None
     explore_exit_retry_used: bool = False
     explore_probe_after_ns: int | None = None
+    nav2_state: Nav2GuidanceState = Nav2GuidanceState()
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -690,6 +696,7 @@ class TrajectoryNavigator:
     """Own reusable trajectory evaluation plus deterministic exploration state."""
 
     __slots__ = (
+        "_nav2_state",
         "_localization_recovery_direction", "_last_maneuver_direction",
         "_goal_selection_reason", "_pending_goal_selection_reason",
         "_localization_recovery_started_ns", "_localization_recovery_mission_id",
@@ -792,6 +799,7 @@ class TrajectoryNavigator:
         if completion_inputs and rollout_backend is not None:
             raise ValueError("closed-input navigation cannot own a worker backend")
         self._config = config
+        self._nav2_state = Nav2GuidanceState()
         self._rollout_backend = rollout_backend
         self._rollout_release_tick_gap = rollout_release_tick_gap
         self._rollout_release_delay_ns = rollout_release_delay_ns
@@ -895,11 +903,13 @@ class TrajectoryNavigator:
             self._explore_stall_count, self._explore_retry_after_ns,
             self._explore_reachable_exit_mask, self._explore_exit_retry_used,
             self._explore_probe_after_ns,
+            self._nav2_state,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
         if not isinstance(checkpoint, NavigationStateCheckpoint):
             raise TypeError("checkpoint must be NavigationStateCheckpoint")
+        self._nav2_state = checkpoint.nav2_state
         self._localization_recovery_started_ns = checkpoint.localization_recovery_started_ns
         self._localization_recovery_mission_id = checkpoint.localization_recovery_mission_id
         self._localization_generation = checkpoint.localization_generation
@@ -1113,6 +1123,20 @@ class TrajectoryNavigator:
                 goal_selection_reason=self._goal_selection_reason,
                 goal_selected_ns=self._goal_selected_ns)
         return plan
+
+    @property
+    def pending_navigation_request(self):
+        return self._nav2_state.request
+
+    def evaluate_with_nav2(self, mission, estimate, world, navigation_input):
+        if mission.mode in (CommandMode.NAVIGATE, CommandMode.EXPLORE, CommandMode.STOP):
+            plan, self._nav2_state = accept_nav2_guidance(mission,
+                estimate.in_local_frame(), world, navigation_input, self._nav2_state,
+                max_scan_age_ns=self._config.max_world_freshness_ns,
+                max_odom_age_ns=self._config.max_world_freshness_ns)
+            return plan
+        self._nav2_state = Nav2GuidanceState()
+        return self.evaluate(mission, estimate, world)
 
     def _reject_unexecutable_explore_family(
         self, mission: MissionIntent, estimate: RobotEstimate,

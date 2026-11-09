@@ -209,6 +209,7 @@ def run_resident_physical_control(
     decision_observer: Callable[[CaptureRecord], None] | None = None,
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
+    navigation_backend: object | None = None,
 ) -> ResidentRuntimeReport:
     """Run until signal/stop or fault, then release every physical capability."""
 
@@ -265,6 +266,7 @@ def run_resident_physical_control(
         auxiliary_sources=auxiliary_sources,
         device_reader=device_reader,
         trajectory_rollout_backend=trajectory_rollout_backend,
+        navigation_backend=navigation_backend,
     )
     if timing is not None:
         runtime.set_timing_observer(timing.observe_control_phase)
@@ -471,6 +473,7 @@ def run_owned_resident_physical_control(
     decision_observer: Callable[[CaptureRecord], None] | None = None,
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
+    navigation_backend: object | None = None,
     enable_multirate_inputs: bool = True,
     input_affinity: RuntimeAffinityConfig | None = None,
     multirate_config=None,
@@ -530,6 +533,7 @@ def run_owned_resident_physical_control(
             decision_observer=decision_observer,
             timing_enabled=timing_enabled,
             trajectory_rollout_backend=trajectory_rollout_backend,
+            navigation_backend=navigation_backend,
         )
     finally:
         try:

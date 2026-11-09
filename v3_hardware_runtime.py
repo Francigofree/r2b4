@@ -31,6 +31,7 @@ from v3.composition.live_inputs import (
 )
 from v3.adapters.recovering_l6_planner import RecoveringTrajectoryRolloutBackend
 from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
+from v3.adapters.nav2_navigation import Nav2NavigationClient
 from v3.adapters.process_encoder_backend import ProcessEncoderSource
 from v3.adapters.process_vision_port import ProcessVisionPort, UnavailableVisionPort
 from v3.composition.native_sensor_inputs import (
@@ -798,9 +799,14 @@ def run_native_hardware_resident_control(
         sleep=sleep,
     )
     rollout_backend = None
+    navigation_backend = None
     async_l6 = config.composition.live_control.control.async_l6
     try:
-        if async_l6.enabled:
+        if config.composition.live_control.control.navigation.full_nav2_enabled:
+            if runtime_edges is None or runtime_edges.nav2_navigation is None:
+                raise ValueError("full Nav2 requires the navigation runtime edge")
+            navigation_backend = Nav2NavigationClient(runtime_edges.nav2_navigation)
+        elif async_l6.enabled:
             rollout_backend = RecoveringTrajectoryRolloutBackend(
                 config.composition.live_control.control.navigation,
                 **({"recovery_policy": runtime_edges.planner_recovery, "process_config": runtime_edges.planner_process} if runtime_edges is not None else {}),
@@ -832,14 +838,19 @@ def run_native_hardware_resident_control(
             decision_observer=decision_observer,
             timing_enabled=True,
             trajectory_rollout_backend=rollout_backend,
+            navigation_backend=navigation_backend,
             enable_multirate_inputs=enable_multirate_inputs,
             multirate_config=runtime_edges.multirate if runtime_edges is not None else None,
             input_affinity=affinity,
         )
     finally:
         try:
-            if rollout_backend is not None:
-                rollout_backend.close()
+            try:
+                if navigation_backend is not None:
+                    navigation_backend.close()
+            finally:
+                if rollout_backend is not None:
+                    rollout_backend.close()
         finally:
             owner.close()
 

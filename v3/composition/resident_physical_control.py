@@ -54,6 +54,7 @@ class ResidentPhysicalControlComposition:
         auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
         device_reader: DeviceReader | None = None,
         trajectory_rollout_backend: object | None = None,
+        navigation_backend: object | None = None,
     ) -> None:
         if not isinstance(config, ResidentPhysicalControlConfig):
             raise TypeError("config must be ResidentPhysicalControlConfig")
@@ -72,6 +73,7 @@ class ResidentPhysicalControlComposition:
                 auxiliary_sources=auxiliary_sources,
                 device_reader=device_reader,
                 trajectory_rollout_backend=trajectory_rollout_backend,
+                navigation_backend=navigation_backend,
             )
         except Exception:
             motor_output.close()

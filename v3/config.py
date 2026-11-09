@@ -20,6 +20,7 @@ from v3.adapters.gpio_motor import GpioMotorFrameSinkConfig
 from v3.adapters.multirate_inputs import MultiRateInputConfig
 from v3.adapters.native_lidar_port import NativeLidarPortConfig
 from v3.adapters.nav2_planner import Nav2PlannerConfig
+from v3.adapters.nav2_navigation import Nav2NavigationConfig
 from v3.adapters.recovering_l6_planner import PlannerRecoveryPolicy
 from v3.adapters.rplidar_c1 import RplidarC1Config
 from v3.capture_encoding import encode_value
@@ -151,12 +152,17 @@ class RuntimeEdgeConfig:
     planner_process: PlannerProcessConfig
     pose_history_capacity: int
     nav2_planner: Nav2PlannerConfig | None = None
+    nav2_navigation: Nav2NavigationConfig | None = None
 
     def __post_init__(self):
         if type(self.pose_history_capacity) is not int or self.pose_history_capacity <= 0:
             raise ValueError("pose_history_capacity must be a positive integer")
         if self.nav2_planner is not None and not isinstance(self.nav2_planner, Nav2PlannerConfig):
             raise TypeError("nav2_planner must be Nav2PlannerConfig or None")
+        if self.nav2_navigation is not None and not isinstance(self.nav2_navigation, Nav2NavigationConfig):
+            raise TypeError("nav2_navigation must be Nav2NavigationConfig or None")
+        if self.nav2_planner is not None and self.nav2_navigation is not None:
+            raise ValueError("Nav2 planner-only and controller edges are exclusive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +181,10 @@ class ResolvedRobotConfig:
         control = self.runtime.composition.live_control.control
         sensors = self.runtime.sensor_inputs
         nav2 = self.edges.nav2_planner
+        if control.navigation.full_nav2_enabled != (self.edges.nav2_navigation is not None):
+            raise ValueError("full navigation policy must match the resolved Nav2 edge")
+        if control.navigation.full_nav2_enabled and self.lidar.global_backend != "slam_toolbox":
+            raise ValueError("Nav2 controller requires the SLAM Toolbox map source")
         if control.navigation.global_planner_enabled != (nav2 is not None):
             raise ValueError("global planner policy must match the resolved Nav2 edge")
         if nav2 is not None:
@@ -382,7 +392,7 @@ class ConfigResolver:
         _keys(c["behavior"], {"roomcruise", "followperson"}, "behavior")
         roomcruise = _typed(RoomCruiseConfig, c["behavior"]["roomcruise"], "behavior.roomcruise")
         followperson = _typed(FollowPersonConfig, c["behavior"]["followperson"], "behavior.followperson")
-        runtime = c["runtime"]
+        runtime = {"nav2_navigation": None, **c["runtime"]}
         edge_names = {f.name for f in fields(RuntimeEdgeConfig)}
         _keys(runtime, edge_names | {"tick_period_ns", "max_preflight_age_ns", "required_lidar_preflight_revisions"}, "runtime")
         edges = _typed(RuntimeEdgeConfig, {k: runtime[k] for k in edge_names}, "runtime")
@@ -393,7 +403,7 @@ class ConfigResolver:
         for section, derived_names in {
             "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps"},
             "wheel_pi": {"minimum_reliable_speed_mps", "velocity_unreliable_below_mps"},
-            "navigation": {"footprint_length_m", "footprint_width_m", "footprint_center_x_m", "wheel_limits", "localization_recovery_omega_rad_s", "global_planner_enabled",
+            "navigation": {"footprint_length_m", "footprint_width_m", "footprint_center_x_m", "wheel_limits", "localization_recovery_omega_rad_s", "global_planner_enabled", "full_nav2_enabled",
                            "operational_max_v_mps", "operational_max_omega_rad_s",
                            "operational_max_curvature_rad_per_m", "motion_proof_horizon_ns"} | ExplorePreferences.field_names(),
             "motion_realization": {"wheel_limits", "max_world_freshness_ns"},
@@ -442,6 +452,7 @@ class ConfigResolver:
                                 "operational_max_omega_rad_s": layers["operational_constraints"]["max_omega_rad_s"],
                                 "operational_max_curvature_rad_per_m": layers["operational_constraints"]["max_curvature_rad_per_m"],
                                 "global_planner_enabled": edges.nav2_planner is not None,
+                                "full_nav2_enabled": edges.nav2_navigation is not None,
                                 "motion_proof_horizon_ns": max(layers["motion_realization"]["max_control_gap_ns"],
                                                                layers["wheel_pi"]["max_control_gap_ns"]),
                                 **{field.key: field.value for field in roomcruise.preferences.as_fields()}}

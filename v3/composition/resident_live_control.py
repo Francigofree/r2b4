@@ -109,6 +109,7 @@ class ResidentLiveControlComposition:
         auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
         device_reader: DeviceReader | None = None,
         trajectory_rollout_backend: object | None = None,
+        navigation_backend: object | None = None,
     ) -> None:
         if not isinstance(encoder_source, NativeEncoderSource):
             raise TypeError("encoder_source must be NativeEncoderSource")
@@ -140,6 +141,7 @@ class ResidentLiveControlComposition:
             motor_writer,
             config.control,
             trajectory_rollout_backend=trajectory_rollout_backend,
+            navigation_backend=navigation_backend,
         )
         self._config = config
         self._lifecycle = LifecycleState.BOOTING

@@ -105,6 +105,33 @@ Recovery szabályok:
 
 A konkrét retry-szám, timeout, backoff, generation formátum és capability-specifikus readiness/revalidation algoritmus source + config kérdés, amíg a fenti authority- és safety-invariánsok megmaradnak.
 
+### 2.3 Külső SLAM/Nav2 navigációs szolgáltató
+
+A SLAM Toolbox és a Nav2 állapottartó algoritmusai külön runtime-edge
+folyamatokban futhatnak: térkép, TF, costmap, globális út, lokális controller,
+BT action és a térképből javasolt felfedezési cél kezelése ott marad. Ez
+algoritmus- és protokollállapot, nem V3 mission-, motion- vagy safety-authority.
+L5 birtokolja a mission azonosságát és életciklusát; L6 fogadja el vagy utasítja
+el a missionhöz kötött, rövid lejáratú navigációs javaslatot, és birtokolja az
+elfogadott végrehajtás progress/terminal állapotát. Külső action-siker önmagában
+nem írhatja át L5 állapotát; csak lezárt inputból, a canonical delayed feedback
+útján válhat mission-befejezéssé.
+
+Külső navigációs módban L4 a szükséges kompakt world/track contractot tartja
+fenn; saját occupancy/structural térképépítés és L6 saját útkeresés/rollout nem
+szükséges. A Nav2 eredménye kis, immutable, időbélyegzett sebességjavaslat,
+explicit mission/command-, provider-generation-, sequence- és frame-lineage-dzsel.
+Csak input closure után, L6→L7→L8→L9→L10→L11→L12 úton realizálható. E módban
+a lokális collision proof ownere a Nav2 costmap/controller; V3 megtartja a
+lokalizáció-, fizikai realizálhatóság-, gyorsulás- és közvetlen LiDAR final safety
+korlátokat. A V3 nem épít második útkeresőt a szolgáltató mellé.
+
+Lejárt, régi missionhöz/generationhöz tartozó, nem igazolt frame-ű, stale szenzoron
+alapuló vagy hiányzó javaslat csak nulla mozgású HOLD/STOP-ot adhat. Heartbeat,
+új tick vagy receipt nem újíthatja meg az eredeti sebességparancs vagy fizikai
+mérés idejét. A szolgáltató elvesztése vagy késése nem blokkolhatja a control
+ciklust, és közvetlen ROS→motor vagy ROS→CommandGateway sebesség-kerülőút nincs.
+
 ## 3. Egyszerű contractmodell és időszemantika
 
 Minden production réteghatár explicit typed és a fogyasztó számára immutable érték. A jelenlegi Python implementáció használhat frozen/slotted dataclassot; nagy payload esetén read-only vagy egyértelmű ownershipű immutable buffer/view is használható, ha nincs kifelé szivárgó írható shared state. Közös metadata minimum:

@@ -15,6 +15,7 @@ from v3.contracts import (
     LocalizationRequirement,
     TickContext,
     VelocityTarget,
+    VelocitySource,
     Waypoint,
     WorldSnapshot,
 )
@@ -100,7 +101,7 @@ class MotionRealizer:
             return self._stopped(objective, "CONTEXT_MISMATCH")
         if estimate.frame_id != world.frame_id:
             return self._stopped(objective, "FRAME_MISMATCH")
-        if world.freshness_ns > self._config.max_world_freshness_ns:
+        if objective.velocity_source is not VelocitySource.NAV2 and world.freshness_ns > self._config.max_world_freshness_ns:
             return self._stopped(objective, "WORLD_STALE")
         if objective.expiry_tick < objective.context.tick_id:
             return self._stopped(objective, "OBJECTIVE_EXPIRED")
@@ -130,11 +131,17 @@ class MotionRealizer:
                 return self._stopped(objective, "VELOCITY_TARGET_MISSING")
             if abs(target.v_mps) <= 1e-12 and abs(target.omega_rad_s) <= 1e-12:
                 return self._stopped(objective, "ZERO_VELOCITY")
-            reference = self._velocity_reference(target, estimate)
-            requested_v_mps, requested_omega_rad_s = self._track_path(
-                target.v_mps, target.omega_rad_s, reference, estimate,
-                pivot_heading=True,
-            )
+            if objective.velocity_source is VelocitySource.NAV2:
+                # Nav2's controller already closes path tracking. V3 retains
+                # physical limits, wheel control and independent final safety.
+                self._state = MotionRealizationStateCheckpoint()
+                requested_v_mps, requested_omega_rad_s = target.v_mps, target.omega_rad_s
+            else:
+                reference = self._velocity_reference(target, estimate)
+                requested_v_mps, requested_omega_rad_s = self._track_path(
+                    target.v_mps, target.omega_rad_s, reference, estimate,
+                    pivot_heading=True,
+                )
         else:
             self._state = MotionRealizationStateCheckpoint()
             target = objective.target_waypoint

@@ -94,6 +94,11 @@ class MotionObjectiveKind(str, Enum):
     VELOCITY = "VELOCITY"
 
 
+class VelocitySource(str, Enum):
+    V3 = "V3"
+    NAV2 = "NAV2"
+
+
 class ConstraintCode(str, Enum):
     ACCELERATION_LIMIT = "ACCELERATION_LIMIT"
     CURVATURE_LIMIT = "CURVATURE_LIMIT"
@@ -866,8 +871,20 @@ class NavigationPlan:
     goal_selection_reason: str | None = None
     goal_selected_ns: int | None = None
     rejection_witness: NavigationRejectionWitness | None = None
+    velocity_source: VelocitySource = VelocitySource.V3
+    nav2_goal: Waypoint | None = None
+    nav2_map_revision: int = 0
+    nav2_child_goal_id: int = 0
 
     def __post_init__(self) -> None:
+        if self.nav2_goal is not None and not isinstance(self.nav2_goal, Waypoint):
+            raise ContractValidationError("Nav2 selected goal must be typed")
+        require_nonnegative(self.nav2_map_revision, "nav2_map_revision")
+        require_nonnegative(self.nav2_child_goal_id, "nav2_child_goal_id")
+        if not isinstance(self.velocity_source, VelocitySource):
+            raise ContractValidationError("velocity source must be typed")
+        if self.velocity_source is VelocitySource.NAV2 and (self.velocity_target is None or self.motion_validity is None):
+            raise ContractValidationError("Nav2 velocity requires a target and expiring validity")
         require_token(self.mission_id, "NavigationPlan.mission_id")
         if self.rejection_witness is not None and not isinstance(self.rejection_witness, NavigationRejectionWitness):
             raise ContractValidationError("plan rejection witness must be typed")
@@ -928,8 +945,13 @@ class MotionObjective:
     validity: MotionValidity | None = None
     transition_allowed: bool = False
     geometry_proof: LocalMotionProof | None = None
+    velocity_source: VelocitySource = VelocitySource.V3
 
     def __post_init__(self) -> None:
+        if not isinstance(self.velocity_source, VelocitySource):
+            raise ContractValidationError("velocity source must be typed")
+        if self.velocity_source is VelocitySource.NAV2 and (self.kind is not MotionObjectiveKind.VELOCITY or self.validity is None):
+            raise ContractValidationError("Nav2 objective requires expiring velocity guidance")
         require_token(self.selected_source, "MotionObjective.selected_source")
         if self.geometry_proof is not None and not isinstance(self.geometry_proof, LocalMotionProof):
             raise ContractValidationError("objective geometry proof must be typed")

@@ -11,6 +11,7 @@ from v3.contracts import (
     NavigationPlan,
     NavigationStatus,
     TrajectoryEvaluation,
+    VelocitySource,
 )
 
 
@@ -325,13 +326,14 @@ def select_motion(plan: NavigationPlan) -> MotionObjective:
     if plan.status is NavigationStatus.ACTIVE and plan.velocity_target is not None:
         return MotionObjective(
             context=plan.context,
-            selected_source="teleop",
+            selected_source="nav2" if plan.velocity_source is VelocitySource.NAV2 else "teleop",
             kind=MotionObjectiveKind.VELOCITY,
             priority=200,
             expiry_tick=plan.context.tick_id + 1,
             selection_reason="DIRECT_VELOCITY",
             target_waypoint=None,
             velocity_target=plan.velocity_target,
+            velocity_source=plan.velocity_source,
             constraints=plan.constraints,
             validity=plan.motion_validity,
             geometry_proof=plan.geometry_proof,

@@ -110,7 +110,7 @@ def command_entries() -> list[dict[str, object]]:
                     ("commands", [], "r commands [--json]", "Teljes, source-ból követett parancskatalógus."),
                     ("maplive", [], "r maplive [--hz 5]", "Passzív V3 L4 ASCII mini térkép."),
                     ("slam", [], "r slam {start|status|stop|save} [--output NAME]", "SLAM Toolbox térképezés és térképmentés."),
-                    ("nav2", [], "r nav2 {start|status|stop}", "Nav2 globális Planner Server; V3 helyi mozgásvezérléssel."),
+                    ("nav2", [], "r nav2 {start|status|stop}", "Nav2 Planner/Controller/BT navigáció; V3 final motorvezérléssel."),
                 ))
     return sorted(rows, key=lambda row: row["name"])
 

@@ -37,6 +37,25 @@ class ScanPose:
     yaw_rad: float
 
 
+def odometry_twist(previous: SlamOdometryPacket | None, current: SlamOdometryPacket):
+    """Body twist from qualified same-generation measurements, never receipt time."""
+    if (previous is None or previous.session_id != current.session_id
+            or previous.generation != current.generation
+            or not all((previous.local_translation_valid, previous.heading_valid,
+                        current.local_translation_valid, current.heading_valid))):
+        return None
+    elapsed = current.monotonic_ns-previous.monotonic_ns
+    if not 0 < elapsed <= MAX_ODOM_BRACKET_NS:
+        return None
+    dt = elapsed/1e9
+    yaw_delta = math.atan2(math.sin(current.yaw_rad-previous.yaw_rad),
+                          math.cos(current.yaw_rad-previous.yaw_rad))
+    middle_yaw = previous.yaw_rad+yaw_delta/2
+    velocity = ((current.x_m-previous.x_m)*math.cos(middle_yaw)
+                +(current.y_m-previous.y_m)*math.sin(middle_yaw))/dt
+    return velocity, yaw_delta/dt
+
+
 def ros_scan_ranges(scan: SlamScanPacket) -> list[float]:
     """Keep missing wire bins out of Karto's unfiltered scan matcher.
 
@@ -146,7 +165,7 @@ def run(args) -> int:
     from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
     from geometry_msgs.msg import TransformStamped, PoseWithCovarianceStamped
     from sensor_msgs.msg import LaserScan
-    from nav_msgs.msg import OccupancyGrid
+    from nav_msgs.msg import OccupancyGrid, Odometry
     from lifecycle_msgs.srv import ChangeState
     from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 
@@ -185,6 +204,7 @@ def run(args) -> int:
     broadcaster = TransformBroadcaster(node)
     static_broadcaster = StaticTransformBroadcaster(node)
     publisher = node.create_publisher(LaserScan, "/r2b4/slam/scan", 1)
+    odometry_publisher = node.create_publisher(Odometry, "/r2b4/odom", 1)
     change_state = node.create_client(ChangeState, "/slam_toolbox/change_state")
     lifecycle_future = None
     lifecycle_transition = 1  # CONFIGURE then ACTIVATE (3)
@@ -318,7 +338,26 @@ def run(args) -> int:
                         raise RuntimeError("ODOMETRY_GENERATION_CHANGED_RESTART_SLAM")
                     if 0 <= time.monotonic_ns() - packet.monotonic_ns <= 2_000_000_000:
                         if not history or packet.monotonic_ns > history[-1].monotonic_ns:
+                            previous = history[-1] if history else None
                             history.append(packet)
+                            if packet.local_translation_valid and packet.heading_valid:
+                                transform = TransformStamped()
+                                stamp(transform, packet.monotonic_ns)
+                                transform.header.frame_id, transform.child_frame_id = ODOM_FRAME, BASE_FRAME
+                                transform.transform.translation.x, transform.transform.translation.y = packet.x_m, packet.y_m
+                                transform.transform.rotation.z = math.sin(packet.yaw_rad/2)
+                                transform.transform.rotation.w = math.cos(packet.yaw_rad/2)
+                                broadcaster.sendTransform(transform)
+                                twist = odometry_twist(previous, packet)
+                                if twist is not None:
+                                    odometry = Odometry()
+                                    stamp(odometry, packet.monotonic_ns)
+                                    odometry.header.frame_id, odometry.child_frame_id = ODOM_FRAME, BASE_FRAME
+                                    odometry.pose.pose.position.x, odometry.pose.pose.position.y = packet.x_m, packet.y_m
+                                    odometry.pose.pose.orientation = transform.transform.rotation
+                                    odometry.twist.twist.linear.x, odometry.twist.twist.angular.z = twist
+                                    odometry_publisher.publish(odometry)
+                                    state["last_odometry_measurement_ns"] = packet.monotonic_ns
                 else:
                     state["scans_received"] += 1
                     if packet.source_sequence > last_sequence:
@@ -348,15 +387,6 @@ def run(args) -> int:
                         transform.transform.translation.y = scan.lidar_y_m
                         transform.transform.rotation.w = 1.0
                         static_broadcaster.sendTransform(transform)
-                    transform = TransformStamped()
-                    stamp(transform, scan.measurement_ns)
-                    transform.header.frame_id = ODOM_FRAME
-                    transform.child_frame_id = BASE_FRAME
-                    transform.transform.translation.x = aligned.x_m
-                    transform.transform.translation.y = aligned.y_m
-                    transform.transform.rotation.z = math.sin(aligned.yaw_rad / 2)
-                    transform.transform.rotation.w = math.cos(aligned.yaw_rad / 2)
-                    broadcaster.sendTransform(transform)
                     message = LaserScan()
                     stamp(message, scan.measurement_ns)
                     message.header.frame_id = LASER_FRAME
