@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 278, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 271, in main
+    return _supervise(root, args.ros_domain_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 235, in _supervise
+    raise RuntimeError("NAV2_CHILD_EXITED")
+RuntimeError: NAV2_CHILD_EXITED
