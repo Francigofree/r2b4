@@ -22,6 +22,7 @@ class Nav2GuidanceState:
     initial_distance_m: float = 0.0
     bound_goal: Waypoint | None = None
     issued_requests: tuple[Nav2NavigationRequest, ...] = ()
+    bound_odom_generation: int | None = None
 
 
 def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
@@ -52,18 +53,22 @@ def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
     goal = state.bound_goal or mission.target_pose
     if mission.mode is CommandMode.NAVIGATE and mission.target_frame_id == LOCAL_FRAME_ID:
         assert goal is not None
-        if state.request is not None and state.request.odom_generation != quality.generation:
+        if state.bound_odom_generation is not None and state.bound_odom_generation != quality.generation:
             return hold("NAV2_LOCAL_GOAL_ODOM_RESET"), replace(state, request=None)
         if state.bound_goal is None:
             x, y, yaw = estimate.map_to_odom.apply(goal.x_m, goal.y_m, goal.yaw_rad)
             goal = Waypoint(x, y, yaw)
     request = Nav2NavigationRequest(mission.context, mission.mission_id,
         mission.mission_id, mission.mode, goal, mission.constraints.max_v_mps,
-        mission.constraints.max_omega_rad_s, quality.generation, estimate.transform_revision)
+        mission.constraints.max_omega_rad_s, quality.generation, estimate.transform_revision,
+        goal_tolerance_m=mission.constraints.goal_tolerance_m,
+        yaw_tolerance_rad=mission.constraints.yaw_tolerance_rad)
     issued = tuple(item for item in state.issued_requests
         if item.context.monotonic_ns >= now - 400_000_000)
     state = replace(state, request=request, bound_goal=goal,
-        issued_requests=(issued + (request,))[-24:])
+        issued_requests=(issued + (request,))[-24:],
+        bound_odom_generation=(quality.generation if state.bound_odom_generation is None
+            else state.bound_odom_generation))
     if state.completed:
         return hold("NAV2_SUCCEEDED", NavigationStatus.COMPLETE), state
     if event is None or event.error is not None or event.guidance is None:

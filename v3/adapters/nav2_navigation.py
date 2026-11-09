@@ -55,6 +55,7 @@ def request_packet(request):
         frame_id=GLOBAL_FRAME_ID, mode=request.mode.value,
         goal=None if request.goal is None else [request.goal.x_m, request.goal.y_m, request.goal.yaw_rad],
         max_v_mps=request.max_v_mps, max_omega_rad_s=request.max_omega_rad_s,
+        goal_tolerance_m=request.goal_tolerance_m, yaw_tolerance_rad=request.yaw_tolerance_rad,
         odom_generation=request.odom_generation, transform_revision=request.transform_revision)
 
 
@@ -91,9 +92,11 @@ class Nav2NavigationClient:
         previous, self._request = self._request, request
         changed = (previous is None or request is None or
             (previous.mission_id, previous.goal_id, previous.odom_generation, previous.goal,
-             previous.mode, previous.max_v_mps, previous.max_omega_rad_s)
+             previous.mode, previous.max_v_mps, previous.max_omega_rad_s,
+             previous.goal_tolerance_m, previous.yaw_tolerance_rad)
             != (request.mission_id, request.goal_id, request.odom_generation, request.goal,
-                request.mode, request.max_v_mps, request.max_omega_rad_s))
+                request.mode, request.max_v_mps, request.max_omega_rad_s,
+                request.goal_tolerance_m, request.yaw_tolerance_rad))
         if changed:
             self._guidance = None
         if self._closed:

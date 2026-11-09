@@ -1,4 +1,4 @@
-"""Host lifecycle for the isolated, non-actuating Nav2 Planner Server."""
+"""Host lifecycle for isolated Nav2 compute; V3 retains all motor authority."""
 from __future__ import annotations
 
 import argparse
@@ -18,9 +18,73 @@ from tools.slam_toolbox import _read_json, _write_json, _process_start, _ros_env
 
 def _paths(root):
     work = root / "runtime" / "nav2_planner"
+    full = _read_json(root / "conf" / "vezerles.json").get("runtime", {}).get("nav2_navigation") is not None
     return {"work": work, "state": work / "supervisor.json", "status": work / "bridge_status.json",
-            "socket": root / "runtime" / "nav2_planner.sock", "prefix": root / "runtime" / "deps" / "nav2-planner",
-            "params": root / "conf" / "nav2_planner.yaml", "geometry": work / "geometry.yaml"}
+            "socket": root / "runtime" / ("nav2_navigation.sock" if full else "nav2_planner.sock"),
+            "prefix": root / "runtime" / "deps" / "nav2-planner",
+            "params": root / "conf" / "nav2_planner.yaml", "geometry": work / "geometry.yaml",
+            "bt": root / "conf" / "nav2_navigate.xml"}
+
+
+def _resolved_control(root):
+    from v3.config import ConfigResolver
+    conf = root / "conf"
+    return ConfigResolver(conf/"hardver.json", conf/"fizika.json", conf/"speed_map.json",
+                          conf/"vezerles.json").resolve().runtime.composition.live_control.control
+
+
+def _write_geometry(paths, control):
+    navigation = control.navigation
+    radius = math.hypot(navigation.footprint_length_m/2 + abs(navigation.footprint_center_x_m),
+                        navigation.footprint_width_m/2) + navigation.footprint_safety_margin_m
+    text = ""
+    for name in ("global_costmap", "local_costmap"):
+        text += (f"{name}:\n  {name}:\n    ros__parameters:\n"
+                 f"      robot_radius: {radius}\n      inflation_layer:\n"
+                 f"        inflation_radius: {radius+.10}\n")
+    limits = control.operational_constraints
+    minimum = limits.wheel_limits.target_minimum_mps
+    constraints = control.mission.default_constraints
+    # RPP proposes steady targets from measured odometry. Its own startup ramp
+    # must cross the wheel deadband in one controller step; the physical ramp
+    # remains exclusively limited by V3 L9, using the unchanged platform limit.
+    proposal_acceleration = max(limits.max_angular_acceleration_rad_s2,
+                                limits.wheel_limits.target_center_spin_rad_s * 20.0 * 1.1)
+    text += ("controller_server:\n  ros__parameters:\n    goal_checker:\n"
+             f"      xy_goal_tolerance: {constraints.goal_tolerance_m / 2}\n"
+             f"      yaw_goal_tolerance: {constraints.yaw_tolerance_rad / 2}\n"
+             "    FollowPath:\n"
+             f"      desired_linear_vel: {min(.30, limits.max_v_mps)}\n"
+             f"      regulated_linear_scaling_min_speed: {minimum}\n"
+             f"      min_approach_linear_velocity: {minimum}\n"
+             f"      rotate_to_heading_angular_vel: {max(limits.wheel_limits.target_center_spin_rad_s, min(1.2, limits.max_omega_rad_s))}\n"
+             f"      max_angular_accel: {proposal_acceleration}\n")
+    # The default tree is loaded during lifecycle activation, before the first
+    # goal can supply its own XML. It must not require unused recovery servers.
+    import json
+    text += ("bt_navigator:\n  ros__parameters:\n"
+             f"    default_nav_to_pose_bt_xml: {json.dumps(str(paths['bt']))}\n")
+    paths["geometry"].write_text(text)
+    return radius
+
+
+def _commands(paths, *, full, radius):
+    servers = ("nav2_planner", "planner_server"),
+    if full:
+        servers += (("nav2_controller", "controller_server"), ("nav2_bt_navigator", "bt_navigator"))
+    commands = []
+    for package, executable in servers:
+        command = [str(paths["prefix"] / "lib" / package / executable), "--ros-args",
+                   "--params-file", str(paths["params"]), "--params-file", str(paths["geometry"])]
+        if executable == "controller_server":
+            command += ["-r", "cmd_vel:=/r2b4/nav2/cmd_vel"]
+        commands.append((executable, command))
+    command = [str(paths["prefix"] / "bin" / "python"), "-m",
+               "v3.nav2_navigation_bridge" if full else "v3.nav2_planner_bridge",
+               "--socket", str(paths["socket"]), "--status-path", str(paths["status"])]
+    if full:
+        command += ["--behavior-tree", str(paths["bt"]), "--robot-radius", str(radius)]
+    return commands + [("bridge", command)]
 
 
 def _owned(state, root):
@@ -55,11 +119,18 @@ def status(root):
 
 def start(root, *, ros_domain_id=74):
     paths = _paths(root)
+    control = _resolved_control(root)
+    full = control.navigation.full_nav2_enabled
     with _lock(paths):
         if _owned(_read_json(paths["state"]), root):
             return status(root)
-        for dependency in (paths["prefix"] / "bin" / "python", paths["params"],
-                           paths["prefix"] / "lib" / "nav2_planner" / "planner_server"):
+        dependencies = [paths["prefix"] / "bin" / "python", paths["params"],
+                        paths["prefix"] / "lib" / "nav2_planner" / "planner_server"]
+        if full:
+            dependencies += [paths["bt"], paths["prefix"] / "lib" / "nav2_controller" / "controller_server",
+                             paths["prefix"] / "lib" / "nav2_bt_navigator" / "bt_navigator",
+                             paths["prefix"] / "lib" / "libnav2_regulated_pure_pursuit_controller.so"]
+        for dependency in dependencies:
             if not dependency.is_file():
                 raise RuntimeError(f"Nav2 dependency missing: {dependency}")
         if paths["socket"].exists():
@@ -69,7 +140,7 @@ def start(root, *, ros_domain_id=74):
             child = subprocess.Popen([sys.executable, "-m", "tools.nav2_planner", "__supervise",
                 "--root", str(root), "--ros-domain-id", str(ros_domain_id)], cwd=root,
                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        deadline = time.monotonic()+15
+        deadline = time.monotonic()+30
         try:
             while time.monotonic() < deadline:
                 current = status(root)
@@ -131,22 +202,13 @@ def _supervise(root, ros_domain_id):
         cpus = {min(cpus)}
         os.sched_setaffinity(0, cpus)
         state["cpus"] = sorted(cpus)
-        from v3.config import ConfigResolver
-        conf = root / "conf"
-        navigation = ConfigResolver(conf/"hardver.json", conf/"fizika.json", conf/"speed_map.json", conf/"vezerles.json").resolve().runtime.composition.live_control.control.navigation
-        radius = math.hypot(navigation.footprint_length_m/2 + abs(navigation.footprint_center_x_m),
-                            navigation.footprint_width_m/2) + navigation.footprint_safety_margin_m
-        paths["geometry"].write_text("global_costmap:\n  global_costmap:\n    ros__parameters:\n"
-            f"      robot_radius: {radius}\n      inflation_layer:\n        inflation_radius: {radius+.10}\n")
+        control = _resolved_control(root)
+        full = control.navigation.full_nav2_enabled
+        state["mode"] = "NAVIGATION" if full else "PLANNER"
+        radius = _write_geometry(paths, control)
         env = _ros_environment(root, paths["prefix"])
         env.update(ROS_DOMAIN_ID=str(ros_domain_id), ROS_LOG_DIR=str(paths["work"] / "ros_logs"))
-        commands = [
-            [str(paths["prefix"] / "lib" / "nav2_planner" / "planner_server"), "--ros-args",
-             "--params-file", str(paths["params"]), "--params-file", str(paths["geometry"])],
-            [str(paths["prefix"] / "bin" / "python"), "-m", "v3.nav2_planner_bridge",
-             "--socket", str(paths["socket"]), "--status-path", str(paths["status"])],
-        ]
-        for name, command in zip(("planner", "bridge"), commands):
+        for name, command in _commands(paths, full=full, radius=radius):
             log = (paths["work"] / f"{name}.log").open("a")
             logs.append(log)
             children.append(subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,

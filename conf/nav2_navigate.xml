@@ -1,11 +1,15 @@
 <!-- Replan from the SLAM map and current obstacle layer. No recovery actuation. -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <PipelineSequence name="NavigateWithReplanning">
-      <RateController hz="2.0">
+    <RecoveryNode name="ReplanAfterControllerOrPlannerFailure" number_of_retries="6">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="2.0">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
+        </RateController>
+        <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker" error_code_id="{follow_path_error_code}"/>
+      </PipelineSequence>
+      <!-- Re-read the live obstacle costmap; never clear it or command a recovery move. -->
         <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
-      </RateController>
-      <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker" error_code_id="{follow_path_error_code}"/>
-    </PipelineSequence>
+    </RecoveryNode>
   </BehaviorTree>
 </root>

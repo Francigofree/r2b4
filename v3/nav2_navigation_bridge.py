@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import json
 import math
 import os
@@ -34,6 +35,10 @@ def validate_request(packet, now_ns):
         value = packet.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 < value <= maximum:
             raise ValueError("invalid mission envelope")
+    for key in ("goal_tolerance_m", "yaw_tolerance_rad"):
+        value = packet.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError("invalid mission goal tolerance")
     goal = packet.get("goal")
     if packet.get("mode") == "EXPLORE":
         if goal is not None:
@@ -72,6 +77,8 @@ def run(args):
     from nav2_msgs.action import NavigateToPose
     from nav2_msgs.msg import SpeedLimit
     from lifecycle_msgs.srv import ChangeState
+    from rcl_interfaces.srv import SetParametersAtomically
+    from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
     from tf2_ros import Buffer, TransformListener, TransformException
     from rclpy.time import Time
     from v3.adapters.room_cruise_goals import OccupancyMap, FrontierGoalSelector
@@ -102,6 +109,8 @@ def run(args):
     node = Node("r2b4_nav2_navigation_bridge")
     navigator = ActionClient(node, NavigateToPose, "/navigate_to_pose")
     speed_publisher = node.create_publisher(SpeedLimit, "/speed_limit", 1)
+    goal_parameters = node.create_client(SetParametersAtomically, "/controller_server/set_parameters_atomically")
+    parameter_future, parameter_values, applied_tolerances, parameter_started_ns = None, None, None, 0
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, node)
     lifecycle = [node.create_client(ChangeState, f"/{name}/change_state")
@@ -118,13 +127,14 @@ def run(args):
     selector = FrontierGoalSelector(robot_radius_m=args.robot_radius)
     map_value, map_received_ns, map_stamp_ns = None, 0, 0
     scan_ns, odom_ns, tf_ns = 0, 0, 0
+    scan_history, odom_history, tf_history = deque(maxlen=32), deque(maxlen=32), deque(maxlen=32)
     sequence, last_status_ns, last_reply_ns = 0, 0, 0
     latest_source_ns = -1
 
     def stamp_ns(message):
         return message.header.stamp.sec*1_000_000_000+message.header.stamp.nanosec-ros_offset_ns
 
-    def reply(status, *, produced_ns=None, valid_until_ns=None, v=0., omega=0.):
+    def reply(status, *, produced_ns=None, valid_until_ns=None, v=0., omega=0., evidence=None):
         nonlocal sequence, last_reply_ns
         if current is None:
             return
@@ -136,10 +146,13 @@ def run(args):
         sequence += 1
         output = {key: packet[key] for key in ("mission_id", "goal_id", "source_ns",
             "source_tick_id", "odom_generation", "transform_revision")}
+        scan_evidence, odom_evidence = (scan_ns, odom_ns) if evidence is None else evidence
         output.update(frame_id=LOCAL_FRAME_ID, status=status, worker_generation=generation,
             command_sequence=sequence, produced_ns=produced_ns,
-            valid_until_ns=produced_ns if valid_until_ns is None else valid_until_ns,
-            scan_measurement_ns=min(scan_ns, produced_ns), odom_measurement_ns=min(odom_ns, produced_ns),
+            valid_until_ns=(max(produced_ns, min(produced_ns+COMMAND_TTL_NS,
+                packet["source_ns"]+HEARTBEAT_MAX_AGE_NS))
+                if valid_until_ns is None else valid_until_ns),
+            scan_measurement_ns=min(scan_evidence, produced_ns), odom_measurement_ns=min(odom_evidence, produced_ns),
             v_mps=v, omega_rad_s=omega, selected_goal=selected_goal,
             map_revision=state["map_revision"], child_goal_id=state["child_goal_id"])
         try:
@@ -181,6 +194,8 @@ def run(args):
                 and all(math.isnan(value) or value == math.inf or message.range_min <= value <= message.range_max
                         for value in message.ranges)):
             scan_ns = max(scan_ns, measured)
+            if not scan_history or measured > scan_history[-1]:
+                scan_history.append(measured)
 
     def odom_callback(message):
         nonlocal odom_ns
@@ -192,13 +207,19 @@ def run(args):
                     twist.linear.x, twist.angular.z))
                 and abs(sum(value*value for value in (q.x, q.y, q.z, q.w))-1.) <= .01):
             odom_ns = max(odom_ns, measured)
+            if not odom_history or measured > odom_history[-1]:
+                odom_history.append(measured)
 
     def velocity_callback(message):
         if current is None or handle is None or cancelling or not active or terminal_status is not None:
             return
         now, produced = time.monotonic_ns(), stamp_ns(message)
+        # ROS queues can deliver a newer sensor callback before an older cmd.
+        # Use already-observed measurements that existed at command production.
+        evidence = [next((stamp for stamp in reversed(history) if stamp <= produced), 0)
+                    for history in (scan_history, odom_history, tf_history)]
         deadline = velocity_lifetime(current[0], now_ns=now, produced_ns=produced,
-            accepted_ns=accepted_ns, scan_ns=scan_ns, odom_ns=odom_ns, tf_ns=tf_ns)
+            accepted_ns=accepted_ns, scan_ns=evidence[0], odom_ns=evidence[1], tf_ns=evidence[2])
         v, omega = message.twist.linear.x, message.twist.angular.z
         if (deadline is None or message.header.frame_id not in ("", "base_link")
                 or not math.isfinite(v) or not math.isfinite(omega)
@@ -208,7 +229,8 @@ def run(args):
                 or abs(omega) > current[0]["max_omega_rad_s"]+1e-6):
             reply("STALE")
             return
-        reply("ACTIVE", produced_ns=produced, valid_until_ns=deadline, v=v, omega=omega)
+        reply("ACTIVE", produced_ns=produced, valid_until_ns=deadline, v=v, omega=omega,
+              evidence=evidence[:2])
         state["commands"] += 1
 
     qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -253,6 +275,8 @@ def run(args):
             try:
                 transform = tf_buffer.lookup_transform(GLOBAL_FRAME_ID, "base_link", Time())
                 tf_ns = stamp_ns(transform)
+                if not tf_history or tf_ns > tf_history[-1]:
+                    tf_history.append(tf_ns)
                 p = transform.transform.translation
                 robot_pose = p.x, p.y
             except TransformException:
@@ -280,7 +304,8 @@ def run(args):
                     continue
                 latest_source_ns = packet["source_ns"]
                 same = current is not None and all(packet[key] == current[0][key]
-                    for key in ("mission_id", "goal_id", "odom_generation", "mode", "goal"))
+                    for key in ("mission_id", "goal_id", "odom_generation", "mode", "goal",
+                                "goal_tolerance_m", "yaw_tolerance_rad"))
                 if same and packet["source_ns"] <= current[0]["source_ns"]:
                     continue
                 if not same:
@@ -322,11 +347,31 @@ def run(args):
                         settle_until_ns = now+150_000_000
             if cancelling and now-cancel_started_ns > 2_000_000_000:
                 raise RuntimeError("NAV2_CANCELLATION_TIMEOUT")
+            if parameter_future is not None:
+                if parameter_future.done():
+                    response = parameter_future.result()
+                    if response is None or not response.result.successful:
+                        raise RuntimeError("NAV2_GOAL_TOLERANCE_REJECTED")
+                    applied_tolerances, parameter_future = parameter_values, None
+                elif now-parameter_started_ns > 2_000_000_000:
+                    raise RuntimeError("NAV2_GOAL_TOLERANCE_TIMEOUT")
+            if (current is not None and active and not cancelling and sending is None and handle is None
+                    and terminal_status is None and now >= settle_until_ns):
+                desired = tuple(current[0][key]*.5 for key in ("goal_tolerance_m", "yaw_tolerance_rad"))
+                if parameter_future is None and applied_tolerances != desired and goal_parameters.service_is_ready():
+                    parameters = SetParametersAtomically.Request()
+                    parameters.parameters = [Parameter(name=name,
+                        value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE, double_value=value))
+                        for name, value in zip(("goal_checker.xy_goal_tolerance", "goal_checker.yaw_goal_tolerance"), desired)]
+                    parameter_values, parameter_started_ns = desired, now
+                    parameter_future = goal_parameters.call_async(parameters)
             fresh = (map_value is not None and 0 <= now-map_received_ns <= 6_000_000_000
                 and 0 <= now-map_stamp_ns <= 6_000_000_000
                 and all(0 < stamp <= now and now-stamp <= SENSOR_MAX_AGE_NS for stamp in (scan_ns, odom_ns, tf_ns)))
             if (current is not None and active and not cancelling and sending is None and handle is None
-                    and terminal_status is None and now >= settle_until_ns and navigator.server_is_ready() and fresh):
+                    and terminal_status is None and parameter_future is None
+                    and applied_tolerances == tuple(current[0][key]*.5 for key in ("goal_tolerance_m", "yaw_tolerance_rad"))
+                    and now >= settle_until_ns and navigator.server_is_ready() and fresh):
                 packet = current[0]
                 if selected_goal is None:
                     if packet["mode"] == "EXPLORE":
@@ -366,6 +411,7 @@ def run(args):
                     mission_id=None if current is None else current[0]["mission_id"],
                     selected_goal=selected_goal, scan_measurement_ns=scan_ns,
                     odom_measurement_ns=odom_ns, tf_measurement_ns=tf_ns)
+                state["goal_checker_tolerances"] = applied_tolerances
                 temporary = status_path.with_suffix(".tmp")
                 temporary.write_text(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
                 temporary.replace(status_path)

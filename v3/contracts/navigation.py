@@ -47,6 +47,10 @@ class Nav2NavigationRequest:
     max_omega_rad_s: float
     odom_generation: int
     transform_revision: int
+    # Compatibility defaults decode earlier Nav2 replay checkpoints. Live L6
+    # always supplies the canonical mission's actual tolerances explicitly.
+    goal_tolerance_m: float = .08
+    yaw_tolerance_rad: float = .1
 
     def __post_init__(self) -> None:
         if not isinstance(self.context, TickContext):
@@ -55,7 +59,8 @@ class Nav2NavigationRequest:
             _identity(getattr(self, name), name)
         if self.mode not in (CommandMode.NAVIGATE, CommandMode.EXPLORE):
             raise ValueError("Nav2 requests require NAVIGATE or EXPLORE")
-        if (self.mode is CommandMode.NAVIGATE) != isinstance(self.goal, Waypoint):
+        if ((self.mode is CommandMode.NAVIGATE and not isinstance(self.goal, Waypoint))
+                or (self.mode is CommandMode.EXPLORE and self.goal is not None)):
             raise ValueError("only NAVIGATE carries a fixed map goal")
         for name in ("max_v_mps", "max_omega_rad_s"):
             value = getattr(self, name)
@@ -63,6 +68,10 @@ class Nav2NavigationRequest:
                 raise ValueError(f"{name} must be finite and positive")
         for name in ("odom_generation", "transform_revision"):
             _nonnegative(getattr(self, name), name)
+        for name in ("goal_tolerance_m", "yaw_tolerance_rad"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and nonnegative")
 
 
 @dataclass(frozen=True, slots=True)

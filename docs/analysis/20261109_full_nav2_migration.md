@@ -48,4 +48,7 @@ dokumentációja; a tényleges paramétereket az installált Jazzy implementáci
 
 ## Eredmények
 
+A fizikai referencia a felhasználó mérése szerint: a robot előtt lévő fal kb.
+2,8 m, a bal oldali fal kb. 0,7 m távolságban van. Ezek a LIDAR középpontjától mért, közelítő értékek.
+
 A fejlesztés és a validáció folyamatban van; elfogadási siker még nincs igazolva.
