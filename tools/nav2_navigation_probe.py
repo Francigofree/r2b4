@@ -186,8 +186,8 @@ def _worker(args, root, output):
         max_obstacle_detour_m=0., min_obstacle_clearance_m=None, plans=plans,
         active_commands=0, expired_commands_rejected=0, error=None)
     trace = (output / "trace.jsonl").open("w")
-    start = last = time.monotonic()
-    last_motion = start
+    start = time.monotonic()
+    last_motion_ns = time.monotonic_ns()
     last_sensor = last_scan = last_map = last_heartbeat = last_trace = 0.
     phase, phase_started, obstacle_inserted = "STARTING", start, None
     phase_id, tick = 0, 0
@@ -226,6 +226,11 @@ def _worker(args, root, output):
                         and not guidance.produced_ns < time.monotonic_ns() < guidance.valid_until_ns):
                     raise RuntimeError("SUCCEEDED guidance is not fresh at receipt")
                 if packet.get("mission_id") == f"motorless-{phase_id}":
+                    if packet.get("status") == "SUCCEEDED" and mode == "NAVIGATE":
+                        error = math.hypot(target[0] - pose[0], target[1] - pose[1])
+                        yaw_error = abs(math.atan2(math.sin(target[2] - pose[2]), math.cos(target[2] - pose[2])))
+                        if error > constraints.goal_tolerance_m or yaw_error > constraints.yaw_tolerance_rad:
+                            raise RuntimeError("Nav2 success exceeded the requested mission tolerance")
                     latest = packet
                     if phase == "EXPLORE" and packet.get("selected_goal") is not None:
                         if packet.get("goal_id") != "motorless-goal-3":
@@ -248,8 +253,8 @@ def _worker(args, root, output):
                     active_command = abs(raw_v) + abs(raw_omega) > 1e-12
                 else:
                     report["expired_commands_rejected"] += 1
-            if now - last_motion >= .02:
-                dt, last_motion = now - last_motion, now
+            if now_ns - last_motion_ns >= 20_000_000:
+                dt, last_motion_ns = (now_ns - last_motion_ns) / 1e9, now_ns
                 context = TickContext(control_tick, now_ns)
                 control_tick += 1
                 estimate = RobotEstimate(context, ODOM_FRAME, *pose, v, omega, (0.,) * 25,
@@ -345,6 +350,8 @@ def _worker(args, root, output):
                     goal_id=f"motorless-goal-{phase_id}", source_ns=now_ns, source_tick_id=tick,
                     odom_generation=0, transform_revision=0, frame_id=MAP_FRAME, mode=mode,
                     goal=target, max_v_mps=constraints.max_v_mps, max_omega_rad_s=constraints.max_omega_rad_s)
+                request.update(goal_tolerance_m=constraints.goal_tolerance_m,
+                               yaw_tolerance_rad=constraints.yaw_tolerance_rad)
                 channel.sendto(json.dumps(request, allow_nan=False, separators=(",", ":")).encode(), str(bridge_socket))
                 last_heartbeat = now
                 tick += 1
@@ -367,6 +374,11 @@ def _worker(args, root, output):
                       obstacle_inserted_s=None if obstacle_inserted is None else obstacle_inserted - start)
         try:
             report["bridge"] = json.loads(bridge_status.read_text())
+            applied = report["bridge"].get("goal_checker_tolerances")
+            report["goal_checker_tolerances_applied"] = (isinstance(applied, list)
+                and applied[:2] == [constraints.goal_tolerance_m / 2, constraints.yaw_tolerance_rad / 2])
+            if report["status"] == "PASS" and not report["goal_checker_tolerances_applied"]:
+                report.update(status="FAILED", error="requested goal checker tolerances were not applied")
         except (OSError, ValueError):
             pass
         for child in reversed(children):
@@ -412,8 +424,7 @@ def main(argv=None):
               else args.output.resolve())
     if args.output is not None:
         output.mkdir(parents=True, exist_ok=False)
-    from tools.slam_toolbox import _ros_environment
-    from tools.nav2_planner import _paths, _resolved_control, _write_geometry
+    from tools.nav2_planner import _paths, _resolved_control, _write_geometry, _navigation_environment
     paths = _paths(root)
     paths.update(work=output, socket=output / "bridge.sock", status=output / "bridge_status.json",
                  geometry=output / "geometry.yaml")
@@ -425,7 +436,7 @@ def main(argv=None):
     (output / "simulation_config.json").write_text(json.dumps(dict(
         operational=asdict(control.operational_constraints), mission=mission), sort_keys=True) + "\n")
     prefix = root / "runtime/deps/nav2-planner"
-    environment = _ros_environment(root, prefix)
+    environment = _navigation_environment(paths, root)
     environment.update(ROS_DOMAIN_ID=str(args.ros_domain_id), ROS_LOG_DIR=str(output / "ros_logs"))
     command = [str(prefix / "bin/python"), "-m", "tools.nav2_navigation_probe", "--worker",
                "--output", str(output), "--ros-domain-id", str(args.ros_domain_id), "--timeout-s", str(args.timeout_s),

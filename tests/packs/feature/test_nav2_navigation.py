@@ -121,12 +121,42 @@ def test_mission_change_and_cancellation_clear_cached_velocity(channel):
     assert decode_packet(packet) == dict(operation="CANCEL", mission_id="new", goal_id="goal")
 
 
+def test_tighter_mission_tolerance_is_sent_immediately_and_invalidates_old_velocity(channel):
+    client, server = channel
+    value = request()
+    send_reply(client, server, value)
+    context = TickContext(11, value.context.monotonic_ns+20_000_000)
+    assert client.poll(context).guidance is not None
+    tighter = replace(value, context=TickContext(11, value.context.monotonic_ns+20_000_000),
+                      goal_tolerance_m=.02, yaw_tolerance_rad=.03)
+    client.submit(tighter)
+    packet, _ = server.recvfrom(4096)
+    assert decode_packet(packet)["goal_tolerance_m"] == .02
+    assert decode_packet(packet)["yaw_tolerance_rad"] == .03
+    assert client.poll(TickContext(12, value.context.monotonic_ns+40_000_000)).guidance is None
+
+
+@pytest.mark.parametrize("limits", [dict(max_v_mps=.25), dict(max_omega_rad_s=1.)])
+def test_mission_cap_change_sends_immediately_and_invalidates_old_velocity(channel, limits):
+    client, server = channel
+    value = request()
+    send_reply(client, server, value)
+    assert client.poll(TickContext(11, value.context.monotonic_ns+20_000_000)).guidance is not None
+    changed = replace(value, context=TickContext(11, value.context.monotonic_ns+20_000_000), **limits)
+    client.submit(changed)
+    packet, _ = server.recvfrom(4096)
+    for key, limit in limits.items():
+        assert decode_packet(packet)[key] == limit
+    assert client.poll(TickContext(12, value.context.monotonic_ns+40_000_000)).guidance is None
+
+
 def test_bridge_rejects_expired_invalid_mission_and_goal_packets():
     value = request()
     packet = request_packet(value)
     validate_request(packet, value.context.monotonic_ns)
     for change in (dict(source_ns=0), dict(frame_id=LOCAL_FRAME_ID), dict(goal=[math.inf, 0., None]),
-                   dict(max_v_mps=True), dict(mode="TELEOP"), dict(odom_generation=-1)):
+                   dict(max_v_mps=True), dict(mode="TELEOP"), dict(odom_generation=-1),
+                   dict(goal_tolerance_m=math.nan), dict(yaw_tolerance_rad=-.01)):
         with pytest.raises(ValueError):
             validate_request({**packet, **change}, value.context.monotonic_ns)
 

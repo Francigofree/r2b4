@@ -108,7 +108,7 @@ def test_no_consumer_never_encodes_scan_and_probes_are_bounded(tmp_path, monkeyp
     assert sender.sent_packets == sender.dropped_packets == 0
 
 
-def test_real_socket_nonblocking_scan_throttle_reply_and_dead_sidecar(tmp_path):
+def test_real_socket_nonblocking_all_unique_scans_reply_and_dead_sidecar(tmp_path):
     path = tmp_path / "slam.sock"
     server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     server.bind(str(path))
@@ -122,7 +122,8 @@ def test_real_socket_nonblocking_scan_throttle_reply_and_dead_sidecar(tmp_path):
         assert decode_packet(data).measurement_ns == 2_000_000_000
         assert sender._socket.gettimeout() == 0.
         assert address
-        assert not sender.publish_scan(_scan(8, 2_100_000_000), now_ns=2_140_000_000, **options)
+        assert sender.publish_scan(_scan(8, 2_100_000_000), now_ns=2_140_000_000, **options)
+        assert decode_packet(server.recvfrom(MAX_PACKET_BYTES)[0]).measurement_ns == 2_100_000_000
         server.sendto(encode_pose(_pose()), address)
         assert sender.receive() == (encode_pose(_pose()),)
         # A stale, vanished or full sidecar cannot stall/fault the producer.
@@ -154,7 +155,7 @@ def test_full_socket_drops_without_waiting_and_scan_health_is_independent(tmp_pa
         server.close()
 
 
-def test_scan_throttle_uses_measurement_spacing_across_clock_bucket_boundary(tmp_path):
+def test_nav2_observes_every_unique_physical_scan_despite_mapping_interval(tmp_path):
     path = tmp_path / "slam.sock"
     server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     server.bind(str(path))
@@ -162,12 +163,15 @@ def test_scan_throttle_uses_measurement_spacing_across_clock_bucket_boundary(tmp
     options = dict(session_id=11, source_pid=22, minimum_range_m=.08,
                    maximum_range_m=12., lidar_x_m=0., lidar_y_m=0., maximum_age_ns=250_000_000)
     try:
-        assert sender.publish_scan(_scan(7, 2_190_000_000), now_ns=2_230_000_000, **options)
-        # Adjacent 200 ms clock buckets are only 20 ms apart here. Exporting
-        # both caused SLAM Toolbox's 180 ms gate to silently drop the latter.
-        assert not sender.publish_scan(_scan(8, 2_210_000_000), now_ns=2_250_000_000, **options)
-        assert sender.publish_scan(_scan(9, 2_390_000_000), now_ns=2_430_000_000, **options)
-        assert sender.sent_packets == 2
+        measurements = (2_000_000_000, 2_100_000_000, 2_199_600_000, 2_300_000_000)
+        for sequence, measured in enumerate(measurements, 7):
+            assert sender.publish_scan(_scan(sequence, measured), now_ns=measured+75_000_000, **options)
+            assert decode_packet(server.recvfrom(MAX_PACKET_BYTES)[0]).measurement_ns == measured
+        # Mapping's independent 180 ms ROS gate must not throttle the scan
+        # stream consumed by Nav2's costmaps and freshness validation.
+        assert not sender.publish_scan(_scan(10, measurements[-1]), now_ns=measurements[-1]+80_000_000, **options)
+        assert not sender.publish_scan(_scan(9, measurements[-2]), now_ns=measurements[-1]+80_000_000, **options)
+        assert sender.sent_packets == len(measurements)
     finally:
         sender.close()
         server.close()

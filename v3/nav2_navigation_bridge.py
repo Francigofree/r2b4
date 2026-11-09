@@ -305,7 +305,7 @@ def run(args):
                 latest_source_ns = packet["source_ns"]
                 same = current is not None and all(packet[key] == current[0][key]
                     for key in ("mission_id", "goal_id", "odom_generation", "mode", "goal",
-                                "goal_tolerance_m", "yaw_tolerance_rad"))
+                                "goal_tolerance_m", "yaw_tolerance_rad", "max_v_mps", "max_omega_rad_s"))
                 if same and packet["source_ns"] <= current[0]["source_ns"]:
                     continue
                 if not same:
@@ -355,14 +355,19 @@ def run(args):
                     applied_tolerances, parameter_future = parameter_values, None
                 elif now-parameter_started_ns > 2_000_000_000:
                     raise RuntimeError("NAV2_GOAL_TOLERANCE_TIMEOUT")
+            desired = None if current is None else (
+                current[0]["goal_tolerance_m"]*.5, current[0]["yaw_tolerance_rad"]*.5,
+                min(1.2, current[0]["max_omega_rad_s"]),
+                current[0]["max_v_mps"], current[0]["max_omega_rad_s"])
             if (current is not None and active and not cancelling and sending is None and handle is None
                     and terminal_status is None and now >= settle_until_ns):
-                desired = tuple(current[0][key]*.5 for key in ("goal_tolerance_m", "yaw_tolerance_rad"))
                 if parameter_future is None and applied_tolerances != desired and goal_parameters.service_is_ready():
                     parameters = SetParametersAtomically.Request()
                     parameters.parameters = [Parameter(name=name,
                         value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE, double_value=value))
-                        for name, value in zip(("goal_checker.xy_goal_tolerance", "goal_checker.yaw_goal_tolerance"), desired)]
+                        for name, value in zip(("goal_checker.xy_goal_tolerance", "goal_checker.yaw_goal_tolerance",
+                            "FollowPath.rotate_to_heading_angular_vel", "FollowPath.mission_max_v_mps",
+                            "FollowPath.mission_max_omega_rad_s"), desired)]
                     parameter_values, parameter_started_ns = desired, now
                     parameter_future = goal_parameters.call_async(parameters)
             fresh = (map_value is not None and 0 <= now-map_received_ns <= 6_000_000_000
@@ -370,7 +375,7 @@ def run(args):
                 and all(0 < stamp <= now and now-stamp <= SENSOR_MAX_AGE_NS for stamp in (scan_ns, odom_ns, tf_ns)))
             if (current is not None and active and not cancelling and sending is None and handle is None
                     and terminal_status is None and parameter_future is None
-                    and applied_tolerances == tuple(current[0][key]*.5 for key in ("goal_tolerance_m", "yaw_tolerance_rad"))
+                    and applied_tolerances == desired
                     and now >= settle_until_ns and navigator.server_is_ready() and fresh):
                 packet = current[0]
                 if selected_goal is None:

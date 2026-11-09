@@ -74,13 +74,9 @@ def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
     if event is None or event.error is not None or event.guidance is None:
         return hold("NAV2_UNAVAILABLE" if event is not None and event.error else "NAV2_PENDING"), state
     guidance = event.guidance
-    source_request = next((item for item in state.issued_requests
-        if item.context == guidance.source_context), None)
     if (event.context != mission.context or guidance.mission_id != mission.mission_id
             or guidance.goal_id != request.goal_id
             or guidance.odom_generation != quality.generation
-            or source_request is None
-            or guidance.transform_revision != source_request.transform_revision
             or state.mission_started is None
             or guidance.source_context.tick_id < state.mission_started.tick_id
             or guidance.source_context.monotonic_ns < state.mission_started.monotonic_ns):
@@ -93,9 +89,16 @@ def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
                          or guidance.produced_ns < previous.produced_ns
                          or (guidance.command_sequence == previous.command_sequence and guidance != previous)))):
             return hold("NAV2_SUPERSEDED"), state
-    state = replace(state, last_guidance=guidance)
     if not guidance.produced_ns <= now < guidance.valid_until_ns:
+        # A cached expired proposal can outlive the bounded issued-request
+        # history. Expiry is its cause, not a new identity failure. Rejection
+        # must leave the last accepted generation/sequence highwater intact.
         return hold("NAV2_STALE"), state
+    source_request = next((item for item in state.issued_requests
+        if item.context == guidance.source_context), None)
+    if source_request is None or guidance.transform_revision != source_request.transform_revision:
+        return hold("NAV2_IDENTITY_MISMATCH"), state
+    state = replace(state, last_guidance=guidance)
     if guidance.status is Nav2NavigationStatus.SUCCEEDED:
         if mission.mode is CommandMode.NAVIGATE:
             pose = estimate.global_pose

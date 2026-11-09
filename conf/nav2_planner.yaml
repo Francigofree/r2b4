@@ -70,7 +70,7 @@ controller_server:
       yaw_goal_tolerance: 0.20
       stateful: true
     FollowPath:
-      plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
+      plugin: r2b4_nav2::WheelAwareRegulatedPurePursuitController
       desired_linear_vel: 0.25
       lookahead_dist: 0.5
       min_lookahead_dist: 0.3

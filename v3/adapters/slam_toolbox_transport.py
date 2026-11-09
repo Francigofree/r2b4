@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 DEFAULT_SLAM_SOCKET = Path(__file__).resolve().parents[2] / "runtime" / "slam_toolbox.sock"
 MAX_PACKET_BYTES = 4096
 SCAN_BINS = 720
-SCAN_PERIOD_NS = 200_000_000
 _PROBE_PERIOD_NS = 1_000_000_000
 _MAGIC = b"R2ST"
 _VERSION = 1
@@ -256,7 +255,7 @@ class SlamToolboxSender:
             return False
         measured = snapshot.measurement_monotonic_ns
         if (self._last_scan_measurement_ns is not None
-                and measured-self._last_scan_measurement_ns < SCAN_PERIOD_NS):
+                and measured <= self._last_scan_measurement_ns):
             return False
         if snapshot.health != "OK" or not 0 <= now_ns-snapshot.measurement_monotonic_ns <= maximum_age_ns:
             self.dropped_packets += 1
@@ -381,7 +380,7 @@ class SlamLocalizationReceiver:
 
 
 __all__ = [
-    "DEFAULT_SLAM_SOCKET", "MAX_PACKET_BYTES", "SCAN_BINS", "SCAN_PERIOD_NS",
+    "DEFAULT_SLAM_SOCKET", "MAX_PACKET_BYTES", "SCAN_BINS",
     "SlamScanPacket", "SlamOdometryPacket", "SlamPosePacket", "SlamToolboxSender",
     "SlamLocalizationReceiver", "encode_scan", "encode_odometry", "encode_pose", "decode_packet",
 ]

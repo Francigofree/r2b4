@@ -219,7 +219,11 @@ def _supervise(root: Path) -> int:
             raise RuntimeError("No CPU available outside the configured control CPU")
         # The sidecar has one compute thread and a few I/O threads. Bound its
         # total schedulable CPU capacity as well as its priority.
-        cpus = {min(cpus)}
+        # Keep SLAM on the LiDAR compute CPU; Nav2 uses the planner CPU. Both
+        # stay outside the control island without contending on one core.
+        preferred = set(_read_json(root / "conf" / "vezerles.json")
+                        .get("runtime_affinity", {}).get("lidar_matcher_cpus", [2]))
+        cpus = {min(cpus & preferred) if cpus & preferred else max(cpus)}
         os.sched_setaffinity(0, cpus)
         state["cpus"] = sorted(cpus)
         env = _ros_environment(root, paths["prefix"])

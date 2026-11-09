@@ -22,6 +22,7 @@ def _paths(root):
     return {"work": work, "state": work / "supervisor.json", "status": work / "bridge_status.json",
             "socket": root / "runtime" / ("nav2_navigation.sock" if full else "nav2_planner.sock"),
             "prefix": root / "runtime" / "deps" / "nav2-planner",
+            "overlay": root / "runtime" / "deps" / "nav2-wheel-adapter",
             "params": root / "conf" / "nav2_planner.yaml", "geometry": work / "geometry.yaml",
             "bt": root / "conf" / "nav2_navigate.xml"}
 
@@ -31,6 +32,13 @@ def _resolved_control(root):
     conf = root / "conf"
     return ConfigResolver(conf/"hardver.json", conf/"fizika.json", conf/"speed_map.json",
                           conf/"vezerles.json").resolve().runtime.composition.live_control.control
+
+
+def _navigation_environment(paths, root):
+    env = _ros_environment(root, paths["prefix"])
+    env["AMENT_PREFIX_PATH"] = str(paths["overlay"]) + os.pathsep + env.get("AMENT_PREFIX_PATH", "")
+    env["LD_LIBRARY_PATH"] = str(paths["overlay"] / "lib") + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+    return env
 
 
 def _write_geometry(paths, control):
@@ -58,7 +66,13 @@ def _write_geometry(paths, control):
              f"      regulated_linear_scaling_min_speed: {minimum}\n"
              f"      min_approach_linear_velocity: {minimum}\n"
              f"      rotate_to_heading_angular_vel: {max(limits.wheel_limits.target_center_spin_rad_s, min(1.2, limits.max_omega_rad_s))}\n"
-             f"      max_angular_accel: {proposal_acceleration}\n")
+             f"      max_angular_accel: {proposal_acceleration}\n"
+             f"      track_width_m: {limits.wheel_limits.track_width_m}\n"
+             f"      wheel_minimum_mps: {limits.wheel_limits.minimum_mps}\n"
+             f"      wheel_maximum_mps: {limits.wheel_limits.maximum_mps}\n"
+             f"      platform_max_v_mps: {limits.max_v_mps}\n"
+             f"      platform_max_omega_rad_s: {limits.max_omega_rad_s}\n"
+             f"      max_curvature_rad_per_m: {limits.max_curvature_rad_per_m}\n")
     # The default tree is loaded during lifecycle activation, before the first
     # goal can supply its own XML. It must not require unused recovery servers.
     import json
@@ -129,7 +143,8 @@ def start(root, *, ros_domain_id=74):
         if full:
             dependencies += [paths["bt"], paths["prefix"] / "lib" / "nav2_controller" / "controller_server",
                              paths["prefix"] / "lib" / "nav2_bt_navigator" / "bt_navigator",
-                             paths["prefix"] / "lib" / "libnav2_regulated_pure_pursuit_controller.so"]
+                             paths["prefix"] / "lib" / "libnav2_regulated_pure_pursuit_controller.so",
+                             paths["overlay"] / "lib" / "libr2b4_nav2_wheel_adapter.so"]
         for dependency in dependencies:
             if not dependency.is_file():
                 raise RuntimeError(f"Nav2 dependency missing: {dependency}")
@@ -206,7 +221,7 @@ def _supervise(root, ros_domain_id):
         full = control.navigation.full_nav2_enabled
         state["mode"] = "NAVIGATION" if full else "PLANNER"
         radius = _write_geometry(paths, control)
-        env = _ros_environment(root, paths["prefix"])
+        env = _navigation_environment(paths, root)
         env.update(ROS_DOMAIN_ID=str(ros_domain_id), ROS_LOG_DIR=str(paths["work"] / "ros_logs"))
         for name, command in _commands(paths, full=full, radius=radius):
             log = (paths["work"] / f"{name}.log").open("a")

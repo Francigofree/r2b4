@@ -12,7 +12,8 @@ from v3.contracts import (CommandMode, CommandRequest, DataField, DeviceHealth,
     NavigationStatus, Pose2D, RawDeviceBatch, RobotEstimate, SafetyDecision,
     TickContext, VelocitySource, Waypoint, WorldSnapshot)
 from v3.contracts.navigation import (Nav2NavigationInput, Nav2NavigationStatus,
-    Nav2VelocityGuidance)
+    Nav2NavigationRequest, Nav2VelocityGuidance)
+from v3.layers._l6_nav2 import Nav2GuidanceState, accept_nav2_guidance
 from v3.engine import TickInputs
 from v3.execution import ExecutionRecord
 from v3.layers.l4_world_model import ShadowWorldModel
@@ -236,3 +237,56 @@ def test_custom_mission_goal_tolerances_reach_the_issued_nav2_request():
     assert request.yaw_tolerance_rad == mission.constraints.yaw_tolerance_rad == .025
     assert control.checkpoint().navigation.nav2_state.issued_requests[-1] == request
     control.close()
+
+
+def test_expired_cached_guidance_stays_stale_after_request_history_prunes_and_preserves_highwater():
+    """Native 2026-11-09 capture's first bad boundary: tick 8604, seq 51.
+
+    The original request aged 400609331 ns; its command had already expired
+    146798901 ns earlier. Pruning its request is not identity corruption.
+    """
+    config = _config()
+    context = TickContext(8604, 3266153283428)
+    command_id = "operator-roomcruise-1794253513478255858-13158"
+    manager = MissionManager(config.mission)
+    mission = manager.evaluate(CommandRequest(context, command_id, CommandMode.EXPLORE,
+        (DataField("max_v_mps", .3), DataField("max_omega_rad_s", 1.4)), context.tick_id))
+    source = TickContext(8584, 3265752674097)
+    source_request = Nav2NavigationRequest(source, mission.mission_id, mission.mission_id,
+        CommandMode.EXPLORE, None, .3, 1.4, 0, 0)
+    guidance = Nav2VelocityGuidance(source, mission.mission_id, mission.mission_id,
+        Nav2NavigationStatus.STALE, 3124876239156, 51, 3265806484527, 3266006484527,
+        3265431267364, 3265774403347, 0., 0., 0, 0,
+        selected_goal=Waypoint(.5426393857075631, .05820569426254796, -.8960553845713439),
+        map_revision=64, child_goal_id=1)
+    estimate = RobotEstimate(context, LOCAL_FRAME_ID, 0., 0., 0., 0., 0., (0.,) * 25,
+        localization_quality=healthy_localization(),
+        map_to_odom=Pose2D(GLOBAL_FRAME_ID, 0., 0., 0.))
+    world = WorldSnapshot(context, LOCAL_FRAME_ID, 0, (), 0)
+    state = Nav2GuidanceState(mission_id=mission.mission_id,
+        mission_started=TickContext(8386, 3261792703915),
+        request=source_request, last_guidance=guidance, issued_requests=(source_request,))
+
+    def evaluate(value, previous=state):
+        return accept_nav2_guidance(mission, estimate, world,
+            Nav2NavigationInput(context, value), previous,
+            max_scan_age_ns=config.navigation.max_world_freshness_ns,
+            max_odom_age_ns=config.navigation.max_world_freshness_ns)
+
+    plan, result = evaluate(guidance)
+    assert plan.reason == "NAV2_STALE" and plan.velocity_target is None
+    assert all(item.context != source for item in result.issued_requests)
+    assert result.last_guidance is guidance
+    # An expired newer sequence must not replace accepted highwater; an older
+    # generation still remains explicitly superseded, regardless of expiry.
+    _, result = evaluate(replace(guidance, command_sequence=52))
+    assert result.last_guidance is guidance
+    plan, result = evaluate(replace(guidance, worker_generation=guidance.worker_generation - 1))
+    assert plan.reason == "NAV2_SUPERSEDED" and result.last_guidance is guidance
+    plan, _ = evaluate(replace(guidance, mission_id="another-mission"))
+    assert plan.reason == "NAV2_IDENTITY_MISMATCH"
+    # Moving the expiry check does not admit a fresh result whose originating
+    # request no longer belongs to the closed issued-request history.
+    plan, result = evaluate(replace(guidance, command_sequence=52,
+        produced_ns=context.monotonic_ns - 1, valid_until_ns=context.monotonic_ns + 100_000_000))
+    assert plan.reason == "NAV2_IDENTITY_MISMATCH" and result.last_guidance is guidance
