@@ -1,0 +1,74 @@
+[INFO] [1794344744.045769692] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794344744.072357080] [planner_server]: Creating
+[INFO] [1794344744.129841400] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794344744.197615722] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794344747.625784489] [planner_server]: Configuring
+[INFO] [1794344747.625864878] [global_costmap.global_costmap]: Configuring
+[INFO] [1794344747.653006640] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794344747.660291859] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794344747.667420781] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794344747.673733165] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794344747.673964332] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794344747.676579023] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794344747.687170175] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794344747.687232453] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794344747.688726641] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794344747.825578856] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 114 at 0.050000 m/pix
+[INFO] [1794344747.848189145] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794344747.849342443] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794344747.851563392] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794344747.887542968] [planner_server]: Activating
+[INFO] [1794344747.887610820] [global_costmap.global_costmap]: Activating
+[INFO] [1794344747.887625043] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794344747.887719284] [global_costmap.global_costmap]: start
+[INFO] [1794344748.089395398] [planner_server]: Activating plugin GridBased of type NavfnPlanner
+[INFO] [1794344748.093818814] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794344753.891589539] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 114 at 0.050000 m/pix
+[INFO] [1794344757.889832259] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 114 at 0.050000 m/pix
+[INFO] [1794344759.888528174] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 145 X 114 at 0.050000 m/pix
+[INFO] [1794344761.888527375] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 145 X 114 at 0.050000 m/pix
+[WARN] [1794344763.216212807] [planner_server]: GridBased plugin failed to plan from (-0.19, -0.14) to (-1.05, -1.91): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794344763.216307973] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[WARN] [1794344763.237695788] [planner_server]: GridBased plugin failed to plan from (-0.19, -0.14) to (-1.05, -1.91): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794344763.239156310] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[INFO] [1794344763.890111937] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 145 X 114 at 0.050000 m/pix
+[INFO] [1794344797.888537610] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 145 X 114 at 0.050000 m/pix
+[WARN] [1794344812.371746586] [planner_server]: GridBased plugin failed to plan from (-1.33, -1.20) to (-1.01, -2.28): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794344812.371813457] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[WARN] [1794344812.412912230] [planner_server]: GridBased plugin failed to plan from (-1.33, -1.20) to (-1.01, -2.28): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794344812.412987897] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[WARN] [1794344812.582719787] [planner_server]: GridBased plugin failed to plan from (-1.34, -1.22) to (-0.74, -2.11): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794344812.582789862] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[WARN] [1794344812.604562503] [planner_server]: GridBased plugin failed to plan from (-1.34, -1.22) to (-0.74, -2.11): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794344812.604645744] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[INFO] [1794344830.292663433] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794344830.008 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794344860.059839475] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794344859.779 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794344867.662075657] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794344867.371 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794344904.088769964] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 160 X 136 at 0.050000 m/pix
+[INFO] [1794344908.090293164] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 167 X 136 at 0.050000 m/pix
+[INFO] [1794344910.088563194] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 136 at 0.050000 m/pix
+[INFO] [1794344912.088525618] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 138 at 0.050000 m/pix
+[INFO] [1794344914.088614074] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 138 at 0.050000 m/pix
+[INFO] [1794344916.088647486] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 138 at 0.050000 m/pix
+[INFO] [1794344918.089595453] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 138 at 0.050000 m/pix
+[INFO] [1794344920.088538401] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 142 at 0.050000 m/pix
+[INFO] [1794344924.088526360] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 142 at 0.050000 m/pix
+[INFO] [1794344944.088648812] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 183 X 142 at 0.050000 m/pix
+[INFO] [1794344944.983148219] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794344944.694 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794344969.602026245] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794344969.602088301] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794344969.602148023] [planner_server]: Deactivating
+[INFO] [1794344969.602171968] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794344969.689680383] [planner_server]: Deactivating plugin GridBased of type NavfnPlanner
+[INFO] [1794344969.689739531] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794344969.699862792] [planner_server]: Cleaning up
+[INFO] [1794344969.713604395] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794344969.724885573] [planner_server]: Cleaning up plugin GridBased of type NavfnPlanner
+[INFO] [1794344969.724948406] [planner_server]: Destroying plugin GridBased of type NavfnPlanner
+[INFO] [1794344969.740405041] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
