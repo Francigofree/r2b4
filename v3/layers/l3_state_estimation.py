@@ -655,6 +655,12 @@ class _PoseFilter:
                 self._state[self._VELOCITY] = measured_velocity
         else:
             dt_s = self._dt_s(frame)
+            if dt_s == 0.0:
+                # A control discontinuity has no supported prediction interval.
+                # Rebase cumulative counts at the next admitted measurement;
+                # never reconcile displacement across the missing interval.
+                self._encoder_anchor = None
+                self._odometry_predictions = []
 
             # Prediction runs at the control rate even when no new measurement
             # event is admitted.  Prefer a fresh trusted IMU rate, then a fresh
