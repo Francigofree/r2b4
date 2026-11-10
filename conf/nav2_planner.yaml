@@ -18,6 +18,9 @@ global_costmap:
       robot_base_frame: base_link
       update_frequency: 5.0
       publish_frequency: 1.0
+      # explore_lite starts with an admitted mission and needs a full grid even
+      # when it subscribes after the initial transient Nav2 publication.
+      always_send_full_costmap: true
       resolution: 0.05
       track_unknown_space: true
       transform_tolerance: 0.2

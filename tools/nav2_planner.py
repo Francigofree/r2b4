@@ -23,6 +23,8 @@ def _paths(root):
             "socket": root / "runtime" / ("nav2_navigation.sock" if full else "nav2_planner.sock"),
             "prefix": root / "runtime" / "deps" / "nav2-planner",
             "overlay": root / "runtime" / "deps" / "nav2-wheel-adapter",
+            "frontier": root / "runtime" / "deps" / "frontier-exploration",
+            "frontier_params": root / "conf" / "frontier_exploration.yaml",
             "params": root / "conf" / "nav2_planner.yaml", "geometry": work / "geometry.yaml",
             "bt": root / "conf" / "nav2_navigate.xml"}
 
@@ -38,6 +40,10 @@ def _navigation_environment(paths, root):
     env = _ros_environment(root, paths["prefix"])
     env["AMENT_PREFIX_PATH"] = str(paths["overlay"]) + os.pathsep + env.get("AMENT_PREFIX_PATH", "")
     env["LD_LIBRARY_PATH"] = str(paths["overlay"] / "lib") + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+    frontier = paths["frontier"]
+    env["AMENT_PREFIX_PATH"] = str(frontier) + os.pathsep + env["AMENT_PREFIX_PATH"]
+    env["LD_LIBRARY_PATH"] = str(frontier / "lib") + os.pathsep + env["LD_LIBRARY_PATH"]
+    env["PYTHONPATH"] = str(frontier / "lib/python3.12/site-packages") + os.pathsep + env.get("PYTHONPATH", "")
     return env
 
 
@@ -97,7 +103,9 @@ def _commands(paths, *, full, radius):
                "v3.nav2_navigation_bridge" if full else "v3.nav2_planner_bridge",
                "--socket", str(paths["socket"]), "--status-path", str(paths["status"])]
     if full:
-        command += ["--behavior-tree", str(paths["bt"]), "--robot-radius", str(radius)]
+        command += ["--behavior-tree", str(paths["bt"]),
+                    "--frontier-executable", str(paths["frontier"] / "lib/explore_lite/explore"),
+                    "--frontier-params", str(paths["frontier_params"])]
     return commands + [("bridge", command)]
 
 
@@ -144,7 +152,8 @@ def start(root, *, ros_domain_id=74):
             dependencies += [paths["bt"], paths["prefix"] / "lib" / "nav2_controller" / "controller_server",
                              paths["prefix"] / "lib" / "nav2_bt_navigator" / "bt_navigator",
                              paths["prefix"] / "lib" / "libnav2_regulated_pure_pursuit_controller.so",
-                             paths["overlay"] / "lib" / "libr2b4_nav2_wheel_adapter.so"]
+                             paths["overlay"] / "lib" / "libr2b4_nav2_wheel_adapter.so",
+                             paths["frontier"] / "lib/explore_lite/explore", paths["frontier_params"]]
         for dependency in dependencies:
             if not dependency.is_file():
                 raise RuntimeError(f"Nav2 dependency missing: {dependency}")

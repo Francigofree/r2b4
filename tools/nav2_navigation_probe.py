@@ -27,6 +27,18 @@ BASE_FRAME = "base_link"
 LASER_FRAME = "r2b4_laser"
 ROOM = (-1.5, -2.5, 5.5, 2.5)
 OBSTACLE = (2., -.55, 2.45, .55)
+FRONTIER_X = 2.5
+
+
+def _guidance_packet(guidance):
+    """Use the canonical transport while retaining this probe's trace format."""
+    packet = asdict(guidance)
+    context = packet.pop("source_context")
+    packet.update(source_tick_id=context["tick_id"], source_ns=context["monotonic_ns"],
+                  frame_id=ODOM_FRAME, status=guidance.status.value)
+    goal = guidance.selected_goal
+    packet["selected_goal"] = None if goal is None else [goal.x_m, goal.y_m, goal.yaw_rad]
+    return packet
 
 
 def _ray_box(x, y, dx, dy, box):
@@ -63,9 +75,11 @@ def _worker(args, root, output):
     from action_msgs.msg import GoalStatusArray
     from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
     from tools.nav2_planner import _paths, _commands
-    from v3.adapters.nav2_navigation import decode_guidance
-    from v3.contracts import (LocalizationQuality, MissionConstraints, MotionIntent,
+    from v3.adapters.nav2_navigation import (decode_guidance, Nav2NavigationClient,
+        Nav2NavigationConfig, HEARTBEAT_MAX_AGE_NS)
+    from v3.contracts import (CommandMode, LocalizationQuality, MissionConstraints, MotionIntent,
                               QualityState, RobotEstimate, TickContext)
+    from v3.contracts.navigation import Nav2NavigationRequest
     from v3.layers.l9_operational_constraints import OperationalConstraintLayer, OperationalConstraintsConfig
     from v3.wheel_motion import WheelMotionLimits
 
@@ -85,9 +99,12 @@ def _worker(args, root, output):
         global_position=QualityState.GOOD, local_sigma_m=.01, global_sigma_m=.01, yaw_sigma_rad=.01,
         encoder_age_ns=0, imu_age_ns=0, lidar_age_ns=0, global_fix_age_ns=0, relative_age_ns=0,
         local_pose_continuous=True, observability=1.)
-    channel = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-    channel.setblocking(False)
-    channel.bind(f"\0r2b4-nav2-probe-{os.getpid()}")
+    client = Nav2NavigationClient(Nav2NavigationConfig(str(bridge_socket))) if args.frontier_only else None
+    channel = None
+    if client is None:
+        channel = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        channel.setblocking(False)
+        channel.bind(f"\0r2b4-nav2-probe-{os.getpid()}")
     rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
     node = Node("r2b4_motorless_navigation_probe")
     qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -99,7 +116,7 @@ def _worker(args, root, output):
     pose = [0., 0., 0.]
     obstacle = False
     plans = dict(total=0, after_obstacle=0, detour_after_obstacle=0)
-    action_ids, explore_baseline_ids, explore_succeeded_ids = set(), set(), set()
+    action_ids, explore_baseline_ids, explore_succeeded_ids, cancelled_ids = set(), set(), set(), set()
     explore_children = {}
 
     def plan_received(message):
@@ -115,6 +132,8 @@ def _worker(args, root, output):
         for item in message.status_list:
             identity = bytes(item.goal_info.goal_id.uuid).hex()
             action_ids.add(identity)
+            if item.status == 5:
+                cancelled_ids.add(identity)
             if phase == "EXPLORE" and identity not in explore_baseline_ids and item.status == 4:
                 explore_succeeded_ids.add(identity)
 
@@ -145,7 +164,9 @@ def _worker(args, root, output):
                 x = -2. + (col + .5) * .05
                 occupied = (not ROOM[0] < x < ROOM[2] or not ROOM[1] < y < ROOM[3]
                             or obstacle and OBSTACLE[0] <= x <= OBSTACLE[2] and OBSTACLE[1] <= y <= OBSTACLE[3])
-                cells.append(100 if occupied else 0)
+                frontier_boundary = FRONTIER_X if args.frontier_only else 4.5
+                unknown = (args.frontier_only or phase == "EXPLORE") and not occupied and x >= frontier_boundary
+                cells.append(100 if occupied else -1 if unknown else 0)
         message.data = cells
         map_publisher.publish(message)
 
@@ -163,7 +184,9 @@ def _worker(args, root, output):
             laser.header.frame_id, laser.header.stamp = LASER_FRAME, stamp
             laser.angle_min, laser.angle_max = -math.pi, math.pi
             laser.angle_increment, laser.scan_time = 2 * math.pi / 180, .1
-            laser.range_min, laser.range_max = .05, 3.5
+            # Keep this synthetic scan inside the previously observed area so
+            # the costmap retains an actual unknown/free frontier.
+            laser.range_min, laser.range_max = .05, 1.5 if args.frontier_only else 3.5
             ranges = []
             for beam in range(181):
                 angle = pose[2] - math.pi + beam * laser.angle_increment
@@ -171,7 +194,7 @@ def _worker(args, root, output):
                 distance = _ray_box(*pose[:2], dx, dy, ROOM)
                 if obstacle:
                     distance = min(distance, _ray_box(*pose[:2], dx, dy, OBSTACLE))
-                ranges.append(float(distance) if .05 <= distance <= 3.5 else math.inf)
+                ranges.append(float(distance) if .05 <= distance <= laser.range_max else math.inf)
             laser.ranges = ranges
             scan_publisher.publish(laser)
 
@@ -185,6 +208,12 @@ def _worker(args, root, output):
         projected_proposals=0, max_normal_wheel_acceleration_mps2=0., max_raw_omega_rad_s=0.,
         max_obstacle_detour_m=0., min_obstacle_clearance_m=None, plans=plans,
         active_commands=0, expired_commands_rejected=0, error=None)
+    if args.frontier_only:
+        report.update(schema="R2B4_ROS2_FRONTIER_MOTORLESS_PROBE_V1", frontier_only=True,
+            unknown_boundary_x_m=FRONTIER_X, canonical_transport="Nav2NavigationClient",
+            frontier_goal_lineage=False, positive_frontier_guidance=False,
+            canonical_cancel=False, heartbeat_stale_observed=False,
+            cancel_zero_motion=False, cancel_action_status_count=0)
     trace = (output / "trace.jsonl").open("w")
     start = time.monotonic()
     last_motion_ns = time.monotonic_ns()
@@ -196,6 +225,11 @@ def _worker(args, root, output):
     heartbeat_stopped_ns = None
     stop_pose = None
     ttl_positive_seen = False
+    latest_sequence = None
+    first_positive_ns = None
+    cancel_requested_ns = None
+    cancellation_pose = None
+    cancellation_baseline = 0
     v = omega = raw_v = raw_omega = 0.
     control_tick = 0
     try:
@@ -213,14 +247,24 @@ def _worker(args, root, output):
             for child, (name, _) in zip(children, commands):
                 if child.poll() is not None:
                     raise RuntimeError(f"{name} exited with {child.returncode}; inspect its log")
-            for _ in range(32):
-                try:
-                    payload, address = channel.recvfrom(4097)
-                except BlockingIOError:
-                    break
-                if address != str(bridge_socket) or len(payload) > 4096:
-                    raise RuntimeError("invalid bridge sender or packet size")
-                packet = json.loads(payload)
+            packets = []
+            if client is not None:
+                closed = client.poll(TickContext(tick, now_ns))
+                if closed.error is not None:
+                    raise RuntimeError(closed.error)
+                if closed.guidance is not None and closed.guidance.command_sequence != latest_sequence:
+                    latest_sequence = closed.guidance.command_sequence
+                    packets.append(_guidance_packet(closed.guidance))
+            else:
+                for _ in range(32):
+                    try:
+                        payload, address = channel.recvfrom(4097)
+                    except BlockingIOError:
+                        break
+                    if address != str(bridge_socket) or len(payload) > 4096:
+                        raise RuntimeError("invalid bridge sender or packet size")
+                    packets.append(json.loads(payload))
+            for packet in packets:
                 guidance = decode_guidance(packet)
                 if (packet.get("status") == "SUCCEEDED"
                         and not guidance.produced_ns < time.monotonic_ns() < guidance.valid_until_ns):
@@ -233,18 +277,32 @@ def _worker(args, root, output):
                             raise RuntimeError("Nav2 success exceeded the requested mission tolerance")
                     latest = packet
                     if phase == "EXPLORE" and packet.get("selected_goal") is not None:
-                        if packet.get("goal_id") != "motorless-goal-3":
+                        expected_goal = f"motorless-goal-{phase_id}"
+                        if packet.get("goal_id") != expected_goal:
                             raise RuntimeError("EXPLORE parent goal identity changed")
                         child = packet["child_goal_id"]
                         selected = tuple(packet["selected_goal"])
                         if child in explore_children and explore_children[child] != selected:
                             raise RuntimeError("EXPLORE changed a retained child goal")
                         explore_children[child] = selected
+                        if args.frontier_only:
+                            if (child <= 0 or packet["map_revision"] <= 0
+                                    or not FRONTIER_X - .15 <= selected[0] <= FRONTIER_X + .15):
+                                raise RuntimeError("selected goal lacks actual frontier/map/child lineage")
+                            report["frontier_goal_lineage"] = True
+                            report["first_frontier_guidance"] = report.get("first_frontier_guidance", packet)
+                    if args.frontier_only and phase == "HEARTBEAT_STOP" and packet["status"] == "STALE":
+                        report["heartbeat_stale_observed"] = True
                     if packet.get("status") == "ACTIVE":
                         report["active_commands"] += 1
-                        if (heartbeat_stopped_ns is not None and packet["produced_ns"] > heartbeat_stopped_ns + 350_000_000
+                        if (heartbeat_stopped_ns is not None and packet["produced_ns"] > heartbeat_stopped_ns + HEARTBEAT_MAX_AGE_NS
                                 and abs(packet["v_mps"]) + abs(packet["omega_rad_s"]) > 1e-8):
                             raise RuntimeError("positive command after heartbeat deadline")
+                        if args.frontier_only and abs(packet["v_mps"]) + abs(packet["omega_rad_s"]) > 1e-8:
+                            report["positive_frontier_guidance"] = True
+                            report["first_positive_guidance"] = report.get("first_positive_guidance", packet)
+                            if phase == "EXPLORE" and first_positive_ns is None:
+                                first_positive_ns = now_ns
             raw_v = raw_omega = 0.
             active_command = False
             if latest is not None and latest.get("status") == "ACTIVE":
@@ -305,7 +363,10 @@ def _worker(args, root, output):
                 except (OSError, ValueError):
                     ready = False
                 if ready:
-                    phase, phase_started, phase_id, target = "FIXED_GOAL", now, 1, [1., 0., 0.]
+                    if args.frontier_only:
+                        phase, phase_started, phase_id, target, mode = "EXPLORE", now, 1, None, "EXPLORE"
+                    else:
+                        phase, phase_started, phase_id, target = "FIXED_GOAL", now, 1, [1., 0., 0.]
                     report["startup_s"] = now - start
                 elif now - start > 30.:
                     raise TimeoutError("Nav2 lifecycle startup timeout")
@@ -322,14 +383,50 @@ def _worker(args, root, output):
                         raise RuntimeError("obstacle detour/replan was not observed")
                     phase, phase_started, phase_id, target, latest, mode = "EXPLORE", now, 3, None, None, "EXPLORE"
                     explore_baseline_ids = set(action_ids)
+                    # Fixed-goal phases use the complete room. Exploration
+                    # needs a real free/unknown boundary, never coverage fallback.
+                    publish_map()
             elif phase == "EXPLORE":
                 report["explore_child_goals"] = len(explore_children)
                 report["explore_succeeded_goals"] = len(explore_succeeded_ids)
-                if (len(explore_children) >= 2 and explore_succeeded_ids and latest is not None
-                        and latest.get("status") == "ACTIVE"):
+                if args.frontier_only:
+                    if (first_positive_ns is not None and now_ns - first_positive_ns >= 800_000_000
+                            and report["frontier_goal_lineage"]):
+                        report["explore_parent_stable"] = True
+                        report["explore_goals"] = list(explore_children.values())
+                        state = json.loads(bridge_status.read_text())
+                        cancellation_baseline = state.get("cancellations", 0)
+                        client.submit(None)
+                        latest, heartbeat, cancel_requested_ns = None, False, now_ns
+                        cancellation_pose = None
+                        phase, phase_started = "FRONTIER_CANCEL", now
+                elif (explore_children and latest is not None and latest.get("status") == "ACTIVE"
+                        and abs(latest["v_mps"]) + abs(latest["omega_rad_s"]) > 1e-8):
                     report["explore_parent_stable"] = True
                     report["explore_goals"] = list(explore_children.values())
                     phase, phase_started, phase_id, target, latest, mode = "HEARTBEAT_STOP", now, 4, [4.5, 0., 0.], None, "NAVIGATE"
+            elif phase == "FRONTIER_CANCEL":
+                if abs(v) + abs(omega) > 1e-8 and now_ns - cancel_requested_ns > 100_000_000:
+                    raise RuntimeError("canonical cancellation did not stop simulated motion")
+                if cancellation_pose is None and now_ns - cancel_requested_ns > 150_000_000:
+                    cancellation_pose = list(pose)
+                state = json.loads(bridge_status.read_text())
+                if (now_ns - cancel_requested_ns > 600_000_000
+                        and state.get("cancellations", 0) > cancellation_baseline
+                        and state.get("mission_id") is None and not state.get("action_active")
+                        and not state.get("pending") and not state.get("cancelling")
+                        and state.get("frontier_running") is False and state.get("frontier_pid") is None):
+                    report["canonical_cancel"] = True
+                    report["cancel_action_status_count"] = len(cancelled_ids)
+                    report["cancel_zero_motion"] = math.hypot(
+                        pose[0] - cancellation_pose[0], pose[1] - cancellation_pose[1]) < .001
+                    report["cancel_bridge"] = state
+                    if not report["cancel_zero_motion"]:
+                        raise RuntimeError("simulated motion continued after cancellation")
+                    phase, phase_started, phase_id, target, latest, mode = "HEARTBEAT_STOP", now, 2, None, None, "EXPLORE"
+                    heartbeat, ttl_positive_seen = True, False
+                elif now_ns - cancel_requested_ns > 3_000_000_000:
+                    raise TimeoutError("canonical frontier cancellation did not become idle")
             elif phase == "HEARTBEAT_STOP":
                 ttl_positive_seen = ttl_positive_seen or abs(v) + abs(omega) > 1e-5
                 if heartbeat and ttl_positive_seen and now - phase_started >= .8:
@@ -343,7 +440,9 @@ def _worker(args, root, output):
                     if now_ns - heartbeat_stopped_ns > 1_000_000_000:
                         report["heartbeat_stop"] = math.hypot(pose[0] - stop_pose[0], pose[1] - stop_pose[1]) < .001
                         report["heartbeat_stop_pose"] = list(pose)
-                        report["status"] = "PASS" if report["heartbeat_stop"] else "FAILED"
+                        passed = report["heartbeat_stop"] and (not args.frontier_only
+                            or report["canonical_cancel"] and report["heartbeat_stale_observed"])
+                        report["status"] = "PASS" if passed else "FAILED"
                         break
             if phase != "STARTING" and heartbeat and now - last_heartbeat >= .05:
                 request = dict(operation="NAVIGATE", mission_id=f"motorless-{phase_id}",
@@ -352,7 +451,13 @@ def _worker(args, root, output):
                     goal=target, max_v_mps=constraints.max_v_mps, max_omega_rad_s=constraints.max_omega_rad_s)
                 request.update(goal_tolerance_m=constraints.goal_tolerance_m,
                                yaw_tolerance_rad=constraints.yaw_tolerance_rad)
-                channel.sendto(json.dumps(request, allow_nan=False, separators=(",", ":")).encode(), str(bridge_socket))
+                if client is not None:
+                    client.submit(Nav2NavigationRequest(TickContext(tick, now_ns),
+                        request["mission_id"], request["goal_id"], CommandMode.EXPLORE, None,
+                        constraints.max_v_mps, constraints.max_omega_rad_s, 0, 0,
+                        constraints.goal_tolerance_m, constraints.yaw_tolerance_rad))
+                else:
+                    channel.sendto(json.dumps(request, allow_nan=False, separators=(",", ":")).encode(), str(bridge_socket))
                 last_heartbeat = now
                 tick += 1
             if latest is not None and latest.get("status") in ("FAILED", "NO_PATH", "UNAVAILABLE"):
@@ -381,6 +486,8 @@ def _worker(args, root, output):
                 report.update(status="FAILED", error="requested goal checker tolerances were not applied")
         except (OSError, ValueError):
             pass
+        if client is not None:
+            client.close()
         for child in reversed(children):
             if child.poll() is None:
                 child.terminate()
@@ -393,7 +500,8 @@ def _worker(args, root, output):
         for handle in handles:
             handle.close()
         trace.close()
-        channel.close()
+        if channel is not None:
+            channel.close()
         node.destroy_node()
         rclpy.shutdown()
         (output / "summary.json").write_text(json.dumps(report, indent=2, allow_nan=False, sort_keys=True) + "\n")
@@ -406,6 +514,8 @@ def main(argv=None):
     parser.add_argument("--output", type=Path)
     parser.add_argument("--ros-domain-id", type=int, default=75)
     parser.add_argument("--timeout-s", type=float, default=100.)
+    parser.add_argument("--frontier-only", action="store_true",
+                        help="probe actual ROS 2 exploration, cancellation and heartbeat expiry")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--robot-radius", type=float, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -441,6 +551,8 @@ def main(argv=None):
     command = [str(prefix / "bin/python"), "-m", "tools.nav2_navigation_probe", "--worker",
                "--output", str(output), "--ros-domain-id", str(args.ros_domain_id), "--timeout-s", str(args.timeout_s),
                "--robot-radius", str(radius)]
+    if args.frontier_only:
+        command.append("--frontier-only")
     return subprocess.run(command, cwd=root, env=environment, check=False).returncode
 
 

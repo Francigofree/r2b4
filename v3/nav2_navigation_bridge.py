@@ -81,7 +81,7 @@ def run(args):
     from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
     from tf2_ros import Buffer, TransformListener, TransformException
     from rclpy.time import Time
-    from v3.adapters.room_cruise_goals import OccupancyMap, FrontierGoalSelector
+    from v3.adapters.ros2_frontier import Ros2FrontierExplorer
 
     path, status_path = Path(args.socket), Path(args.status_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,6 +107,8 @@ def run(args):
     signal.signal(signal.SIGINT, stop)
     rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
     node = Node("r2b4_nav2_navigation_bridge")
+    frontier = Ros2FrontierExplorer(node, args.frontier_executable, args.frontier_params,
+        status_path.parent / "frontier.log", ros_offset_ns)
     navigator = ActionClient(node, NavigateToPose, "/navigate_to_pose")
     speed_publisher = node.create_publisher(SpeedLimit, "/speed_limit", 1)
     goal_parameters = node.create_client(SetParametersAtomically, "/controller_server/set_parameters_atomically")
@@ -123,9 +125,8 @@ def run(args):
     cancelling, cancel_started_ns, accepted_ns, settle_until_ns = False, 0, 0, 0
     terminal_status = None
     selected_goal = None
-    visited = []
-    selector = FrontierGoalSelector(robot_radius_m=args.robot_radius)
-    map_value, map_received_ns, map_stamp_ns = None, 0, 0
+    frontier_goal = None
+    map_valid, map_received_ns, map_stamp_ns = False, 0, 0
     scan_ns, odom_ns, tf_ns = 0, 0, 0
     scan_history, odom_history, tf_history = deque(maxlen=32), deque(maxlen=32), deque(maxlen=32)
     sequence, last_status_ns, last_reply_ns = 0, 0, 0
@@ -162,22 +163,22 @@ def run(args):
             state["rejected"] += 1
 
     def map_callback(message):
-        nonlocal map_value, map_received_ns, map_stamp_ns
+        nonlocal map_valid, map_received_ns, map_stamp_ns
         measured = stamp_ns(message)
         cells = message.info.width * message.info.height
         if (message.header.frame_id != GLOBAL_FRAME_ID or not 0 < cells <= args.max_map_cells
                 or cells != len(message.data) or not math.isfinite(message.info.resolution)
                 or message.info.resolution <= 0 or not 0 <= time.monotonic_ns()-measured <= 6_000_000_000):
-            map_value = None
+            map_valid = False
             return
         p, q = message.info.origin.position, message.info.origin.orientation
-        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
-        try:
-            map_value = OccupancyMap(message.info.width, message.info.height, message.info.resolution,
-                p.x, p.y, yaw, tuple(message.data))
-        except ValueError:
-            map_value = None
+        if (not all(math.isfinite(value) for value in (p.x, p.y, p.z, q.x, q.y, q.z, q.w))
+                or abs(sum(value*value for value in (q.x, q.y, q.z, q.w))-1.) > .01):
+            map_valid = False
             return
+        # Only freshness/revision scalars stay here. The ROS2 explorer owns the
+        # costmap and frontier searches; there is no second Python map policy.
+        map_valid = True
         map_received_ns = time.monotonic_ns()
         map_stamp_ns = measured
         state["map_revision"] += 1
@@ -213,6 +214,9 @@ def run(args):
     def velocity_callback(message):
         if current is None or handle is None or cancelling or not active or terminal_status is not None:
             return
+        if current[0]["mode"] == "EXPLORE" and (frontier_goal is None
+                or frontier_goal is not frontier.proposal or frontier_goal.completion.done()):
+            return
         now, produced = time.monotonic_ns(), stamp_ns(message)
         # ROS queues can deliver a newer sensor callback before an older cmd.
         # Use already-observed measurements that existed at command production.
@@ -240,8 +244,10 @@ def run(args):
     node.create_subscription(Odometry, "/r2b4/odom", odom_callback, qos_profile_sensor_data)
     node.create_subscription(TwistStamped, "/r2b4/nav2/cmd_vel", velocity_callback, 1)
 
-    def begin_cancel(now):
+    def begin_cancel(now, *, stop_frontier=True):
         nonlocal cancelling, cancel_started_ns, cancel_future
+        if stop_frontier:
+            frontier.stop()
         if not cancelling and (sending is not None or handle is not None):
             cancelling, cancel_started_ns = True, now
             state["cancellations"] += 1
@@ -252,6 +258,7 @@ def run(args):
         while not stopped and rclpy.ok():
             rclpy.spin_once(node, timeout_sec=.002)
             now = time.monotonic_ns()
+            frontier.poll()
             if not active:
                 if lifecycle_future is not None and lifecycle_future.done():
                     response = lifecycle_future.result()
@@ -298,7 +305,7 @@ def run(args):
                     if current is not None and all(packet[key] == current[0][key] for key in ("mission_id", "goal_id")):
                         reply("CANCELLED")
                         begin_cancel(now)
-                        current, selected_goal, terminal_status = None, None, None
+                        current, selected_goal, terminal_status, frontier_goal = None, None, None, None
                     continue
                 if packet["source_ns"] <= latest_source_ns:
                     continue
@@ -310,7 +317,7 @@ def run(args):
                     continue
                 if not same:
                     begin_cancel(now)
-                    selected_goal, terminal_status, visited = None, None, []
+                    selected_goal, terminal_status, frontier_goal = None, None, None
                 current = packet, address
                 limit = SpeedLimit()
                 limit.header.stamp = node.get_clock().now().to_msg()
@@ -319,7 +326,13 @@ def run(args):
             if current is not None and now-current[0]["source_ns"] > HEARTBEAT_MAX_AGE_NS:
                 reply("STALE")
                 begin_cancel(now)
-                current, selected_goal, terminal_status = None, None, None
+                current, selected_goal, terminal_status, frontier_goal = None, None, None, None
+            if (current is not None and current[0]["mode"] == "EXPLORE"
+                    and frontier_goal is not None and frontier_goal is not frontier.proposal):
+                # Upstream preemption/cancel revokes the old child's velocity
+                # immediately. Wait for real Nav2 cancellation before dispatch.
+                begin_cancel(now, stop_frontier=False)
+                selected_goal, frontier_goal = None, None
             if sending is not None and sending.done():
                 handle = sending.result()
                 sending = None
@@ -327,6 +340,10 @@ def run(args):
                     handle, terminal_status = None, None if cancelling else "NO_PATH"
                     if cancelling:
                         cancelling, settle_until_ns = False, now+150_000_000
+                    elif current is not None and current[0]["mode"] == "EXPLORE":
+                        frontier.finish(frontier_goal, "ABORTED", 900)
+                        selected_goal, frontier_goal, terminal_status = None, None, None
+                        settle_until_ns = now+150_000_000
                 else:
                     accepted_ns = now
                     result_future = handle.get_result_async()
@@ -341,9 +358,9 @@ def run(args):
                     terminal_status = "SUCCEEDED" if envelope.status == 4 and envelope.result.error_code == 0 else "FAILED"
                     reply("PENDING" if current[0]["mode"] == "EXPLORE" else terminal_status)
                     if current[0]["mode"] == "EXPLORE":
-                        if selected_goal is not None:
-                            visited = (visited+[tuple(selected_goal[:2])])[-32:]
-                        selected_goal, terminal_status = None, None
+                        frontier.finish(frontier_goal, "SUCCEEDED" if terminal_status == "SUCCEEDED"
+                            else "ABORTED", envelope.result.error_code or (900 if terminal_status != "SUCCEEDED" else 0))
+                        selected_goal, terminal_status, frontier_goal = None, None, None
                         settle_until_ns = now+150_000_000
             if cancelling and now-cancel_started_ns > 2_000_000_000:
                 raise RuntimeError("NAV2_CANCELLATION_TIMEOUT")
@@ -370,7 +387,7 @@ def run(args):
                             "FollowPath.mission_max_omega_rad_s"), desired)]
                     parameter_values, parameter_started_ns = desired, now
                     parameter_future = goal_parameters.call_async(parameters)
-            fresh = (map_value is not None and 0 <= now-map_received_ns <= 6_000_000_000
+            fresh = (map_valid and 0 <= now-map_received_ns <= 6_000_000_000
                 and 0 <= now-map_stamp_ns <= 6_000_000_000
                 and all(0 < stamp <= now and now-stamp <= SENSOR_MAX_AGE_NS for stamp in (scan_ns, odom_ns, tf_ns)))
             if (current is not None and active and not cancelling and sending is None and handle is None
@@ -380,8 +397,10 @@ def run(args):
                 packet = current[0]
                 if selected_goal is None:
                     if packet["mode"] == "EXPLORE":
-                        candidate = selector.select(map_value, *robot_pose, visited=tuple(visited))
-                        selected_goal = None if candidate is None else list(candidate)
+                        session = tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation"))
+                        if frontier.start(session):
+                            frontier_goal = frontier.proposal
+                            selected_goal = None if frontier_goal is None else list(frontier_goal.goal)
                     else:
                         selected_goal = packet["goal"]
                     if selected_goal is not None:
@@ -407,7 +426,7 @@ def run(args):
                     sending = navigator.send_goal_async(goal)
                     reply("PENDING")
                 elif now-last_reply_ns >= 100_000_000:
-                    reply("NO_PATH")
+                    reply("NO_PATH" if frontier.complete else "PENDING")
             if current is not None and now-last_reply_ns >= 100_000_000:
                 reply(terminal_status or ("PENDING" if fresh and active else "STALE"))
             if now-last_status_ns >= 250_000_000:
@@ -415,7 +434,11 @@ def run(args):
                     action_active=handle is not None, cancelling=cancelling,
                     mission_id=None if current is None else current[0]["mission_id"],
                     selected_goal=selected_goal, scan_measurement_ns=scan_ns,
-                    odom_measurement_ns=odom_ns, tf_measurement_ns=tf_ns)
+                    odom_measurement_ns=odom_ns, tf_measurement_ns=tf_ns,
+                    goal_provider="ros2_explore_lite", frontier_status=frontier.status,
+                    frontier_running=frontier.session is not None,
+                    frontier_pid=None if frontier.process is None else frontier.process.pid,
+                    frontier_goals=frontier.accepted, frontier_rejected=frontier.rejected)
                 state["goal_checker_tolerances"] = applied_tolerances
                 temporary = status_path.with_suffix(".tmp")
                 temporary.write_text(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
@@ -429,6 +452,7 @@ def run(args):
             handle.cancel_goal_async()
         if current is not None:
             reply("UNAVAILABLE")
+        frontier.close()
         ingress.close()
         path.unlink(missing_ok=True)
         if state["state"] != "FAILED":
@@ -444,7 +468,8 @@ def main():
     parser.add_argument("--socket", required=True)
     parser.add_argument("--status-path", required=True)
     parser.add_argument("--behavior-tree", required=True)
-    parser.add_argument("--robot-radius", type=float, required=True)
+    parser.add_argument("--frontier-executable", required=True)
+    parser.add_argument("--frontier-params", required=True)
     parser.add_argument("--max-map-cells", type=int, default=250000)
     return run(parser.parse_args())
 

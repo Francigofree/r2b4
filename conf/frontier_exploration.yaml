@@ -1,0 +1,17 @@
+# ROS edge only. The bridge remaps NavigateToPose to its mission-gated relay;
+# exploration has no direct command gateway or motor capability.
+/**:
+  ros__parameters:
+    use_sim_time: false
+    robot_base_frame: base_link
+    costmap_topic: /global_costmap/costmap
+    costmap_updates_topic: /global_costmap/costmap_updates
+    return_to_init: false
+    visualize: false
+    planner_frequency: 0.5
+    progress_timeout: 15.0
+    potential_scale: 3.0
+    orientation_scale: 0.0
+    gain_scale: 1.0
+    transform_tolerance: 0.2
+    min_frontier_size: 0.75

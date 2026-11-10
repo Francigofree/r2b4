@@ -261,6 +261,8 @@ def test_expired_cached_guidance_stays_stale_after_request_history_prunes_and_pr
         map_revision=64, child_goal_id=1)
     estimate = RobotEstimate(context, LOCAL_FRAME_ID, 0., 0., 0., 0., 0., (0.,) * 25,
         localization_quality=healthy_localization(),
+        local_pose=Pose2D(LOCAL_FRAME_ID, 0., 0., 0.),
+        global_pose=Pose2D(GLOBAL_FRAME_ID, 0., 0., 0.),
         map_to_odom=Pose2D(GLOBAL_FRAME_ID, 0., 0., 0.))
     world = WorldSnapshot(context, LOCAL_FRAME_ID, 0, (), 0)
     state = Nav2GuidanceState(mission_id=mission.mission_id,
