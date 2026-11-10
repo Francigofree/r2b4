@@ -1,0 +1,164 @@
+[INFO] [1794253376.748232825] [controller_server]: 
+	controller_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794253376.754148413] [controller_server]: Creating controller server
+[INFO] [1794253376.870802140] [local_costmap.local_costmap]: 
+	local_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794253376.874358956] [local_costmap.local_costmap]: Creating Costmap
+[INFO] [1794253380.880267997] [controller_server]: Configuring controller interface
+[INFO] [1794253380.880355738] [controller_server]: getting progress checker plugins..
+[INFO] [1794253380.880505813] [controller_server]: getting goal checker plugins..
+[INFO] [1794253380.880579572] [controller_server]: Controller frequency set to 20.0000Hz
+[INFO] [1794253380.880615980] [local_costmap.local_costmap]: Configuring
+[INFO] [1794253380.928408062] [local_costmap.local_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794253380.951463154] [local_costmap.local_costmap]: Subscribed to Topics: scan
+[INFO] [1794253380.968926362] [local_costmap.local_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794253380.970114814] [local_costmap.local_costmap]: Using plugin "inflation_layer"
+[INFO] [1794253380.972476568] [local_costmap.local_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794253381.118667311] [controller_server]: Created progress_checker : progress_checker of type nav2_controller::PoseProgressChecker
+[INFO] [1794253381.123761598] [controller_server]: Controller Server has progress_checker  progress checkers available.
+[INFO] [1794253381.125945703] [controller_server]: Created goal checker : goal_checker of type nav2_controller::SimpleGoalChecker
+[INFO] [1794253381.126162056] [controller_server]: Controller Server has goal_checker  goal checkers available.
+[INFO] [1794253381.132034145] [controller_server]: Created controller : FollowPath of type r2b4_nav2::WheelAwareRegulatedPurePursuitController
+[INFO] [1794253381.164249769] [controller_server]: Controller Server has FollowPath  controllers available.
+[INFO] [1794253381.221823017] [controller_server]: Activating
+[INFO] [1794253381.221992981] [local_costmap.local_costmap]: Activating
+[INFO] [1794253381.222047388] [local_costmap.local_costmap]: Checking transform
+[INFO] [1794253381.222184204] [local_costmap.local_costmap]: start
+[INFO] [1794253381.325354225] [controller_server]: Activating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794253381.325499596] [controller_server]: Creating bond (controller_server) to lifecycle manager.
+[INFO] [1794253514.504389333] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253514.508117261] [controller_server]: No progress checker was specified in parameter 'current_progress_checker'. Server will use only plugin loaded progress_checker . This warning will appear once.
+[ERROR] [1794253514.713929466] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253514.488826 but the latest data is at time 1794253514.323865, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253514.715823532] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253514.716029089] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253514.791427270] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253515.037605423] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.8482 Hz.
+[WARN] [1794253515.234585857] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.8120 Hz.
+[WARN] [1794253515.438884406] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.5341 Hz.
+[INFO] [1794253515.438959129] [controller_server]: Passing new path to controller.
+[WARN] [1794253515.638856153] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.7468 Hz.
+[ERROR] [1794253515.895742885] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253515.668666 but the latest data is at time 1794253515.627979, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253515.895877034] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253515.898745994] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253515.898923143] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253516.034769995] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 7.3635 Hz.
+[WARN] [1794253516.234710242] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 5.0033 Hz.
+[ERROR] [1794253516.493380594] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253516.268648 but the latest data is at time 1794253516.225113, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253516.493506021] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253516.493609873] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253516.493704355] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253516.751394184] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253516.529277 but the latest data is at time 1794253516.522779, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253516.753446436] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253516.759370210] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253516.852073802] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253517.052450718] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253516.828664 but the latest data is at time 1794253516.820740, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253517.052701460] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253517.053448779] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253517.111486752] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253517.111698716] [tf_help]: Transform data too old when converting from R2B4_BOOT_ROBOT_MAP to R2B4_ODOM_LOCAL
+[ERROR] [1794253517.111733475] [tf_help]: Data time: 1794253517s 96187074ns, Transform time: 1794253516s 820739420ns
+[ERROR] [1794253517.111770198] [controller_server]: Failed to transform end pose to global frame
+[WARN] [1794253517.111863328] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253517.172506463] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253517.326334711] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.5046 Hz.
+[WARN] [1794253517.529984886] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.6081 Hz.
+[WARN] [1794253517.736099149] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.4749 Hz.
+[INFO] [1794253517.736196057] [controller_server]: Passing new path to controller.
+[ERROR] [1794253517.997322553] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253517.748693 but the latest data is at time 1794253517.724519, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253517.997464869] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253517.997564388] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253518.092034379] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253518.355172201] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253518.128660 but the latest data is at time 1794253518.127234, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253518.355278479] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253518.355392776] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253518.393416192] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253518.393610749] [tf_help]: Transform data too old when converting from R2B4_BOOT_ROBOT_MAP to R2B4_ODOM_LOCAL
+[ERROR] [1794253518.393632675] [tf_help]: Data time: 1794253518s 377593271ns, Transform time: 1794253518s 127233506ns
+[ERROR] [1794253518.393659212] [controller_server]: Failed to transform end pose to global frame
+[WARN] [1794253518.400650196] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253521.030770743] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253521.231763181] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 4.9777 Hz.
+[WARN] [1794253521.426869216] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.8985 Hz.
+[ERROR] [1794253521.679866981] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253521.448631 but the latest data is at time 1794253521.421678, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253521.679993926] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253521.680108816] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253521.680210335] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253521.734212489] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 18.5283 Hz.
+[ERROR] [1794253521.988909560] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253521.769305 but the latest data is at time 1794253521.719012, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253521.989043468] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253521.989160246] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253522.069798234] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253522.272755701] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253522.048616 but the latest data is at time 1794253522.017631, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253522.272874943] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253522.274284136] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253522.332091829] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253522.536110691] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.7270 Hz.
+[ERROR] [1794253522.795656790] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253522.569779 but the latest data is at time 1794253522.517061, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253522.795825828] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253522.795962736] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253522.868022639] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253522.926092889] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 17.2410 Hz.
+[WARN] [1794253523.133587030] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.3557 Hz.
+[ERROR] [1794253523.391348081] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253523.168600 but the latest data is at time 1794253523.119908, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253523.391461952] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253523.391581286] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253523.391681027] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253523.397571190] [tf_help]: Transform data too old when converting from R2B4_BOOT_ROBOT_MAP to R2B4_ODOM_LOCAL
+[ERROR] [1794253523.397638542] [tf_help]: Data time: 1794253523s 368472935ns, Transform time: 1794253523s 119907579ns
+[ERROR] [1794253523.397682079] [controller_server]: Failed to transform end pose to global frame
+[WARN] [1794253523.397808876] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253523.490363079] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253523.704192570] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253523.468680 but the latest data is at time 1794253523.420133, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253523.704291404] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253523.704385830] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253523.788025964] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253523.994390951] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253523.748656 but the latest data is at time 1794253523.716825, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253523.994495396] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253523.994596655] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253524.037765952] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253524.234645219] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 7.1907 Hz.
+[ERROR] [1794253524.489796367] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253524.268712 but the latest data is at time 1794253524.215527, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253524.489924553] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253524.490363333] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253524.744206011] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253524.937005810] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 5.1891 Hz.
+[ERROR] [1794253525.198547105] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253524.969610 but the latest data is at time 1794253524.916732, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253525.198677550] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253525.200020002] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253525.229132664] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794253525.429690878] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.6589 Hz.
+[WARN] [1794253525.635177341] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.4633 Hz.
+[ERROR] [1794253525.889583966] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253525.668641 but the latest data is at time 1794253525.617276, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253525.889717967] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253525.889843134] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253525.889951227] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253526.153142309] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253525.928652 but the latest data is at time 1794253525.915754, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253526.154658002] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253526.154968097] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253526.222181120] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253526.222360714] [tf_help]: Transform data too old when converting from R2B4_BOOT_ROBOT_MAP to R2B4_ODOM_LOCAL
+[ERROR] [1794253526.222388529] [tf_help]: Data time: 1794253526s 184781208ns, Transform time: 1794253525s 915754098ns
+[ERROR] [1794253526.222414751] [controller_server]: Failed to transform end pose to global frame
+[WARN] [1794253526.222474141] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253526.235281268] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253526.493035449] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253526.268981 but the latest data is at time 1794253526.213476, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253526.493181524] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794253526.493457488] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794253526.536616044] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794253526.745818454] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794253526.512413 but the latest data is at time 1794253526.512255, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794253526.747294073] [controller_server]: Unable to transform robot pose into global plan's frame
+[INFO] [1794253526.747443333] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794253619.185820617] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794253619.188568206] [controller_server]: Running Nav2 LifecycleNode rcl preshutdown (controller_server)
+[INFO] [1794253619.189034023] [controller_server]: Deactivating
+[INFO] [1794253619.189054986] [controller_server]: Deactivating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794253619.189076783] [local_costmap.local_costmap]: Deactivating
+[INFO] [1794253619.248781228] [controller_server]: Destroying bond (controller_server) to lifecycle manager.
+[INFO] [1794253619.259031025] [controller_server]: Cleaning up
+[INFO] [1794253619.259084581] [controller_server]: Cleaning up controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794253619.259940845] [local_costmap.local_costmap]: Cleaning up
+[INFO] [1794253619.319399918] [controller_server]: Destroying bond (controller_server) to lifecycle manager.
