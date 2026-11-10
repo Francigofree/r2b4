@@ -296,9 +296,13 @@ def run(args):
                     break
                 try:
                     packet = decode_packet(data)
+                    # TF/ROS work above may have yielded the CPU since the
+                    # loop timestamp. Validate against actual receipt time.
+                    now = time.monotonic_ns()
                     validate_request(packet, now)
-                except (ValueError, KeyError, TypeError, OverflowError):
+                except (ValueError, KeyError, TypeError, OverflowError) as exc:
                     state["rejected"] += 1
+                    state["last_rejection"] = str(exc)[:128]
                     continue
                 state["requests"] += 1
                 if packet["operation"] == "CANCEL":
@@ -319,6 +323,11 @@ def run(args):
                     begin_cancel(now)
                     selected_goal, terminal_status, frontier_goal = None, None, None
                 current = packet, address
+                if packet["mode"] == "EXPLORE":
+                    # Overlap ROS discovery/costmap warmup with mission
+                    # admission. Actual Nav2 dispatch below still requires
+                    # fresh sensors/map/TF and applied mission tolerances.
+                    frontier.start(tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation")))
                 limit = SpeedLimit()
                 limit.header.stamp = node.get_clock().now().to_msg()
                 limit.percentage, limit.speed_limit = False, float(packet["max_v_mps"])

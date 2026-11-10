@@ -450,3 +450,47 @@ def test_localization_counter_displacement_is_not_double_counted_by_velocity_upd
         if tick == 3:
             restored = NativeStateEstimator(config)
             restored.restore(estimator.checkpoint())
+
+
+@pytest.mark.parametrize("wheel_on_gap", (False, True))
+def test_encoder_reanchors_after_control_gap_without_replaying_unobserved_distance(wheel_on_gap):
+    """Live tick 14840 resumed cumulative counts after an unsupported 607 ms gap."""
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    estimator = NativeStateEstimator(config)
+
+    def counted(tick, ns, total):
+        wheel = observation("wheel_velocity", tick, ns,
+            left_mps=0.0, right_mps=0.0, trust=1.0,
+            raw_left_distance_m=total, raw_right_distance_m=total,
+            left_counter_running=True, right_counter_running=True)
+        heading = observation("ekf_heading", tick, ns,
+            yaw_rad=0.0, omega_rad_s=0.0, confidence=1.0)
+        return AdmittedFrame(TickContext(tick, ns), (wheel, heading), ())
+
+    estimator(counted(0, 1_000_000_000, 10.0))
+    before = estimator(counted(1, 1_020_000_000, 10.004))
+    assert before.local_pose.x_m == pytest.approx(.004)
+    gap_ns = 1_627_370_870
+    interrupted = estimator(counted(2, gap_ns, 10.104) if wheel_on_gap else
+        AdmittedFrame(TickContext(2, gap_ns), (), ()))
+    assert interrupted.local_pose == before.local_pose
+    assert not interrupted.localization_quality.local_pose_continuous
+    assert interrupted.localization_quality.generation == before.localization_quality.generation + 1
+    assert interrupted.localization_quality.local_translation is QualityState.LOST
+
+    restored = NativeStateEstimator(config)
+    restored.restore(estimator.checkpoint())
+    resume_tick = 3
+    if not wheel_on_gap:
+        baseline_frame = counted(resume_tick, gap_ns + 20_000_000, 10.104)
+        resumed = estimator(baseline_frame)
+        assert restored(baseline_frame) == resumed
+        assert resumed.local_pose == before.local_pose
+        assert resumed.localization_quality.local_translation is QualityState.LOST
+        resume_tick += 1
+    measured_frame = counted(resume_tick, gap_ns + (resume_tick - 2) * 20_000_000, 10.108)
+    measured = estimator(measured_frame)
+    assert restored(measured_frame) == measured
+    assert measured.local_pose.x_m == pytest.approx(.008)
+    assert measured.local_pose.y_m == pytest.approx(0.0)
+    assert measured.localization_quality.local_translation is QualityState.LOST

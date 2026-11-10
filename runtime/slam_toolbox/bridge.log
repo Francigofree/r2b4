@@ -269,3 +269,19 @@ RuntimeError: ROBOT_SESSION_CHANGED_RESTART_SLAM
 [WARN] [1794261469.843942755] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
 [WARN] [1794333365.617225749] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
 [WARN] [1794333365.617827625] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794334948.354798214] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794334948.354846214] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794335089.186609407] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794335089.186649426] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/slam_toolbox_bridge.py", line 450, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/slam_toolbox_bridge.py", line 446, in main
+    return run(args)
+           ^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/slam_toolbox_bridge.py", line 338, in run
+    raise RuntimeError("ODOMETRY_GENERATION_CHANGED_RESTART_SLAM")
+RuntimeError: ODOMETRY_GENERATION_CHANGED_RESTART_SLAM

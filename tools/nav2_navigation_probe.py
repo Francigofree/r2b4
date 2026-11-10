@@ -186,7 +186,7 @@ def _worker(args, root, output):
             laser.angle_increment, laser.scan_time = 2 * math.pi / 180, .1
             # Keep this synthetic scan inside the previously observed area so
             # the costmap retains an actual unknown/free frontier.
-            laser.range_min, laser.range_max = .05, 1.5 if args.frontier_only else 3.5
+            laser.range_min, laser.range_max = .05, 1.5 if args.frontier_only or phase == "EXPLORE" else 3.5
             ranges = []
             for beam in range(181):
                 angle = pose[2] - math.pi + beam * laser.angle_increment
@@ -203,6 +203,7 @@ def _worker(args, root, output):
     report = dict(schema="R2B4_NAV2_MOTORLESS_PROBE_V1", status="FAILED", motor_authority=False,
         ros_domain_id=args.ros_domain_id, output=str(output), radius_m=radius,
         fixed_goal_reached=False, obstacle_goal_reached=False, heartbeat_stop=False,
+        explore_scope="single_frontier_positive_guidance",
         explore_parent_stable=False, explore_child_goals=0, explore_succeeded_goals=0,
         simulated_motion="production_L9_with_synthetic_localization", unrealizable_proposals=0,
         projected_proposals=0, max_normal_wheel_acceleration_mps2=0., max_raw_omega_rad_s=0.,

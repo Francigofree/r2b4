@@ -34,7 +34,7 @@ def frontier_pose(goal, *, now_ns, started_ns, ros_offset_ns):
 
 @dataclass(slots=True)
 class FrontierProposal:
-    goal: tuple[float, float, float]
+    goal: tuple[float, float, float] | None
     handle: object
     completion: object
 
@@ -66,14 +66,19 @@ class Ros2FrontierExplorer:
             return GoalResponse.ACCEPT if valid else GoalResponse.REJECT
 
         def accepted_callback(handle):
-            # explore_lite may preempt an old frontier as the map changes.
-            self.finish(self.proposal, "ABORTED", 0)
             from rclpy.task import Future
             pose = frontier_pose(handle.request, now_ns=time.monotonic_ns(),
                 started_ns=self.started_ns, ros_offset_ns=self.ros_offset_ns)
-            self.proposal = FrontierProposal(pose, handle, Future())
-            self.executions[id(handle)] = self.proposal
-            self.accepted += 1
+            proposal = FrontierProposal(pose, handle, Future())
+            self.executions[id(handle)] = proposal
+            if pose is not None and self.session is not None:
+                # explore_lite may preempt an old frontier as the map changes.
+                self.finish(self.proposal, "ABORTED", 0)
+                self.proposal = proposal
+                self.accepted += 1
+            else:
+                proposal.goal = None
+                self.rejected += 1
             handle.execute()
 
         async def execute_callback(handle):
