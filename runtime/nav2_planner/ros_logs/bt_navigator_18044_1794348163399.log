@@ -1,0 +1,40 @@
+[INFO] [1794348163.521163745] [bt_navigator]: 
+	bt_navigator lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794348163.522175182] [bt_navigator]: Creating
+[INFO] [1794348165.148396224] [bt_navigator]: Configuring
+[INFO] [1794348165.173899197] [bt_navigator]: Creating navigator id navigate_to_pose of type nav2_bt_navigator::NavigateToPoseNavigator
+[WARN] [1794348165.199463691] [bt_navigator]: Error_code parameters were not set. Using default values of: follow_path_error_code compute_path_error_code
+Make sure these match your BT and there are not other sources of error codes youreported to your application
+[INFO] [1794348165.399381825] [bt_navigator]: Activating
+[INFO] [1794348165.457446315] [bt_navigator]: Creating bond (bt_navigator) to lifecycle manager.
+[INFO] [1794348181.243098227] [bt_navigator]: Begin navigating from current location (0.00, -0.00) to (-2.62, -0.88)
+[ERROR] [1794348185.223763235] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[INFO] [1794348185.223935330] [bt_navigator]: [navigate_to_pose] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794348185.224954175] [bt_navigator]: Goal canceled
+[INFO] [1794348185.379354333] [bt_navigator]: Begin navigating from current location (-0.09, 0.03) to (-2.59, -0.88)
+[ERROR] [1794348187.221906731] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[INFO] [1794348187.222050437] [bt_navigator]: [navigate_to_pose] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794348187.223550435] [bt_navigator]: Goal canceled
+[INFO] [1794348187.376175741] [bt_navigator]: Begin navigating from current location (-0.19, -0.05) to (-2.54, -0.85)
+[ERROR] [1794348187.939427056] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[INFO] [1794348187.939556594] [bt_navigator]: [navigate_to_pose] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794348187.939687614] [bt_navigator]: Goal canceled
+[INFO] [1794348193.857190311] [bt_navigator]: Begin navigating from current location (-0.23, -0.08) to (-2.63, -0.85)
+[WARN] [1794348197.737369297] [bt_navigator]: [navigate_to_pose] [ActionServer] Aborting handle.
+[ERROR] [1794348197.737582336] [bt_navigator]: Goal failed
+[INFO] [1794348197.893531810] [bt_navigator]: Begin navigating from current location (-1.06, -0.69) to (-1.12, -2.26)
+[ERROR] [1794348199.934527908] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[INFO] [1794348199.934748911] [bt_navigator]: [navigate_to_pose] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794348199.934882171] [bt_navigator]: Goal canceled
+[INFO] [1794348200.103647217] [bt_navigator]: Begin navigating from current location (-1.40, -1.07) to (-0.99, -2.19)
+[WARN] [1794348200.703809810] [bt_navigator]: [navigate_to_pose] [ActionServer] Aborting handle.
+[ERROR] [1794348200.704867025] [bt_navigator]: Goal failed
+[INFO] [1794348222.897131947] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794348222.897176373] [bt_navigator]: Running Nav2 LifecycleNode rcl preshutdown (bt_navigator)
+[INFO] [1794348222.897222022] [bt_navigator]: Deactivating
+[INFO] [1794348222.897236781] [bt_navigator]: Destroying bond (bt_navigator) to lifecycle manager.
+[INFO] [1794348222.907357192] [bt_navigator]: Cleaning up
+[INFO] [1794348222.990621325] [bt_navigator]: Completed Cleaning up
+[INFO] [1794348222.990699807] [bt_navigator]: Destroying bond (bt_navigator) to lifecycle manager.

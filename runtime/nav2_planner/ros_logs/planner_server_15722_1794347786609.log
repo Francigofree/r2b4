@@ -1,0 +1,36 @@
+[INFO] [1794347786.700799933] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794347786.701444773] [planner_server]: Creating
+[INFO] [1794347786.744547183] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794347786.744990225] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794347787.309441043] [planner_server]: Configuring
+[INFO] [1794347787.309511211] [global_costmap.global_costmap]: Configuring
+[INFO] [1794347787.336317611] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794347787.342915571] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794347787.348285018] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794347787.354268268] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794347787.354326750] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794347787.356056195] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794347787.361883665] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794347787.361950370] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794347787.363692851] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794347787.426216379] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794347787.426285694] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794347787.429549618] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794347787.457498476] [planner_server]: Activating
+[INFO] [1794347787.457566902] [global_costmap.global_costmap]: Activating
+[INFO] [1794347787.457584699] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794347787.457604014] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794347787.957671952] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794347788.457668410] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794347788.957671497] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794347789.458192979] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794347789.957674543] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794347790.216578507] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794347790.216663934] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794347790.216689490] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
