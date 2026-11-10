@@ -985,3 +985,30 @@ Unregistering sensor: Custom Described Lidar
 [INFO] [1794336757.312785391] [slam_toolbox]: CeresSolver: R2B4 solver thread limit: 1
 [INFO] [1794336757.366575021] [slam_toolbox]: Activating
 [INFO] [1794336783.385226138] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[WARN] [1794337215.371436650] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794337215.371475706] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794337215.406439775] [slam_toolbox]: Node using stack size 40000000
+[INFO] [1794337215.867473895] [slam_toolbox]: Configuring
+[INFO] [1794337215.895720298] [slam_toolbox]: Using solver plugin solver_plugins::CeresSolver
+[INFO] [1794337215.896034844] [slam_toolbox]: CeresSolver: Using SCHUR_JACOBI preconditioner.
+[INFO] [1794337215.896056418] [slam_toolbox]: CeresSolver: R2B4 solver thread limit: 1
+[INFO] [1794337215.926405379] [slam_toolbox]: Activating
+[WARN] [1794337231.691294742] [slam_toolbox]: maximum laser range setting (25.0 m) exceeds the capabilities of the used Lidar (12.0 m)
+Registering sensor: [Custom Described Lidar]
+Save To File /home/alba/project_r2b4/runtime/slam_toolbox/maps/2003.posegraph 
+Mapper <- Module
+Mapper <- m_pSequentialScanMatcher
+Mapper <- m_pGraph
+MapperGraph <- Graph; Graph <- m_Edges; Graph <- m_Vertices
+MapperGraph <- m_pMapper; MapperGraph <- m_pLoopScanMatcher; MapperGraph <- m_pTraversal
+Mapper <- m_pMapperSensorManager
+MapperSensorManager <- m_ScanManagers; MapperSensorManager <- m_Scans
+Mapper <- m_Listeners
+**Finished serializing Mapper**
+Save To File
+**Serializing Dataset**
+Dataset <- m_SensorNameLookup
+Dataset <- m_Data
+Dataset <- m_Lasers
+Dataset <- m_pDatasetInfo
+**Finished serializing Dataset**
