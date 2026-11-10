@@ -401,6 +401,7 @@ class PoseFilterStateCheckpoint:
     odometry_predictions: tuple[OdometryPrediction, ...] = ()
     stationary_until_ns: int | None = None
     last_velocity_evidence_ns: tuple[int, int] | None = None
+    encoder_rebase_pending: bool = False
 
     def __post_init__(self) -> None:
         if len(self.state) != 5 or any(not math.isfinite(value) for value in self.state):
@@ -429,6 +430,8 @@ class PoseFilterStateCheckpoint:
             or any(type(ns) is not int or ns < 0 for ns in self.last_velocity_evidence_ns)
         ):
             raise ValueError("last_velocity_evidence_ns must be two non-negative times or None")
+        if type(self.encoder_rebase_pending) is not bool:
+            raise TypeError("encoder_rebase_pending must be bool")
 
 
 class _PoseFilter:
@@ -458,6 +461,7 @@ class _PoseFilter:
         "_last_wheel_ns",
         "_last_heading_ns",
         "_encoder_anchor",
+        "_encoder_rebase_pending",
         "_odometry_predictions",
         "_stationary_until_ns",
         "_last_velocity_evidence_ns",
@@ -481,6 +485,7 @@ class _PoseFilter:
         self._last_wheel_ns: int | None = None
         self._last_heading_ns: int | None = None
         self._encoder_anchor: EncoderAnchor | None = None
+        self._encoder_rebase_pending = False
         self._odometry_predictions: list[OdometryPrediction] = []
         self._stationary_until_ns: int | None = None
         self._last_velocity_evidence_ns: tuple[int, int] | None = None
@@ -502,6 +507,7 @@ class _PoseFilter:
             tuple(self._odometry_predictions),
             self._stationary_until_ns,
             self._last_velocity_evidence_ns,
+            self._encoder_rebase_pending,
         )
 
     def restore(self, checkpoint: PoseFilterStateCheckpoint) -> None:
@@ -515,6 +521,7 @@ class _PoseFilter:
         self._last_wheel_ns = checkpoint.last_wheel_ns if checkpoint.last_wheel_ns is not None else legacy_ns
         self._last_heading_ns = checkpoint.last_heading_ns if checkpoint.last_heading_ns is not None else legacy_ns
         self._encoder_anchor = checkpoint.encoder_anchor
+        self._encoder_rebase_pending = checkpoint.encoder_rebase_pending
         self._odometry_predictions = list(checkpoint.odometry_predictions)
         self._stationary_until_ns = checkpoint.stationary_until_ns
         self._last_velocity_evidence_ns = checkpoint.last_velocity_evidence_ns
@@ -659,7 +666,9 @@ class _PoseFilter:
                 # A control discontinuity has no supported prediction interval.
                 # Rebase cumulative counts at the next admitted measurement;
                 # never reconcile displacement across the missing interval.
-                self._encoder_anchor = None
+                # Keep cumulative-mode ownership until the rebase so scalar
+                # velocity/yaw updates cannot correct local X/Y through gains.
+                self._encoder_rebase_pending = True
                 self._odometry_predictions = []
 
             # Prediction runs at the control rate even when no new measurement
@@ -794,16 +803,20 @@ class _PoseFilter:
             return
         current = EncoderAnchor(wheel.source_device_id, wheel.captured_monotonic_ns, *totals)
         previous = self._encoder_anchor
-        if previous is None:
+        if previous is not None and (
+            current.source_id != previous.source_id or current.captured_ns <= previous.captured_ns
+        ):
+            raise ValueError("L3 cumulative encoder source/time changed")
+        if previous is None or self._encoder_rebase_pending:
             self._encoder_anchor = current
-            # Bootstrap establishes pose at the first physical measurement.
+            self._encoder_rebase_pending = False
+            self._odometry_predictions = []
+            # Bootstrap or a continuity reset establishes a new count baseline.
             if current.captured_ns < context.monotonic_ns:
                 self._odometry_predictions = [OdometryPrediction(
                     current.captured_ns, context.monotonic_ns, self._state[self._YAW], 0.0, 0.0,
                 )]
             return
-        if current.source_id != previous.source_id or current.captured_ns <= previous.captured_ns:
-            raise ValueError("L3 cumulative encoder source/time changed")
         span_ns = current.captured_ns - previous.captured_ns
         distance = 0.5 * (current.left_m - previous.left_m + current.right_m - previous.right_m)
         if max(abs(current.left_m - previous.left_m), abs(current.right_m - previous.right_m)) > (
