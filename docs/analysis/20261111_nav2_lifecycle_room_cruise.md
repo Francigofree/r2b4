@@ -236,6 +236,19 @@ magyarázza ezt a DEGRADED ágat. L6 erre explicit localization HOLD-ot ad,
 L8/L9 nulla mozgást, L12 ALLOW/zero outputot rögzít. Nem costmap- vagy
 L12-távolság miatti STOP, és nem lifecycle-kiesés.
 
+Az eredeti MCAP 545 egyesített tick/decision sorának és 316 eltérő accepted
+relative sequence-ének célzott ellenőrzése nem mutatott ismételt
+újraszámolást vagy megfigyelt intervallumátfedést. A 192 közvetlenül egymást
+követő sequence-pár mindegyikén pontosan teljesült a source-ban szereplő
+`accum_new = exp(-interval_s / 30) * accum_old + interval_error` összefüggés.
+A küszöbátmenet: seq313 `0.07947688`, seq314 `0.09649940`, seq315
+`0.10855824 rad`; a két utolsó intervallum ~100 ms. Az összeg ezután még
+`0.16531120 rad`-ig nőtt, és az álló szakaszon is csak a 30 s-os memória
+szerint csökkent. Ez megmagyarázza a tartós HOLD-ot. A megfigyelt párokon
+nincs duplázásra vagy receipt-time téves használatára utaló jel; a scope-ból
+hiányzó köztes nyers mérésekre ez nem állít teljes ellenőrzést.
+Artifact: `tmp/nav2_room_20261111.ffISVv/cruise_after_dds_fix/heading_accumulation_check.json`.
+
 A physical gyro-bias, helyi odometria és LiDAR-regisztráció hozzájárulása a
 5 Hz-es behavior scope raw inputjai nélkül nem választható szét biztosan.
 A quality-gate megkerülése vagy küszöbének lazítása nem történt; folyamatos,
