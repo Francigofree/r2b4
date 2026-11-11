@@ -18,6 +18,84 @@ from v3.layers.l9_operational_constraints import OperationalConstraintLayer
 from v3.wheel_motion import WheelMotionLimits
 
 
+def test_native_controller_speed_limit_caps_configured_nominal_and_restores_it(tmp_path):
+    """Exercise the production override with the installed RPP parameter owner."""
+    prefix = ROOT / "runtime" / "deps" / "nav2-planner"
+    if not (prefix / "lib/libnav2_regulated_pure_pursuit_controller.so").is_file():
+        pytest.skip("Native RPP integration requires the isolated ROS prefix")
+    from tools.nav2_planner import _navigation_environment, _paths
+    env = _navigation_environment(_paths(ROOT), ROOT)
+    env.update(ROS_DOMAIN_ID="176", ROS_LOG_DIR=str(tmp_path / "ros_logs"))
+    (tmp_path / "speed_limit.cpp").write_text(r'''
+#include "controller.cpp"
+#include <iomanip>
+#include <iostream>
+#include <string>
+
+class Probe : public r2b4_nav2::WheelAwareRegulatedPurePursuitController {
+ public:
+  void speedParameters(const rclcpp_lifecycle::LifecycleNode::SharedPtr &node) {
+    plugin_name_ = "FollowPath";
+    logger_ = node->get_logger();
+    param_handler_ = std::make_unique<nav2_regulated_pure_pursuit_controller::ParameterHandler>(
+        node, plugin_name_, logger_, 3.0);
+    params_ = param_handler_->getParams();
+  }
+  double desired() { return params_->desired_linear_vel; }
+};
+
+int main(int argc, char **argv) {
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("speed_limit_probe");
+  node->declare_parameter("FollowPath.desired_linear_vel", 0.3);
+  Probe controller;
+  controller.speedParameters(node);
+  std::cout << std::setprecision(17);
+  std::string value;
+  int percentage;
+  while (std::cin >> value >> percentage) {
+    controller.setSpeedLimit(std::stod(value), percentage != 0);
+    std::cout << controller.desired() << "\n";
+  }
+  rclcpp::shutdown();
+}
+''')
+    (tmp_path / "CMakeLists.txt").write_text('''
+cmake_minimum_required(VERSION 3.16)
+project(speed_limit_probe LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(ament_cmake REQUIRED)
+find_package(nav2_regulated_pure_pursuit_controller REQUIRED)
+find_package(nav2_core REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(nav2_util REQUIRED)
+find_package(pluginlib REQUIRED)
+add_executable(speed_limit speed_limit.cpp)
+target_include_directories(speed_limit PRIVATE "''' + str(ROOT / "deploy/nav2_wheel_adapter") + '''")
+target_link_directories(speed_limit PRIVATE "''' + str(prefix / "lib") + '''")
+ament_target_dependencies(speed_limit nav2_regulated_pure_pursuit_controller
+  nav2_core nav2_costmap_2d nav2_util pluginlib)
+target_link_libraries(speed_limit "''' + str(prefix / "lib/libnav2_regulated_pure_pursuit_controller.so") + '''")
+''')
+    cmake = str(prefix / "bin/cmake")
+    build = tmp_path / "build"
+    for command in ([cmake, "-S", str(tmp_path), "-B", str(build),
+                     "-DCMAKE_C_COMPILER=/usr/bin/gcc", "-DCMAKE_CXX_COMPILER=/usr/bin/g++"],
+                    [cmake, "--build", str(build), "--parallel", "1"]):
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stderr[-4000:]
+    # Repeated large mission heartbeats, a lower cap, upstream restore sentinel,
+    # percentages above 100 and invalid limits all use the actual native method.
+    limits = [(0.45, 0), (0.45, 0), (0.2, 0), (0., 0), (50., 1),
+              (150., 1), (0., 1), (-1., 0), (math.nan, 0), (math.inf, 1), (0., 0)]
+    result = subprocess.run([str(build / "speed_limit")], env=env,
+        input="".join(f"{limit} {percentage}\n" for limit, percentage in limits),
+        capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert [float(line) for line in result.stdout.splitlines()] == pytest.approx(
+        [.3, .3, .2, .3, .15, .3, .3, 0., 0., 0., .3])
+
+
 @pytest.fixture(scope="module")
 def native_projector(tmp_path_factory):
     compiler = shutil.which("g++")

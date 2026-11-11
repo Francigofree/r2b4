@@ -1,6 +1,7 @@
 #include "wheel_projection.hpp"
 #include "nav2_regulated_pure_pursuit_controller/regulated_pure_pursuit_controller.hpp"
 #include "nav2_core/controller_exceptions.hpp"
+#include "nav2_costmap_2d/costmap_filters/filter_values.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "pluginlib/class_list_macros.hpp"
 
@@ -30,6 +31,22 @@ class WheelAwareRegulatedPurePursuitController
                                                rclcpp::ParameterValue(limits_.max_v));
     nav2_util::declare_parameter_if_not_declared(node, name+".mission_max_omega_rad_s",
                                                rclcpp::ParameterValue(limits_.max_omega));
+  }
+
+  void setSpeedLimit(const double &speed_limit, const bool &percentage) override {
+    std::lock_guard<std::mutex> lock(param_handler_->getMutex());
+    const double nominal = params_->base_desired_linear_vel;
+    // A mission maximum is a cap, not permission to amplify configured cruise
+    // speed. Use the upstream base parameter and mutex, including dynamic edits.
+    if (!std::isfinite(nominal) || nominal < 0. || !std::isfinite(speed_limit)) {
+      params_->desired_linear_vel = 0.;
+    } else if (speed_limit == nav2_costmap_2d::NO_SPEED_LIMIT) {
+      params_->desired_linear_vel = nominal;
+    } else {
+      params_->desired_linear_vel = percentage
+          ? nominal * std::clamp(speed_limit, 0., 100.) / 100.
+          : std::clamp(speed_limit, 0., nominal);
+    }
   }
 
   geometry_msgs::msg::TwistStamped computeVelocityCommands(
