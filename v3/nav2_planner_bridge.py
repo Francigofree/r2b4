@@ -214,6 +214,7 @@ def run(args):
                 pending = (packet, address, planner.send_goal_async(goal), None,
                            state["map_revision"], map_stamp_ns)
             if now-last_status_ns > 250_000_000:
+                state["lifecycle_status"] = lifecycle.snapshot(now)
                 last_status_ns = now
                 state["map_stamp_ns"], state["pending"] = map_stamp_ns, pending is not None
                 temporary = status_path.with_suffix(".tmp")
@@ -221,6 +222,7 @@ def run(args):
                 temporary.replace(status_path)
     except BaseException as exc:
         state.update(state="FAILED", error=f"{type(exc).__name__}:{exc}"[:256])
+        state["lifecycle_status"] = lifecycle.snapshot(time.monotonic_ns())
         raise
     finally:
         if pending is not None and pending[3] is not None:

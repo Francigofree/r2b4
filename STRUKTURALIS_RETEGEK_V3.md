@@ -157,7 +157,8 @@ téglalap alapján számolja, `BODY_OUTLINE` mértékjelöléssel adja tovább; 
 eltérő vagy hiányzó mértékalapot nem fogadhat el. A jelenlegi robot hivatalos
 STOP-clearance értéke 0,10 m a testtől; ennek konfigurációs authorityja a
 `layers.lidar_safety.minimum_clearance_m`. A Nav2 ugyanebből a feloldott
-geometriából és legalább ekkora test-paddingből dolgozik. Korábbi capture
+geometriából és legalább ekkora test-paddingből dolgozik. Fordulásnál L12
+mind a négy testoldalt ellenőrzi a kilendülő sarkok miatt. Korábbi capture
 replayje a rögzített korábbi mértékalapot és konfigurációt használja.
 
 A capture edge használhat verziózott külső serializációt, de az nem válik minden runtime contract részévé.

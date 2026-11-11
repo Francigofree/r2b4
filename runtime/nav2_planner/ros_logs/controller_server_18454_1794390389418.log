@@ -1,0 +1,124 @@
+[INFO] [1794390389.609539713] [controller_server]: 
+	controller_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794390389.625932873] [controller_server]: Creating controller server
+[INFO] [1794390389.728566939] [local_costmap.local_costmap]: 
+	local_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794390389.730367564] [local_costmap.local_costmap]: Creating Costmap
+[INFO] [1794390389.954673747] [controller_server]: Configuring controller interface
+[INFO] [1794390389.954727025] [controller_server]: getting progress checker plugins..
+[INFO] [1794390389.955266492] [controller_server]: getting goal checker plugins..
+[INFO] [1794390389.956327926] [controller_server]: Controller frequency set to 20.0000Hz
+[INFO] [1794390389.956400982] [local_costmap.local_costmap]: Configuring
+[INFO] [1794390389.982444789] [local_costmap.local_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794390389.994090302] [local_costmap.local_costmap]: Subscribed to Topics: scan
+[INFO] [1794390390.072012794] [local_costmap.local_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794390390.072090757] [local_costmap.local_costmap]: Using plugin "inflation_layer"
+[INFO] [1794390390.072450686] [local_costmap.local_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794390390.141892522] [controller_server]: Created progress_checker : progress_checker of type nav2_controller::PoseProgressChecker
+[INFO] [1794390390.145449270] [controller_server]: Controller Server has progress_checker  progress checkers available.
+[INFO] [1794390390.146167831] [controller_server]: Created goal checker : goal_checker of type nav2_controller::SimpleGoalChecker
+[INFO] [1794390390.151996579] [controller_server]: Controller Server has goal_checker  goal checkers available.
+[INFO] [1794390390.153824426] [controller_server]: Created controller : FollowPath of type r2b4_nav2::WheelAwareRegulatedPurePursuitController
+[INFO] [1794390390.172346157] [controller_server]: Controller Server has FollowPath  controllers available.
+[INFO] [1794390390.781518560] [controller_server]: Activating
+[INFO] [1794390390.781580282] [local_costmap.local_costmap]: Activating
+[INFO] [1794390390.781600597] [local_costmap.local_costmap]: Checking transform
+[INFO] [1794390390.781697191] [local_costmap.local_costmap]: start
+[INFO] [1794390390.883269471] [controller_server]: Activating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794390390.883331860] [controller_server]: Creating bond (controller_server) to lifecycle manager.
+[INFO] [1794390407.932488254] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794390407.932811590] [controller_server]: No progress checker was specified in parameter 'current_progress_checker'. Server will use only plugin loaded progress_checker . This warning will appear once.
+[INFO] [1794390408.483438497] [controller_server]: Passing new path to controller.
+[INFO] [1794390409.033448752] [controller_server]: Passing new path to controller.
+[INFO] [1794390409.583626080] [controller_server]: Passing new path to controller.
+[INFO] [1794390410.133339979] [controller_server]: Passing new path to controller.
+[INFO] [1794390410.683215249] [controller_server]: Passing new path to controller.
+[INFO] [1794390411.183193998] [controller_server]: Passing new path to controller.
+[INFO] [1794390411.732958988] [controller_server]: Passing new path to controller.
+[INFO] [1794390412.232945903] [controller_server]: Passing new path to controller.
+[INFO] [1794390412.783195396] [controller_server]: Passing new path to controller.
+[INFO] [1794390413.284771191] [controller_server]: Passing new path to controller.
+[INFO] [1794390413.834205566] [controller_server]: Passing new path to controller.
+[INFO] [1794390414.383197381] [controller_server]: Passing new path to controller.
+[INFO] [1794390414.936092447] [controller_server]: Passing new path to controller.
+[INFO] [1794390415.483959289] [controller_server]: Passing new path to controller.
+[INFO] [1794390415.933792197] [controller_server]: Cancellation was successful. Stopping the robot.
+[INFO] [1794390415.933884679] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794390417.145556003] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794390417.748496532] [controller_server]: Passing new path to controller.
+[INFO] [1794390418.248455867] [controller_server]: Passing new path to controller.
+[INFO] [1794390418.798455499] [controller_server]: Passing new path to controller.
+[INFO] [1794390419.348456798] [controller_server]: Passing new path to controller.
+[INFO] [1794390419.898610376] [controller_server]: Passing new path to controller.
+[INFO] [1794390420.448508247] [controller_server]: Passing new path to controller.
+[INFO] [1794390420.948457579] [controller_server]: Passing new path to controller.
+[INFO] [1794390421.498889750] [controller_server]: Passing new path to controller.
+[INFO] [1794390422.048486913] [controller_server]: Passing new path to controller.
+[ERROR] [1794390422.199514685] [controller_server]: Wheel-feasible R2B4 command collides in local costmap
+[WARN] [1794390422.200246172] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794390422.285156841] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794390422.435614682] [controller_server]: Reached the goal!
+[INFO] [1794390422.509808623] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794390423.111125763] [controller_server]: Passing new path to controller.
+[INFO] [1794390423.611191538] [controller_server]: Passing new path to controller.
+[INFO] [1794390424.161110221] [controller_server]: Passing new path to controller.
+[INFO] [1794390424.711145200] [controller_server]: Passing new path to controller.
+[INFO] [1794390424.811095073] [controller_server]: Cancellation was successful. Stopping the robot.
+[INFO] [1794390424.811149017] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794390439.482804709] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794390440.033503215] [controller_server]: Passing new path to controller.
+[INFO] [1794390440.583873440] [controller_server]: Passing new path to controller.
+[INFO] [1794390440.883857310] [controller_server]: Cancellation was successful. Stopping the robot.
+[INFO] [1794390440.883915385] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794390444.495940533] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794390445.047622727] [controller_server]: Passing new path to controller.
+[INFO] [1794390445.596191082] [controller_server]: Passing new path to controller.
+[INFO] [1794390446.096476431] [controller_server]: Passing new path to controller.
+[INFO] [1794390446.646113959] [controller_server]: Passing new path to controller.
+[INFO] [1794390447.146293418] [controller_server]: Passing new path to controller.
+[INFO] [1794390447.696113540] [controller_server]: Passing new path to controller.
+[INFO] [1794390448.246138588] [controller_server]: Passing new path to controller.
+[INFO] [1794390448.796408397] [controller_server]: Passing new path to controller.
+[INFO] [1794390449.296114035] [controller_server]: Passing new path to controller.
+[INFO] [1794390449.846269102] [controller_server]: Passing new path to controller.
+[INFO] [1794390450.396233314] [controller_server]: Passing new path to controller.
+[INFO] [1794390450.946616567] [controller_server]: Passing new path to controller.
+[ERROR] [1794390451.396360038] [controller_server]: Wheel-feasible R2B4 command collides in local costmap
+[WARN] [1794390451.396954727] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794390451.634872318] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794390451.635218043] [controller_server]: Reached the goal!
+[INFO] [1794390451.721632311] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794390452.271949265] [controller_server]: Passing new path to controller.
+[INFO] [1794390452.822067051] [controller_server]: Passing new path to controller.
+[INFO] [1794390453.322031743] [controller_server]: Passing new path to controller.
+[INFO] [1794390453.872708661] [controller_server]: Passing new path to controller.
+[INFO] [1794390454.422067292] [controller_server]: Passing new path to controller.
+[ERROR] [1794390455.078209043] [RPPPathHandler]: Exception in transformPose: Lookup would require extrapolation into the future.  Requested time 1794390454.851538 but the latest data is at time 1794390454.842576, when looking up transform from frame [R2B4_ODOM_LOCAL] to frame [R2B4_BOOT_ROBOT_MAP]
+[ERROR] [1794390455.078674620] [controller_server]: Unable to transform robot pose into global plan's frame
+[WARN] [1794390455.080702802] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794390455.082873318] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794390455.249618123] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 5.9998 Hz.
+[WARN] [1794390455.449883120] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.6700 Hz.
+[INFO] [1794390455.450711348] [controller_server]: Passing new path to controller.
+[INFO] [1794390456.050449349] [controller_server]: Passing new path to controller.
+[INFO] [1794390456.600455222] [controller_server]: Passing new path to controller.
+[INFO] [1794390457.150459225] [controller_server]: Passing new path to controller.
+[WARN] [1794390457.449526839] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 6.7079 Hz.
+[WARN] [1794390457.552524432] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 19.2356 Hz.
+[INFO] [1794390457.703279192] [controller_server]: Cancellation was successful. Stopping the robot.
+[WARN] [1794390457.703360100] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794390457.703486620] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794390832.357298208] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794390832.357341800] [controller_server]: Running Nav2 LifecycleNode rcl preshutdown (controller_server)
+[INFO] [1794390832.357382801] [controller_server]: Deactivating
+[INFO] [1794390832.357398486] [controller_server]: Deactivating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794390832.357419208] [local_costmap.local_costmap]: Deactivating
+[INFO] [1794390832.385467180] [controller_server]: Destroying bond (controller_server) to lifecycle manager.
+[INFO] [1794390832.395636436] [controller_server]: Cleaning up
+[INFO] [1794390832.395700399] [controller_server]: Cleaning up controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794390832.395777344] [local_costmap.local_costmap]: Cleaning up
+[INFO] [1794390832.447570277] [controller_server]: Destroying bond (controller_server) to lifecycle manager.

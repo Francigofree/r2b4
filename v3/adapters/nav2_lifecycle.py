@@ -27,10 +27,30 @@ class Nav2LifecycleMonitor:
         self._checked_ns = 0
         self._active = False
         self._ever_active = False
+        self._last_poll_ns = started_ns
+        self._max_poll_gap_ns = 0
+        self._timeouts = 0
+        self._late_completed = 0
+
+    def snapshot(self, now_ns):
+        """Fixed scalar evidence; no extra ROS query, queue or control payload."""
+        return {"query_requested_ns": self._requested_ns,
+                "last_response_checked_ns": self._checked_ns,
+                "last_response_age_ns": None if not self._checked_ns else now_ns-self._checked_ns,
+                "query_pending": self._future is not None,
+                "query_done": self._future is not None and self._future.done(),
+                "query_timeouts": self._timeouts,
+                "late_completed_queries": self._late_completed,
+                "max_poll_gap_ns": self._max_poll_gap_ns,
+                "active": self._active}
 
     def poll(self, now_ns):
+        self._max_poll_gap_ns = max(self._max_poll_gap_ns, now_ns-self._last_poll_ns)
+        self._last_poll_ns = now_ns
         if self._future is not None:
             if now_ns-self._requested_ns >= self.RESPONSE_TIMEOUT_NS:
+                self._timeouts += 1
+                self._late_completed += int(self._future.done())
                 self._client.remove_pending_request(self._future)
                 self._future.cancel()
                 self._future = None

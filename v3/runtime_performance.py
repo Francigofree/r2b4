@@ -514,6 +514,11 @@ class RuntimeTimingAccumulator:
     def observe_tick_start(self, now_ns: int, deadline_ns: int) -> None:
         now = int(now_ns)
         deadline = int(deadline_ns)
+        if self._window_start_ns is None:
+            # The first period after capture begins at the preceding tick,
+            # which is included in period_sum/count even though it was emitted
+            # by the previous window. Keep the time bounds consistent with it.
+            self._window_start_ns = now if self._last_tick_ns is None else self._last_tick_ns
         if self._last_tick_ns is not None:
             period = max(0, now - self._last_tick_ns)
             self._period.add(period)
@@ -527,8 +532,6 @@ class RuntimeTimingAccumulator:
         self._lateness_over_2 += int(lateness > 2_000_000)
         self._last_tick_ns = now
         self._ticks += 1
-        if self._window_start_ns is None:
-            self._window_start_ns = now
         self._window[0] += 1
         self._window[4] = max(self._window[4], lateness)
 

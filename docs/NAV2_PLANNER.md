@@ -27,6 +27,17 @@ amit a meglévő process-supervisor gyermekhibaként kezel. A régi sikeres star
 nem marad korlátlan ideig readiness-bizonyíték. A supervisor és bridge státusza
 `lifecycle_owner=nav2_lifecycle_manager` mezőt közöl.
 
+A Nav2 edge külön `conf/nav2_fastdds.xml` service-writer profilt tölt be.
+A reliable válasz továbbra is reliable; a még fel nem fedezett vagy megszűnő
+action-válaszolvasóra várás maximuma 10 ms. Az installed RMW 8.4.4
+[szinkron válaszútja](https://github.com/ros2/rmw_fastrtps/blob/8.4.4/rmw_fastrtps_shared_cpp/src/rmw_response.cpp)
+ezt a writer-limitet használja. A motormentes, hiányzó response-reader állapotot
+reprodukáló mérésben az alap 100 ms-os várás 100,145 ms-ot, a profil 10,116 ms-ot
+vett igénybe. A profil csak a Nav2 processzkörnyezetére hat; a lifecycle és
+command freshness határidők nem változtak. A bridge-státusz és az MCAP
+`nav2_observation.lifecycle_status` fix skalármezői külön mutatják a query idejét,
+az utolsó válasz korát, a timeoutokat és a legnagyobb poll-közt.
+
 A manager saját `diagnostic_updater` publishere 5 Hz-en ad `Nav2 Health`
 státuszt a `/diagnostics` topicra. Az alkalmazott szolgáltatás és bond-viselkedés
 az [installed verzióval azonos Nav2 1.3.13 forrásban](https://github.com/ros-navigation/navigation2/blob/1.3.13/nav2_lifecycle_manager/src/lifecycle_manager.cpp)

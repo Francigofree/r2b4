@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <!-- Only the Nav2 edge loads this profile. A vanished or undiscovered action
+       reply reader must not hold its ROS spin loop across command heartbeats.
+       Keep reliable delivery; bound the native response-reader match wait. -->
+  <data_writer profile_name="service">
+    <qos>
+      <reliability>
+        <kind>RELIABLE</kind>
+        <max_blocking_time><sec>0</sec><nanosec>10000000</nanosec></max_blocking_time>
+      </reliability>
+    </qos>
+  </data_writer>
+</profiles>

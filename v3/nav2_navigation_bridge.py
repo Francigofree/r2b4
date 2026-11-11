@@ -289,6 +289,10 @@ def run(args):
 
     def begin_cancel(now, *, stop_frontier=True):
         nonlocal cancelling, cancel_started_ns, cancel_future, last_active_until_ns
+        if last_active_until_ns:
+            # Revoke an internal child's cached velocity before cancelling the
+            # ROS action. Explicit CANCELLED/STALE replies already clear this.
+            reply("PENDING")
         last_active_until_ns = 0
         if stop_frontier:
             frontier.stop()
@@ -500,6 +504,7 @@ def run(args):
                 if status is not None:
                     reply(status)
             if now-last_status_ns >= NAV2_SAMPLE_PERIOD_NS:
+                state["lifecycle_status"] = lifecycle.snapshot(now)
                 state.update(observed_monotonic_ns=now, pending=sending is not None,
                     action_active=handle is not None, cancelling=cancelling,
                     mission_id=None if current is None else current[0]["mission_id"],
@@ -522,6 +527,7 @@ def run(args):
                 last_status_ns = now
     except BaseException as exc:
         state.update(state="FAILED", error=f"{type(exc).__name__}:{exc}"[:256])
+        state["lifecycle_status"] = lifecycle.snapshot(time.monotonic_ns())
         diagnostics.record_error(time.monotonic_ns(), "BRIDGE_FAILED", message=state["error"])
         raise
     finally:

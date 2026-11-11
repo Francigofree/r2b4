@@ -205,6 +205,7 @@ class Nav2Telemetry:
             "worker_generation": self.generation, "sample_sequence": self.sequence,
             "measurement_monotonic_ns": now, "sample_period_ns": NAV2_SAMPLE_PERIOD_NS,
             "state": state.get("state"), "active": active,
+            "lifecycle_status": state.get("lifecycle_status"),
             "mission_id": state.get("mission_id"), "selected_goal": state.get("selected_goal"),
             "child_goal_id": state.get("child_goal_id"),
             "sensor_age_ns": {"scan": _age(now, scan_ns), "odometry": _age(now, odom_ns), "tf": _age(now, tf_ns)},

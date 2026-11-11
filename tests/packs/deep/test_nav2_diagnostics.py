@@ -130,6 +130,17 @@ def test_five_hz_timing_window_keeps_unsampled_cycle_delay_and_distinct_pipeline
     assert encoded["tick_evidence"][0]["period_max_ns"] == 60_000_000
     assert timing.take_capture_window() is None
     assert timing.snapshot().period_max_ns == 60_000_000
+    # Consecutive capture windows include the cross-window interval exactly
+    # once; deriving frequency from the timestamp span must agree with sums.
+    next_start = stamp
+    for _ in range(10):
+        stamp += 20_000_000
+        timing.observe_tick_start(stamp, stamp)
+        timing.observe_control(2_000_000)
+    following = timing.take_capture_window()
+    assert following.window_start_monotonic_ns == next_start
+    assert following.window_end_monotonic_ns-following.window_start_monotonic_ns == following.period_sum_ns
+    assert following.period_count*1e9/following.period_sum_ns == 50.
 
 
 def test_nav2_producer_snapshot_reaches_real_mcap_without_control_payload(tmp_path):

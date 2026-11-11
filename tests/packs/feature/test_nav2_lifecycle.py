@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tools.nav2_planner import _commands
+from tools.nav2_planner import _commands, _navigation_environment
 from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
 
 
@@ -91,6 +91,42 @@ def test_manager_missing_or_query_exception_never_enables_bridge():
     client.calls[-1].set_exception(ValueError("dead service"))
     with pytest.raises(RuntimeError, match="LIFECYCLE_QUERY_FAILED"):
         watch.poll(1_100_000_000)
+
+
+def test_monitor_reports_timeout_and_loop_gap_without_extending_readiness():
+    watch, client = monitor()
+    watch.poll(1_000_000_000)
+    client.calls[-1].set_result(SimpleNamespace(success=True))
+    assert watch.poll(1_100_000_000)
+    assert watch.poll(1_500_000_000)
+    assert watch.poll(2_500_000_000)
+    evidence = watch.snapshot(2_500_000_000)
+    assert evidence["query_timeouts"] == 1
+    assert evidence["max_poll_gap_ns"] == 1_000_000_000
+    assert evidence["last_response_checked_ns"] == 1_100_000_000
+    assert evidence["last_response_age_ns"] == 1_400_000_000
+    assert client.removed[-1].cancelled()
+    with pytest.raises(RuntimeError, match="LIFECYCLE_STATUS_STALE"):
+        watch.poll(2_600_000_000)
+
+
+def test_fastdds_service_wait_is_bounded_only_in_navigation_environment(monkeypatch):
+    import tools.nav2_planner as host
+    import xml.etree.ElementTree as ET
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.setattr(host, "_ros_environment", lambda *_: {"UNCHANGED": "kept"})
+    env = _navigation_environment({key: root / key for key in ("prefix", "overlay", "frontier")}, root)
+    assert env["UNCHANGED"] == "kept"
+    profile = Path(env["FASTRTPS_DEFAULT_PROFILES_FILE"])
+    ns = {"dds": "http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles"}
+    writer = ET.parse(profile).find("dds:data_writer[@profile_name='service']", ns)
+    reliability = writer.find("dds:qos/dds:reliability", ns)
+    assert reliability.findtext("dds:kind", namespaces=ns) == "RELIABLE"
+    blocking = reliability.find("dds:max_blocking_time", ns)
+    seconds = int(blocking.findtext("dds:sec", namespaces=ns))
+    nanos = int(blocking.findtext("dds:nanosec", namespaces=ns))
+    assert 0 < seconds*1_000_000_000+nanos <= Nav2LifecycleMonitor.POLL_NS/10
+    assert "RMW_FASTRTPS_USE_QOS_FROM_XML" not in env
 
 
 @pytest.mark.parametrize("full", [False, True])

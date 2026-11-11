@@ -43,6 +43,10 @@ def _resolved_control(root):
 
 def _navigation_environment(paths, root):
     env = _ros_environment(root, paths["prefix"])
+    # Bound FastDDS service/action response discovery waits in this edge only.
+    # RMW 8.4.4 loads the service profile without enabling XML overrides for its
+    # history-memory policy, so retain the normal RMW allocation defaults.
+    env["FASTRTPS_DEFAULT_PROFILES_FILE"] = str(root / "conf" / "nav2_fastdds.xml")
     env["AMENT_PREFIX_PATH"] = str(paths["overlay"]) + os.pathsep + env.get("AMENT_PREFIX_PATH", "")
     env["LD_LIBRARY_PATH"] = str(paths["overlay"] / "lib") + os.pathsep + env.get("LD_LIBRARY_PATH", "")
     frontier = paths["frontier"]
@@ -171,6 +175,7 @@ def start(root, *, ros_domain_id=74):
         if _owned(_read_json(paths["state"]), root):
             return status(root)
         dependencies = [paths["prefix"] / "bin" / "python", paths["params"],
+                        root / "conf" / "nav2_fastdds.xml",
                         paths["prefix"] / "lib" / "nav2_planner" / "planner_server",
                         paths["prefix"] / "lib" / "nav2_lifecycle_manager" / "lifecycle_manager"]
         if full:

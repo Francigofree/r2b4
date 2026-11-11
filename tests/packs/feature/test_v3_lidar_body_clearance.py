@@ -90,7 +90,6 @@ def test_l12_rejects_missing_or_laser_origin_clearance_for_body_config(basis):
 @pytest.mark.parametrize('left,right', [(-.2, .2), (.2, -.2), (.2, .3), (.3, .2)])
 @pytest.mark.parametrize('near_face', ['front', 'rear', 'left', 'right'])
 def test_turning_offset_body_checks_opposite_corner_and_all_exposed_faces(left, right, near_face):
-    from v3.contracts import WheelVelocitySetpoint
     cfg = resolved_config().runtime.composition.live_control.control.lidar_safety
     context = TickContext(0, 100)
     values = (DataField('age_ns', 0), DataField('clearance_basis', 'BODY_OUTLINE'))
