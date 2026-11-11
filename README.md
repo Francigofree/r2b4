@@ -1,137 +1,189 @@
-# R2B4
+# R2B4 — Embodied AI on a real mobile robot
 
-### A physical research platform for embodied AI, adaptive robot behavior, and reusable machine-generated skills
+**A publicly accessible Raspberry Pi 5-based research project for autonomous mobile robotics, local cognitive control and reusable Python skills.**
 
-**Raspberry Pi 5 · Autonomous mobile robotics · Local Cognitive Executive · Python skill synthesis · Evidence-driven development**
+[Magyar leírás / Hungarian README](README.hu.md)
 
-R2B4 is an experimental indoor mobile robot and an open-ended research project exploring how **language-guided intelligence can become persistent, executable robot behavior**.
+R2B4 connects real sensors and motors to a layered robot controller, ROS 2 navigation, a local cognitive executive (LCE), and an optional language-model interface. The research goal is to turn human instructions into **persistent, observable robot behavior** without putting an LLM in the time-critical motion loop.
 
-Its central premise is simple: a robot should not need to consult a large language model at every control step. Higher-level intelligence can interpret goals, compose or write new behaviors, test and refine them, and leave behind **reusable local Python skills**. The robot then executes those skills through a common interface while a deterministic control system remains responsible for physical motion.
+> **Status — 11 November 2026:** Actively developed **research prototype**, not a production-ready autonomous robot. The architecture, software integrations, diagnostic paths and targeted tests are real; successful tests or replay do **not** establish reliable unattended navigation, collision avoidance in every environment, or successful completion of arbitrary physical tasks. This overview was checked against `main` at commit [`d19d4aa`](https://github.com/Francigofree/r2b4/commit/d19d4aa036ab8b9858570d3f264fe6c856cb4da1). For current behavior, use the source and active configuration rather than historical reports.
 
-**Project status:** an actively developed research prototype, not a production-ready autonomous assistant. Working software architecture and automated integration tests are not presented as proof of robust real-world autonomy.
+## What exists today
 
-## Research questions
-
-R2B4 investigates four connected problems:
-
-1. **From language to action.** Can a cognitive agent translate an unconstrained human goal into an executable program grounded in the robot's *actual* capabilities and observations?
-2. **From a single solution to a reusable skill.** Can generated behaviors be saved, tested, improved, and executed later without continuous LLM participation?
-3. **From control to embodied intelligence.** How can higher-level experimentation remain flexible without coupling unpredictable AI workloads to time-critical robot control?
-4. **From observations to trustworthy improvement.** Can recordings, replay, diagnostics, and a persistent world model support reproducible analysis rather than unverified success claims?
-
-These questions guide an intentionally small, hardware-grounded architecture rather than a general-purpose agent framework.
-
-## The system today
-
-| Research area | Current implementation | Important boundary |
+| Area | Implemented capability | Important limitation |
 | --- | --- | --- |
-| **Mobile robot control** | Native V3 L0–L12 execution architecture, approximately 50 Hz control, sensor integration, navigation, safety and canonical motor ownership | Real-world movement quality and robustness remain experimental |
-| **Local cognitive control** | `BrainCore` / Local Cognitive Executive (LCE), goals, priorities, behavior lifecycle, cancellation and result tracking | A completed software operation does not prove that the human's physical goal was achieved |
-| **Robot capability interface** | Shared `RobotInterface`, discoverable capabilities and an asynchronous Python SDK | Capability coverage is growing; availability depends on live owners and sensors |
-| **Executable skill system** | File-based `.py` library, separate CPython worker, versioned source identity, runtime status and cancellation | Integration is tested; general unattended operation needs further field validation |
-| **LLM collaboration** | `r learn` generates, measures, repairs and reuses Python skills with independent scenario checks and capture/EVI/DIAG/replay feedback | Motor-free evidence does not establish open-ended learning or goal satisfaction in the physical world |
-| **Perception and memory** | Camera/person perception, public temporal world model, person identity and spatial references | Mouse/door recognition, reliable room semantics and global localization are not implied |
-| **Research instrumentation** | Passive observer, MCAP flight recording, explicit Evidence Compiler, diagnostic tools and native V3 replay | Exact decision replay needs complete, valid 50 Hz capture evidence |
-| **Mapping and simulation** | Offline 50 Hz MCAP-to-map tool, motor-free semantic skill trials and native STOP capture/replay | Physical scene/recognition simulation and an autonomous IDLE mapping cycle remain future work |
+| **Physical control (V3)** | Deterministic L0–L12 pipeline, nominal 50 Hz ticks, encoder/IMU/LiDAR inputs, differential-drive control and a single final motor/safety authority | Motion quality, timing and reliability need evidence from each live configuration |
+| **Mapping and localization** | ROS 2 Jazzy **SLAM Toolbox** in a separate runtime, producing a live occupancy map and localization corrections; V3 retains its own local estimation and safety inputs | A saved map is not automatically a valid localization reference after moving or restarting the robot |
+| **Navigation** | Full **Nav2** integration: Planner Server, Controller Server, BT Navigator, global/local costmaps and an R2B4 wheel-aware Regulated Pure Pursuit controller | Nav2 sends bounded guidance to V3, **not** motor commands; recovery and close-quarters behavior are still experimental |
+| **Room Cruise** | ROS 2 `explore_lite` frontier discovery, followed by a bounded, costmap-based **known-room coverage** phase when no frontiers remain | Neither a frontier goal nor a coverage goal proves that an entire room has been physically mapped or traversed |
+| **Local intelligence** | `BrainCore`/LCE owns semantic goals, task progress, behavior lifecycle and cancellation; shared `RobotInterface` connects it to robot capabilities | Goal admission, software completion and independently verified real-world outcome are different facts |
+| **Python skills** | Saved `.py` skills, an async robot SDK, isolated worker processes, source-version tracking, cancellation and motor-free skill trials | Isolation is not a security sandbox; generated skills require review and bounded evaluation |
+| **Perception and interaction** | Camera owner, person detection/tracking, image/media capture, person-oriented behaviors, voice/STT/TTS and optional LLM collaboration | Camera detections are not guaranteed identity recognition or reliable room-level scene understanding |
+| **Evidence and tools** | MCAP flight recording, explicit Evidence Compiler (EVI), diagnostic analyzers (DIAG), canonical V3 replay, simulation and offline tuning | Sampled captures cannot be treated as complete 50 Hz replay input |
 
-The first local observation skill, [`monitor_region.py`](robot_skills/monitor_region.py), watches an **image-space region for people**, responds to local detector events and requests video clips. It is not a general mouse detector, room-aware observer or field-proven eight-hour surveillance system.
-
-## Architecture: intelligence above, physical authority below
+## Architecture: external intelligence, one physical authority
 
 ```mermaid
 flowchart TD
-    H[Human goals / research experiments] --> L[LCE / BrainCore<br/>Goals, decisions, supervision]
-    L <--> A[LLM or VLM<br/>On demand, not in the control loop]
-    L <--> K[Reusable Python skill library]
-    K --> W[Local Python skill worker]
-    L --> I[Common RobotInterface]
-    W --> S[Asynchronous robot SDK]
-    S --> I
-    I --> V[V3 L0–L12<br/>Navigation, motion, physical safety]
-    I <--> P[Perception, World, Spatial, Media]
-    V --> O[Motors and physical sensors]
-    V -.-> E[Passive observation / MCAP]
-    P -.-> E
-    L -.-> E
-    E --> R[Evidence, diagnostics, native replay]
-    R -.-> H
+    H[Human / CLI / voice / agent] --> B[LCE / BrainCore<br/>goals and skills]
+    B <--> M[LLM or VLM<br/>on demand]
+    B --> I[RobotInterface / async SDK]
+    I --> C[Canonical command ingress / V3 L5]
+    S[Wheel encoders / BNO055 / RPLIDAR] --> E[V3 sensor edges and L1-L3]
+    E --> SL[ROS 2 SLAM Toolbox<br/>mapping and localization]
+    SL --> N[ROS 2 Nav2<br/>planner / controller / BT]
+    F[explore_lite + known-room coverage] --> N
+    C --> N
+    N --> G[Bounded, timestamped guidance]
+    G --> V[V3 L6-L12<br/>acceptance, limits and final safety]
+    E --> V
+    V --> W[Single MotorWriter / DRV8871]
+    V -.-> O[Passive observation / MCAP]
+    B -.-> O
+    O --> D[EVI / DIAG / native replay]
 ```
 
-**V3** is the real-time physical execution owner. **LCE** owns semantic goals and upper-level decisions. **Python skills** can express loops, conditions, state, perception-driven reactions and composition using ordinary Python. The **LLM** can act as a planner and skill-development partner, but is not part of the 50 Hz control cycle. **The SDK does not provide direct motor/GPIO authority**; accepted physical actions follow the existing canonical V3 path, including STOP handling.
+This diagram is simplified: the live Nav2 bridge and sensor paths exchange measurement-timestamped data through separate processes. **ROS 2 never owns the final motors.** A navigation result must enter the canonical V3 execution path; only L12 can authorize the final normal motor write. Stale input, invalid identity or missing safety evidence cannot authorize continued movement.
 
-This separation is central to the experiment. Isolating a skill in a separate process is failure isolation, **not** an operating-system security sandbox.
+### Physical execution and safety
 
-## One idea, two execution modes
+- `v3/engine.py` executes the single-tick layered pipeline; `v3_runtime.py` manages the resident physical runtime.
+- Layers own their state and decisions. Sensor acquisition, SLAM, ROS navigation, vision and other variable-latency work are moved to bounded process/adapter edges wherever appropriate.
+- The current robot geometry is defined in [`conf/fizika.json`](conf/fizika.json): **0.36 × 0.36 m** body, center **0.08 m** ahead of the wheel axis, **0.3557 m** wheel track and LiDAR X offset **−0.005 m**.
+- The configured L12 LiDAR STOP clearance is **0.10 m from the physical body outline**, not 0.10 m from the laser origin. This is a **configured threshold**, not a guarantee that every obstacle is detected or every collision prevented.
+- [`conf/speed_map.json`](conf/speed_map.json) defines wheel calibration and **0.15 m/s minimum sustained wheel speed**. The active command-ingress linear speed cap is **0.50 m/s**; mission-specific limits may be lower.
+- STOP, fault handling, producer lifetime and final GPIO state remain inside the canonical safety/runtime design. Tools, ROS nodes, AI and Python skills do not get a second motor path.
 
-**When a capability is already known:** the LCE can choose an installed behavior or saved Python skill, run it locally, inspect its result and proceed without repeated model calls.
+### Current ROS 2 mapping and navigation
 
-**When a new behavior is required:** the cognitive system can request a new or revised Python program, save it in the shared skill library, optionally run saved tests, and initiate an LCE-owned execution. The source can also be edited using ordinary developer tools. A running invocation retains the source version it loaded; changes take effect on a later invocation.
+The active configuration [`conf/vezerles.json`](conf/vezerles.json) selects `lidar_runtime.global_backend = "slam_toolbox"` and `runtime.nav2_navigation`; the earlier `runtime.nav2_planner` mode is **disabled** (`null`).
 
-The supported research loop is:
+1. **SLAM Toolbox** consumes correlated LiDAR scans and local odometry. Its ROS process owns the occupancy map; V3 L3 qualifies the accepted localization result.
+2. **Nav2** plans through global/local costmaps. Its custom wheel-aware controller accounts for the practical wheel-speed constraints. It produces guidance, not direct GPIO/PWM actuation.
+3. **Room Cruise** first obtains frontiers via upstream ROS 2 `explore_lite`; when frontier discovery completes, `v3/adapters/room_cruise.py` can propose destinations in already known free space. Nav2 still checks path feasibility and obstacles.
+4. **V3 L6–L12** validates guidance freshness and mission context, realizes physically constrained movement and performs independent final LiDAR safety checks.
 
-**Goal → capability discovery → plan or Python skill → test → local execution → observed outcome → possible revision → reuse.**
+The older native V3 local map/rollout implementation remains in the repository for modes and replay that require it; it is **not an automatic fallback** from a failed full-Nav2 session. There is no direct ROS `cmd_vel → motor` bypass, and the Nav2 behavior tree does not issue separate recovery movements outside V3.
 
-Parts of this loop are implemented and integration-tested. Continuous autonomous skill evolution in unstructured physical environments remains a research objective.
+ROS components use isolated Jazzy/RoboStack environments under `runtime/deps/` when installed. Reproducible dependency descriptions and custom adapter build scripts are in [`deploy/`](deploy/). A Git clone alone does **not** install these environments or configure physical hardware.
 
-Motor-free trials can also use a supplied observer trace through the unchanged
-`robot.read("camera.status")` and `robot.observe()` / `robot.events.wait()` SDK.
-The [minimal example](docs/examples/skill_learning_recorded_observer.json) is a
-synthetic fixture; [usage and the source contract](docs/R_LAUNCHER.md#mentett-observer-trace-motor-nélküli-próbája)
-describe how original measurement time, sequence, revision and lineage are
-retained. Incomplete coverage remains `INCOMPLETE`, and recorded time does not
-establish current freshness. Expected outputs and reports stay with the host's
-independent check rather than being exposed by the skill's scenario read. These
-trials provide semantic program evidence without starting camera, media or motor
-owners.
+## Hardware reference
 
-## Physical platform
+The current project configuration targets:
 
-- **Compute:** Raspberry Pi 5 (4 GB); Linux and Python.
-- **Drive:** differential-drive chassis, wheel encoders and two DRV8871 motor drivers.
-- **Sensing:** RPLIDAR C1, BNO055 IMU and Raspberry Pi Camera Module 3 / IMX708.
-- **Control:** native V3 layered execution, independent sensor/compute workers where appropriate, canonical motion and STOP paths.
-- **Operating environment:** small indoor spaces; real-world sensing, floor conditions, occlusion and motor behavior are active experimental constraints.
+- Raspberry Pi 5, **4 GB**, Linux, native Python control and isolated ROS 2 processes.
+- Differential-drive chassis; two **DRV8871** drivers; encoder-equipped gearmotors.
+- **RPLIDAR C1**; **BNO055** IMU; Raspberry Pi **IMX708 Camera Module 3 Wide NoIR**.
+- Optional microphone/speaker path and LiteRT person detector; actual availability depends on devices, installed models and credentials.
 
-Active parameters are defined in [`conf/`](conf/), not in this overview.
+GPIO mappings, calibration, camera geometry and sensor/provider selection live in [`conf/hardver.json`](conf/hardver.json), [`conf/fizika.json`](conf/fizika.json), [`conf/speed_map.json`](conf/speed_map.json) and [`conf/vezerles.json`](conf/vezerles.json). Do not copy numeric examples into a different robot without recalibration.
 
-## Evidence is part of the experiment
+## Use on a configured R2B4 host
 
-R2B4 distinguishes **a requested action, an accepted command, a completed operation and a demonstrated physical outcome**. They are not interchangeable.
+The [`r`](r) launcher is the primary operator/developer entry point. Its command catalog is generated from owning CLI definitions; prefer it over copied command lists.
 
-Its passive observation and recording pipeline links host/Brain/Interface events with robot runtime information. MCAP captures can be compiled into queryable evidence and, where the required raw inputs are present, replayed through the native V3 execution path. Offline global map reconstruction from suitable 50 Hz recordings is provided as a separate research tool.
-
-This instrumentation enables investigations of timing, sensor quality, localization, decision provenance and failures. A successful unit test, simulator trace or replay verdict only establishes what that test actually measured.
-
-## Current research frontier
-
-The next major investigations are **capability-grounded skill creation in live settings**, reproducible skill evaluation and improvement, long-running local perception tasks, richer semantic and spatial grounding, and an efficient simulation/experimentation loop suited to Raspberry Pi 5. A further challenge is making physical navigation and person interaction consistently reliable across realistic indoor conditions.
-
-The project draws inspiration from **[SayCan](https://arxiv.org/abs/2204.01691)**, **[SayPlan](https://arxiv.org/abs/2307.06135)**, **[Code as Policies](https://arxiv.org/abs/2209.07753)** and **[Voyager](https://arxiv.org/abs/2305.16291)**. R2B4 is a hardware-specific experiment inspired by these ideas, **not** a reproduction of their published results or a claim of comparable benchmark performance.
-
-## Explore the repository
-
-| Start here | What it documents |
-| --- | --- |
-| [`robot_skills/README.md`](robot_skills/README.md) | Existing local Python skill workflow and its concrete limitations |
-| [`docs/R_LAUNCHER.md`](docs/R_LAUNCHER.md) | Simple skill/evidence/diagnostics commands and parser-driven launcher discovery |
-| [`docs/LCE_LLM_COOPERATION_PLAN.md`](docs/LCE_LLM_COOPERATION_PLAN.md) | Research direction for open skills and LCE–LLM cooperation; some status text predates the implementation |
-| [`docs/PUBLIC_ROBOT_SYSTEM.md`](docs/PUBLIC_ROBOT_SYSTEM.md) | Public world, Brain, behavior and interface semantics |
-| [`STRUKTURALIS_RETEGEK_V3.md`](STRUKTURALIS_RETEGEK_V3.md) | Normative physical architecture and ownership boundaries |
-| [`ASZINKRON_RUNTIME_CONTRACT_V3.md`](ASZINKRON_RUNTIME_CONTRACT_V3.md) | Asynchronous device, compute and control boundary |
-| [`docs/MCAP_EVIDENCE.md`](docs/MCAP_EVIDENCE.md) | Evidence Compiler and recording analysis |
-| [`tools/mcap50-to-map.py`](tools/mcap50-to-map.py) | Offline global occupancy-map reconstruction from recorded data |
-| [`docs/PYTEST_POLICY.md`](docs/PYTEST_POLICY.md) | Test scopes and evidence requirements |
-
-For a first inspection in a configured R2B4 environment:
+**Inspection and software validation (no movement requested):**
 
 ```bash
 ./r help
+./r commands --json
+./r s
 ./r caps --json
 ./r test
 ```
 
-`./r test` is a small contract gate, not a full physical acceptance test. Motion requires an appropriately prepared live robot and explicit operator authorization.
+**Inspect ROS services and prepare them for an operator-authorized experiment:**
 
----
+```bash
+./r slam start
+./r rt start c full c 5
+./r nav2 start
+./r slam status
+./r nav2 status
+```
 
-**R2B4 is a research platform for investigating the transition from language-guided planning to persistent, physically grounded robot skills — with reproducibility and honest evidence boundaries as part of the design.**
+Startup is not a request for autonomous exploration. The following example **does request physical motion** and must only be used by an operator with the robot's environment, health, stop path and supervision prepared:
+
+```bash
+./r rc 30                # 30-second Room Cruise request — MOVES THE ROBOT
+./r x                    # canonical STOP
+```
+
+For the corresponding shutdown and an explicitly saved live SLAM map:
+
+```bash
+./r nav2 stop
+./r slam save --output room_map
+./r sd
+./r slam stop
+```
+
+The standard full capture is sampled at **5 Hz**; request `c 50` only when the more expensive full sensor/debug evidence is needed for replay analysis. `c alap` is a bounded event-oriented ring, and `c nincs` disables capture. Capture settings must be chosen for the intended runtime session.
+
+## Skills, perception and local cognition
+
+A skill is an ordinary Python module with `async def run(robot, **parameters)`, stored in [`robot_skills/`](robot_skills/). The worker uses the shared asynchronous robot SDK, rather than importing motor drivers. The library can list skills without executing their code.
+
+```bash
+./r skill                                       # saved skills
+./r skill monitor_region --parameters '{"duration_hours":0.01}' --json
+./r execute skill.status --parameters '{"run_id":"ID"}' --json
+./r execute skill.stop --parameters '{"run_id":"ID"}' --json
+```
+
+Examples include `room_cruise`, `follow_person`, `monitor_region` and `terkepesz_r2b4`. The **map surveyor** skill is distinct from live SLAM: its survey stage requires an already active 50 Hz full capture, and its offline build stage reconstructs a historical atlas after capture finalization. A historical atlas is not automatically a current navigable map.
+
+The LCE can execute existing local behaviors without continuously consulting an LLM. The optional AI layer can help interpret goals, select capabilities and develop/test Python skills. The `r learn` path provides bounded **motor-free** learning trials; these do not establish live physical goal satisfaction. Voice and conversational paths are host-side and do not enter the 50 Hz tick.
+
+## Evidence-driven development
+
+The project distinguishes **requested action → admitted command → reported completion → independently supported physical outcome**.
+
+- **MCAP:** passive flight recording of V3 and selected host/ROS observations; capture completeness is explicitly tracked.
+- **EVI:** offline source-preserving compiler; converts a final MCAP into a queryable evidence bundle without diagnosing or controlling the robot.
+- **DIAG:** reports measurements, navigation root-cause hypotheses, integrity and source references from verified evidence.
+- **Native replay:** re-executes recorded canonical V3 decisions when all required input/state/config evidence is present. `MATCH` is a software reproducibility result, **not** a physical success certificate.
+
+```bash
+./r evi latest --workers 1
+./r diag full latest --json
+./r test release
+```
+
+`./r test` is the small mandatory robot-contract gate; `./r test release` adds user-facing scenarios. Feature/deep packs and long-running checks are deliberately separate; see [`docs/PYTEST_POLICY.md`](docs/PYTEST_POLICY.md). Diagnosing an active robot requires live status tools, not a heavyweight offline evidence pass on its control CPU.
+
+## Repository guide
+
+| Location | Responsibility |
+| --- | --- |
+| [`v3/`](v3/) and [`v3_runtime.py`](v3_runtime.py) | Native L0–L12 runtime, input adapters, motor output, canonical execution and replay |
+| [`v3/nav2_navigation_bridge.py`](v3/nav2_navigation_bridge.py), [`v3/adapters/room_cruise.py`](v3/adapters/room_cruise.py) | ROS-side Nav2 navigation and Room Cruise goal proposals |
+| [`tools/slam_toolbox.py`](tools/slam_toolbox.py), [`tools/nav2_planner.py`](tools/nav2_planner.py) | ROS process lifecycle and map operations |
+| [`deploy/`](deploy/) and [`conf/`](conf/) | Isolated ROS dependencies, custom controller, physical and navigation configuration |
+| [`r2b4_orchestration/`](r2b4_orchestration/) | LCE, public world, spatial memory, skill execution/learning and SDK |
+| [`r2b4_voice/`](r2b4_voice/) | Speech, conversation, optional model providers and failover |
+| [`robot_skills/`](robot_skills/) | Reusable Python behaviors and examples |
+| [`tools/mcap_evidence/`](tools/mcap_evidence/), [`tools/diag/`](tools/diag/) | Offline evidence compilation and analysis |
+| [`tests/`](tests/) | Contract gates, scenarios, development packs and endurance checks |
+| [`docs/analysis/`](docs/analysis/) | **Dated historical run reports**, not necessarily current operational instructions |
+
+### Start with these documents
+
+- [`STRUKTURALIS_RETEGEK_V3.md`](STRUKTURALIS_RETEGEK_V3.md) — normative layer ownership, physical authority and evidence rules.
+- [`ASZINKRON_RUNTIME_CONTRACT_V3.md`](ASZINKRON_RUNTIME_CONTRACT_V3.md) — where asynchronous device/compute work may run.
+- [`AGENTS.md`](AGENTS.md) — source-first development and safety workflow.
+- [`docs/SLAM_TOOLBOX_INTEGRACIO.md`](docs/SLAM_TOOLBOX_INTEGRACIO.md) and [`docs/NAV2_PLANNER.md`](docs/NAV2_PLANNER.md) — ROS integration; note that the latter also retains an explicitly labeled **historical planner-only** section.
+- [`docs/R_LAUNCHER.md`](docs/R_LAUNCHER.md), [`robot_skills/README.md`](robot_skills/README.md) — operator commands and skill interface.
+- [`docs/MCAP_EVIDENCE.md`](docs/MCAP_EVIDENCE.md), [`docs/DIAG.md`](docs/DIAG.md), [`docs/PYTEST_POLICY.md`](docs/PYTEST_POLICY.md) — evidence and validation.
+
+**Source-of-truth rule:** normative V3 contracts define required architectural boundaries; the checked-out production code and **resolved active configuration** define the implemented mode. Historical plans, previous test reports and sample configuration fragments must not be mistaken for the current live wiring. If these disagree, investigate the discrepancy rather than silently treating one as authoritative for every question.
+
+## Research direction
+
+R2B4 is exploring reproducible indoor AMR behavior, robust local/global localization, safe navigation and recovery, reusable LLM-assisted Python skills, sensor-grounded semantic world knowledge, person interaction and longer supervised operation. Docking, precision manipulation, reliable multi-room autonomy and unrestricted self-improving robot behavior are **research goals**, not demonstrated capabilities of this snapshot.
+
+The project is informed by research such as [SayCan](https://arxiv.org/abs/2204.01691), [SayPlan](https://arxiv.org/abs/2307.06135), [Code as Policies](https://arxiv.org/abs/2209.07753) and [Voyager](https://arxiv.org/abs/2305.16291), without claiming to reproduce their results.
+
+## Licensing
+
+At the checked revision, the repository does not contain a `LICENSE` file. Public access to source code is **not** itself a grant of redistribution or reuse rights; licensing terms should be clarified with the repository owner.
