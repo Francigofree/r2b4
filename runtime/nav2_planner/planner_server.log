@@ -3181,3 +3181,438 @@ terminate called without an active exception
 [INFO] [1794388781.574760231] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
 [INFO] [1794388781.620320317] [global_costmap.global_costmap]: Destroying
 [INFO] [1794388781.628238765] [planner_server]: Destroying
+[WARN] [1794389143.685763252] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794389143.685799826] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794389143.836085408] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389143.836822801] [planner_server]: Creating
+[INFO] [1794389144.226226221] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389144.230711688] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794389145.231770542] [planner_server]: Configuring
+[INFO] [1794389145.231847321] [global_costmap.global_costmap]: Configuring
+[INFO] [1794389145.260908336] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794389145.276946897] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794389145.281827162] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794389145.289198717] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794389145.289261810] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794389145.292890161] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794389145.303987569] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794389145.304059217] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794389145.305517872] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794389145.396894513] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 79 at 0.050000 m/pix
+[INFO] [1794389145.399520470] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794389145.399583452] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794389145.401841111] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794389145.963472056] [planner_server]: Activating
+[INFO] [1794389145.963534778] [global_costmap.global_costmap]: Activating
+[INFO] [1794389145.963550482] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794389145.963651408] [global_costmap.global_costmap]: start
+[INFO] [1794389146.167356349] [planner_server]: Activating plugin GridBased of type NavfnPlanner
+[INFO] [1794389146.176350356] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794389146.564948235] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 79 at 0.050000 m/pix
+[INFO] [1794389160.564702960] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 79 at 0.050000 m/pix
+[INFO] [1794389176.564094068] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 79 at 0.050000 m/pix
+[INFO] [1794389178.564099934] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 79 at 0.050000 m/pix
+[INFO] [1794389180.564092687] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 79 at 0.050000 m/pix
+[INFO] [1794389182.564165736] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 154 X 79 at 0.050000 m/pix
+[INFO] [1794389186.568592333] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 154 X 85 at 0.050000 m/pix
+[INFO] [1794389188.564091281] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 154 X 86 at 0.050000 m/pix
+[INFO] [1794389190.564508605] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 184 X 86 at 0.050000 m/pix
+[INFO] [1794389192.564080480] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 184 X 86 at 0.050000 m/pix
+[INFO] [1794389194.564092151] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 184 X 86 at 0.050000 m/pix
+[INFO] [1794389196.564091840] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 184 X 86 at 0.050000 m/pix
+[INFO] [1794389199.909671060] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794389199.909720430] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794389199.909777227] [planner_server]: Deactivating
+[INFO] [1794389199.909806616] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794389199.964504258] [planner_server]: Deactivating plugin GridBased of type NavfnPlanner
+[INFO] [1794389199.964564758] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794389199.975758703] [planner_server]: Cleaning up
+[INFO] [1794389200.019969496] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794389200.025390097] [planner_server]: Cleaning up plugin GridBased of type NavfnPlanner
+[INFO] [1794389200.031024736] [planner_server]: Destroying plugin GridBased of type NavfnPlanner
+[INFO] [1794389200.053147142] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794389200.057800425] [global_costmap.global_costmap]: Destroying
+[INFO] [1794389200.077034168] [planner_server]: Destroying
+[WARN] [1794389292.047231354] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794389292.047275095] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794389292.173470179] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389292.174592437] [planner_server]: Creating
+[INFO] [1794389292.283377814] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389292.283800524] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794389292.334568454] [planner_server]: Configuring
+[INFO] [1794389292.334686512] [global_costmap.global_costmap]: Configuring
+[INFO] [1794389292.364203567] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794389292.377675380] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794389292.384849137] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794389292.394135535] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794389292.394202425] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794389292.399292539] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794389292.404608008] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794389292.404673194] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794389292.407720166] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794389292.480491964] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794389292.480551447] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794389292.482332362] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 76 at 0.050000 m/pix
+[INFO] [1794389292.487658146] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794389292.953461838] [planner_server]: Activating
+[INFO] [1794389292.953513228] [global_costmap.global_costmap]: Activating
+[INFO] [1794389292.953527469] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794389292.953618804] [global_costmap.global_costmap]: start
+[INFO] [1794389293.154698104] [planner_server]: Activating plugin GridBased of type NavfnPlanner
+[INFO] [1794389293.159388878] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794389306.755761105] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 77 at 0.050000 m/pix
+[INFO] [1794389308.753997756] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 85 at 0.050000 m/pix
+[INFO] [1794389309.492832335] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794389309.186 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794389362.066395023] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794389362.066437561] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794389362.066478209] [planner_server]: Deactivating
+[INFO] [1794389362.066501636] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794389362.156280684] [planner_server]: Deactivating plugin GridBased of type NavfnPlanner
+[INFO] [1794389362.156345741] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794389362.169394497] [planner_server]: Cleaning up
+[INFO] [1794389362.196890418] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794389362.209305850] [planner_server]: Cleaning up plugin GridBased of type NavfnPlanner
+[INFO] [1794389362.209366629] [planner_server]: Destroying plugin GridBased of type NavfnPlanner
+[INFO] [1794389362.219985240] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794389362.231395714] [global_costmap.global_costmap]: Destroying
+[INFO] [1794389362.242061844] [planner_server]: Destroying
+[WARN] [1794389370.037134462] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794389370.037171036] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794389370.121763521] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389370.122403234] [planner_server]: Creating
+[INFO] [1794389370.204282737] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389370.216965783] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794389370.236679130] [planner_server]: Configuring
+[INFO] [1794389370.236743408] [global_costmap.global_costmap]: Configuring
+[INFO] [1794389370.251573114] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794389370.259762190] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794389370.262811084] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794389370.271510186] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794389370.271567335] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794389370.273525843] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794389370.277751717] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794389370.277809477] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794389370.279411165] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794389370.335330198] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794389370.335385236] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794389370.338463927] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794389370.704393879] [planner_server]: Activating
+[INFO] [1794389370.704437546] [global_costmap.global_costmap]: Activating
+[INFO] [1794389370.704452435] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794389370.704469361] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389371.204536258] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389371.704534206] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389372.204537891] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389372.704535368] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389373.204534473] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389373.704534165] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389374.204539373] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389374.704856711] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389375.204540278] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389375.704539345] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389376.204538984] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389376.705124570] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389377.204539490] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389377.704539432] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389378.204540130] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389378.704540343] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389379.204820908] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389379.704541628] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389380.204548035] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389380.704786885] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389381.204539762] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389381.704540250] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389382.204539124] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389382.704799515] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389383.204539601] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389383.704539908] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389384.204663362] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389384.704540346] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389385.204538643] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389385.705362336] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389386.204538116] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389386.704542346] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389387.205147786] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389387.704541205] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389388.204567445] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389388.704539902] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389389.204557320] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389389.704942128] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389390.204539015] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389390.704561588] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389391.204537603] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389391.704538262] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389392.204539178] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389392.704541922] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389393.204541368] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389393.704682219] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389394.204539971] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389394.704937170] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389395.204537338] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389395.704568748] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389396.128238441] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794389396.128324479] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794389396.128351905] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794389396.130388877] [global_costmap.global_costmap]: start
+[ERROR] [1794389396.137932423] [global_costmap.global_costmap]: Caught exception in callback for transition 13
+[ERROR] [1794389396.137981331] [global_costmap.global_costmap]: Original error: could not create subscription: rcl node's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/node.c:404
+[ERROR] [1794389396.137996720] [global_costmap.global_costmap]: Failed to finish transition 3. Current state is now: errorprocessing (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[ERROR] [1794389396.138004665] [planner_server]: Failed to finish transition 3. Current state is now: inactive (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[INFO] [1794389396.140242269] [planner_server]: Destroying plugin GridBased of type NavfnPlanner
+Warning: class_loader.ClassLoader: SEVERE WARNING!!! Attempting to unload library while objects created by this loader exist in the heap! You should delete your objects before attempting to unload the library or destroying the ClassLoader. The library will NOT be unloaded.
+         at line 127 in /home/runner/conda-bld/bld/rattler-build_ros2-class-loader_1791447710/work/ros2-class-loader/src/work/src/class_loader.cpp
+terminate called without an active exception
+[WARN] [1794389409.801048283] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794389409.801085505] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794389409.906492537] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389409.907105563] [planner_server]: Creating
+[INFO] [1794389409.971148896] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389409.976666581] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794389409.993960922] [planner_server]: Configuring
+[INFO] [1794389409.994026997] [global_costmap.global_costmap]: Configuring
+[INFO] [1794389410.017541087] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794389410.027298402] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794389410.031138990] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794389410.040068460] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794389410.040125146] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794389410.041271532] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794389410.046262228] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794389410.046317062] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794389410.048005603] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794389410.101203754] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794389410.101260125] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794389410.105193214] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794389410.474579084] [planner_server]: Activating
+[INFO] [1794389410.474626881] [global_costmap.global_costmap]: Activating
+[INFO] [1794389410.474646159] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794389410.474663530] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389410.974730358] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389411.474728512] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389411.974729962] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389412.474746628] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389412.974814572] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389413.474728212] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389413.974732797] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389414.474919693] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389414.974735713] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389415.474733619] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389415.974733524] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389416.474732812] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389416.974732877] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389417.474734418] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389417.974735143] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389418.474734196] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389418.974732729] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389419.474734109] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389419.974734284] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389420.474728583] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389420.974988088] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389421.474736247] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389421.974733687] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389422.474851308] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389422.974733074] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389423.474734890] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389423.974733299] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389424.474900555] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389424.974736566] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389425.475469898] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389425.974733228] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389426.474733747] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389426.974943973] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389427.475225545] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389427.974734495] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389428.474737520] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389428.974869417] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389429.474736563] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389429.974818786] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389430.474734501] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389430.975116092] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389431.474734333] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389431.974734783] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389432.474734746] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389432.974733652] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389433.474738534] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389433.975017290] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389434.474734624] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389434.974933613] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389435.474735795] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389435.894146156] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794389435.894250491] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794389435.894282418] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794389435.895823752] [global_costmap.global_costmap]: start
+[ERROR] [1794389435.896047792] [global_costmap.global_costmap]: Caught exception in callback for transition 13
+[ERROR] [1794389435.896055663] [global_costmap.global_costmap]: Original error: could not create subscription: rcl node's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/node.c:404
+[ERROR] [1794389435.896066978] [global_costmap.global_costmap]: Failed to finish transition 3. Current state is now: errorprocessing (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[ERROR] [1794389435.896075348] [planner_server]: Failed to finish transition 3. Current state is now: inactive (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[INFO] [1794389435.900871318] [planner_server]: Destroying plugin GridBased of type NavfnPlanner
+Warning: class_loader.ClassLoader: SEVERE WARNING!!! Attempting to unload library while objects created by this loader exist in the heap! You should delete your objects before attempting to unload the library or destroying the ClassLoader. The library will NOT be unloaded.
+         at line 127 in /home/runner/conda-bld/bld/rattler-build_ros2-class-loader_1791447710/work/ros2-class-loader/src/work/src/class_loader.cpp
+terminate called without an active exception
+[WARN] [1794389453.614676548] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794389453.614724660] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794389453.735417364] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389453.736089428] [planner_server]: Creating
+[INFO] [1794389453.813696583] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389453.814062273] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794389453.850093509] [planner_server]: Configuring
+[INFO] [1794389453.850142084] [global_costmap.global_costmap]: Configuring
+[INFO] [1794389453.872082938] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794389453.882428199] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794389453.888547221] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794389453.895576311] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794389453.895634941] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794389453.898401773] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794389453.904666001] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794389453.904716131] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794389453.904950578] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794389453.957594805] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794389453.957654416] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794389453.958968470] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794389454.371774353] [planner_server]: Activating
+[INFO] [1794389454.371820502] [global_costmap.global_costmap]: Activating
+[INFO] [1794389454.371834354] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794389454.371852206] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389454.871919736] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389455.371915871] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389455.872323455] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389456.371918154] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389456.872137358] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389457.371966276] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389457.871918805] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389458.371918218] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389458.871922594] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389459.372520601] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389459.871903185] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389460.371920809] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389460.871917450] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389461.371919586] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389461.871919203] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389462.371920055] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389462.871923647] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389463.372147478] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389463.871917728] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389464.372150775] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389464.871919796] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389465.371920613] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389465.872331562] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389466.371920552] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389466.871919713] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389467.372274114] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389467.871919894] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389468.371922989] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389468.871926211] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389469.371970819] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389469.871920184] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389470.372704073] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389470.871901755] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389471.371920851] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389471.871920074] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389472.371920516] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389472.872487148] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389473.371920743] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389473.871922844] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389474.371921737] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389474.871919813] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389475.372371502] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389475.871919381] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389476.372050060] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389476.871919068] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389477.373023753] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389477.871919168] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389478.372352599] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389478.871920943] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389479.371925788] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794389479.808141302] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794389479.808201395] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794389479.808230821] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794389479.808505473] [global_costmap.global_costmap]: start
+[ERROR] [1794389479.808674401] [global_costmap.global_costmap]: Caught exception in callback for transition 13
+[ERROR] [1794389479.808686938] [global_costmap.global_costmap]: Original error: could not create subscription: rcl node's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/node.c:404
+[ERROR] [1794389479.808697475] [global_costmap.global_costmap]: Failed to finish transition 3. Current state is now: errorprocessing (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[ERROR] [1794389479.808704753] [planner_server]: Failed to finish transition 3. Current state is now: inactive (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[INFO] [1794389479.815324280] [planner_server]: Destroying plugin GridBased of type NavfnPlanner
+Warning: class_loader.ClassLoader: SEVERE WARNING!!! Attempting to unload library while objects created by this loader exist in the heap! You should delete your objects before attempting to unload the library or destroying the ClassLoader. The library will NOT be unloaded.
+         at line 127 in /home/runner/conda-bld/bld/rattler-build_ros2-class-loader_1791447710/work/ros2-class-loader/src/work/src/class_loader.cpp
+terminate called without an active exception
+[WARN] [1794389571.465056534] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794389571.465093053] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794389571.648531727] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389571.649231902] [planner_server]: Creating
+[INFO] [1794389571.745103056] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389571.748762764] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794389571.750240355] [planner_server]: Configuring
+[INFO] [1794389571.750299282] [global_costmap.global_costmap]: Configuring
+[INFO] [1794389571.773185303] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794389571.781092986] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794389571.790208794] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794389571.803628374] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794389571.803686412] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794389571.804375271] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794389571.808907805] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794389571.808972343] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794389571.815496973] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794389571.889297540] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 76 at 0.050000 m/pix
+[INFO] [1794389571.892162110] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794389571.892241426] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794389571.896903738] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794389572.334569488] [planner_server]: Activating
+[INFO] [1794389572.334622748] [global_costmap.global_costmap]: Activating
+[INFO] [1794389572.334637934] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794389572.334749398] [global_costmap.global_costmap]: start
+[INFO] [1794389572.535602029] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 76 at 0.050000 m/pix
+[INFO] [1794389572.536428446] [planner_server]: Activating plugin GridBased of type NavfnPlanner
+[INFO] [1794389572.542771315] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794389572.888788274] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794389572.609 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794389576.535411386] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 76 at 0.050000 m/pix
+[INFO] [1794389584.535407145] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 76 at 0.050000 m/pix
+[INFO] [1794389586.536659815] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 76 at 0.050000 m/pix
+[INFO] [1794389588.536805675] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 76 at 0.050000 m/pix
+[INFO] [1794389590.735419345] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 82 at 0.050000 m/pix
+[INFO] [1794389592.735409403] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 84 at 0.050000 m/pix
+[INFO] [1794389594.735670982] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 86 at 0.050000 m/pix
+[INFO] [1794389610.775714511] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794389610.468 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794389612.737618059] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 86 at 0.050000 m/pix
+[INFO] [1794389614.735407099] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 86 at 0.050000 m/pix
+[INFO] [1794389618.736220649] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 86 at 0.050000 m/pix
+[INFO] [1794389620.735390098] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 86 at 0.050000 m/pix
+[INFO] [1794389622.735411392] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 87 at 0.050000 m/pix
+[WARN] [1794389631.619310746] [planner_server]: GridBased plugin failed to plan from (-0.62, -1.26) to (-0.34, 1.21): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794389631.619383154] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[WARN] [1794389631.659399924] [planner_server]: GridBased plugin failed to plan from (-0.62, -1.26) to (-0.34, 1.21): "Failed to create plan with tolerance of: 0.100000"
+[WARN] [1794389631.659466313] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.

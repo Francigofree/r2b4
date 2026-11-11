@@ -1,0 +1,272 @@
+[INFO] [1794389143.864191844] [controller_server]: 
+	controller_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389143.871288806] [controller_server]: Creating controller server
+[INFO] [1794389143.888566484] [local_costmap.local_costmap]: 
+	local_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794389143.888981801] [local_costmap.local_costmap]: Creating Costmap
+[INFO] [1794389145.435667446] [controller_server]: Configuring controller interface
+[INFO] [1794389145.435717558] [controller_server]: getting progress checker plugins..
+[INFO] [1794389145.435933429] [controller_server]: getting goal checker plugins..
+[INFO] [1794389145.436153634] [controller_server]: Controller frequency set to 20.0000Hz
+[INFO] [1794389145.436203079] [local_costmap.local_costmap]: Configuring
+[INFO] [1794389145.458533468] [local_costmap.local_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794389145.469598245] [local_costmap.local_costmap]: Subscribed to Topics: scan
+[INFO] [1794389145.484924229] [local_costmap.local_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794389145.484989803] [local_costmap.local_costmap]: Using plugin "inflation_layer"
+[INFO] [1794389145.489329658] [local_costmap.local_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794389145.579288421] [controller_server]: Created progress_checker : progress_checker of type nav2_controller::PoseProgressChecker
+[INFO] [1794389145.582019675] [controller_server]: Controller Server has progress_checker  progress checkers available.
+[INFO] [1794389145.583922573] [controller_server]: Created goal checker : goal_checker of type nav2_controller::SimpleGoalChecker
+[INFO] [1794389145.588289836] [controller_server]: Controller Server has goal_checker  goal checkers available.
+[INFO] [1794389145.592117207] [controller_server]: Created controller : FollowPath of type r2b4_nav2::WheelAwareRegulatedPurePursuitController
+[INFO] [1794389145.617586982] [controller_server]: Controller Server has FollowPath  controllers available.
+[INFO] [1794389146.288309043] [controller_server]: Activating
+[INFO] [1794389146.288370692] [local_costmap.local_costmap]: Activating
+[INFO] [1794389146.288385858] [local_costmap.local_costmap]: Checking transform
+[INFO] [1794389146.288573082] [local_costmap.local_costmap]: start
+[INFO] [1794389146.391048147] [controller_server]: Activating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794389146.391112851] [controller_server]: Creating bond (controller_server) to lifecycle manager.
+[INFO] [1794389174.570509178] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794389174.570581456] [controller_server]: No progress checker was specified in parameter 'current_progress_checker'. Server will use only plugin loaded progress_checker . This warning will appear once.
+[INFO] [1794389175.170865366] [controller_server]: Passing new path to controller.
+[INFO] [1794389175.720988193] [controller_server]: Passing new path to controller.
+[INFO] [1794389176.271016241] [controller_server]: Passing new path to controller.
+[INFO] [1794389176.770829670] [controller_server]: Passing new path to controller.
+[INFO] [1794389177.322316540] [controller_server]: Passing new path to controller.
+[INFO] [1794389177.823179326] [controller_server]: Passing new path to controller.
+[INFO] [1794389178.370707287] [controller_server]: Passing new path to controller.
+[INFO] [1794389178.920735984] [controller_server]: Passing new path to controller.
+[INFO] [1794389179.470700383] [controller_server]: Passing new path to controller.
+[INFO] [1794389179.970911684] [controller_server]: Passing new path to controller.
+[INFO] [1794389180.520756990] [controller_server]: Passing new path to controller.
+[INFO] [1794389181.071272040] [controller_server]: Passing new path to controller.
+[INFO] [1794389181.570703355] [controller_server]: Passing new path to controller.
+[INFO] [1794389182.120799218] [controller_server]: Passing new path to controller.
+[INFO] [1794389182.671088970] [controller_server]: Passing new path to controller.
+[INFO] [1794389183.221253167] [controller_server]: Passing new path to controller.
+[ERROR] [1794389183.521243694] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389183.522317977] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389183.566581160] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794389184.116756819] [controller_server]: Passing new path to controller.
+[INFO] [1794389184.666746552] [controller_server]: Passing new path to controller.
+[ERROR] [1794389184.717796991] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389184.717922176] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389184.789079011] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389184.789458143] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389184.789560366] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389184.847345171] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389184.847626006] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389184.847980711] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389184.925931599] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389184.926216433] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389184.927608070] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389184.966274058] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389184.966857857] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389184.967871714] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389185.045909232] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389185.046352104] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389185.046451401] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389186.582234882] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1794389187.132901895] [controller_server]: Passing new path to controller.
+[INFO] [1794389187.683172443] [controller_server]: Passing new path to controller.
+[INFO] [1794389188.232831951] [controller_server]: Passing new path to controller.
+[INFO] [1794389188.732829842] [controller_server]: Passing new path to controller.
+[INFO] [1794389189.283342002] [controller_server]: Passing new path to controller.
+[INFO] [1794389189.782824834] [controller_server]: Passing new path to controller.
+[INFO] [1794389190.333038993] [controller_server]: Passing new path to controller.
+[ERROR] [1794389190.383424965] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389190.383552836] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389190.458511542] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389190.459263120] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389190.459974364] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389190.542772442] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389190.543051184] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389190.543130240] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389190.598814702] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389190.599122518] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389190.600691396] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389190.700728523] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389190.700979839] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389190.701040320] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389190.779076023] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389190.781666276] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389190.784943774] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389190.821774994] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389190.822109737] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389190.822982537] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389190.997546849] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389191.002485595] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389191.002620077] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389191.074205081] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389191.076297166] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389191.078300527] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389191.154063422] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389191.154992390] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389191.156356637] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389191.234562192] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389191.235074713] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389191.235149121] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389191.256725599] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389191.257238823] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389191.257322898] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389191.313465177] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389191.314113717] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389191.314217625] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389191.373759865] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389191.374268349] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389191.374349201] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389192.000485514] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389192.001839040] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389192.003146602] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389192.079802408] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389192.080253781] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389192.080320670] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389192.121264781] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389192.121718987] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389192.121788672] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389192.159441563] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389192.159888732] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389192.159946362] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389192.237304690] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389192.238685938] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389192.239155718] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389192.282244136] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389192.282814916] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389192.282899769] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389192.357178730] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389192.357948845] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389192.362438145] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389193.004280591] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389193.004742168] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389193.004819205] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389193.040062917] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389193.040510679] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389193.041677814] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389193.118836494] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389193.119385441] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389193.120785614] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389193.158931711] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389193.160071439] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389193.160163514] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389193.238128012] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389193.238591125] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389193.239685649] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389193.297943920] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389193.298389904] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389193.298449960] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389193.337504116] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389193.338232176] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389193.339807720] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389194.041261148] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389194.043234991] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389194.043354010] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389194.142758578] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389194.143484674] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389194.143597323] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389194.148933238] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389194.149479889] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389194.149571260] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389194.161560542] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389194.162115526] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389194.162193915] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389194.220906003] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389194.221949730] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389194.222044083] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389194.282603217] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389194.286771571] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389194.287330925] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389194.381343466] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389194.382422472] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389194.385821525] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389195.004848655] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389195.005537788] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389195.007881855] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389195.048051999] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389195.072866918] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389195.075239467] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389195.161955916] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389195.162464215] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389195.163524479] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389195.262293248] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389195.262784880] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389195.262874065] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389195.301780758] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389195.302311891] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389195.302400854] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389195.344011635] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389195.346826056] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389195.346980946] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389195.351138541] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389195.351956859] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389195.356278788] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389196.006495405] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389196.007081131] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389196.007203205] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389196.045912360] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389196.046399104] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389196.047078033] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389196.088155681] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389196.094436805] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389196.094520731] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389196.184238825] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389196.184747402] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389196.186079260] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389196.243425174] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389196.244016270] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389196.244107807] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389196.324217131] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389196.325294581] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389196.325411748] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389196.368440962] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389196.370041599] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389196.370149396] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389197.007522616] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389197.008062248] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389197.008165027] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389197.064849882] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389197.065346940] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389197.066840188] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389197.089773839] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389197.090258564] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389197.090328712] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389197.127600397] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389197.128322086] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389197.128426901] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389197.167696467] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389197.168189673] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389197.168280562] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389197.215695149] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389197.216175393] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389197.216258541] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389197.265182691] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389197.292422086] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389197.292517198] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389198.015012525] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389198.015566139] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389198.015640176] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389198.091891333] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389198.094790125] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389198.094896570] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389198.191820292] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389198.422490251] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1794389199.291715326] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[WARN] [1794389199.532177853] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389199.533209247] [controller_server]: Received a goal, begin computing control effort.
+[ERROR] [1794389199.533444266] [tf_help]: Transform data too old when converting from R2B4_BOOT_ROBOT_MAP to R2B4_ODOM_LOCAL
+[ERROR] [1794389199.533482766] [tf_help]: Data time: 1794389199s 252688391ns, Transform time: 1794389198s 570004086ns
+[ERROR] [1794389199.533511267] [controller_server]: Failed to transform end pose to global frame
+[WARN] [1794389199.533575100] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+[INFO] [1794389199.910096469] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794389199.910140044] [controller_server]: Running Nav2 LifecycleNode rcl preshutdown (controller_server)
+[INFO] [1794389199.910182414] [controller_server]: Deactivating
+[INFO] [1794389199.910199303] [controller_server]: Deactivating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794389199.910219137] [local_costmap.local_costmap]: Deactivating
+[INFO] [1794389199.990230071] [controller_server]: Destroying bond (controller_server) to lifecycle manager.
+[INFO] [1794389200.002185834] [controller_server]: Cleaning up
+[INFO] [1794389200.002245316] [controller_server]: Cleaning up controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794389200.002325594] [local_costmap.local_costmap]: Cleaning up
+[INFO] [1794389200.040648506] [controller_server]: Destroying bond (controller_server) to lifecycle manager.
