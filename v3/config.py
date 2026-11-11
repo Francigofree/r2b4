@@ -215,6 +215,13 @@ class ResolvedRobotConfig:
             raise ValueError("encoder source and control velocity quality thresholds mismatch")
         if control.lidar_safety.minimum_clearance_m != sensors.lidar_danger_zone_m or self.lidar.danger_zone_m != sensors.lidar_danger_zone_m:
             raise ValueError("LiDAR safety clearance mismatch")
+        body = control.navigation
+        expected_bounds = (body.footprint_center_x_m - body.footprint_length_m/2,
+                           body.footprint_center_x_m + body.footprint_length_m/2,
+                           -body.footprint_width_m/2, body.footprint_width_m/2)
+        if (control.lidar_safety.clearance_basis != "BODY_OUTLINE"
+                or self.lidar.safety_body_bounds_m != expected_bounds):
+            raise ValueError("LiDAR body clearance geometry mismatch")
         if control.lidar_safety.maximum_sample_age_ns != sensors.inputs.lidar_source.maximum_measurement_age_ns:
             raise ValueError("LiDAR safety/source freshness mismatch")
         if self.lidar.maximum_result_age_ns != sensors.inputs.lidar_backend.maximum_result_age_ns:
@@ -413,7 +420,7 @@ class ConfigResolver:
                 "person_camera_horizontal_fov_rad",
                 "person_camera_yaw_offset_rad",
             },
-            "lidar_safety": {"device_id", "maximum_sample_age_ns"},
+            "lidar_safety": {"device_id", "maximum_sample_age_ns", "clearance_basis"},
         }.items():
             layer_type = get_type_hints(NativeControlCompositionConfig)[section]
             if get_origin(layer_type) in (Union, types.UnionType):
@@ -476,7 +483,8 @@ class ConfigResolver:
                 else math.radians(camera_geometry.mount.yaw_deg)
             ),
         }
-        layers["lidar_safety"] = {**layers["lidar_safety"], "device_id":"RPLIDAR_C1", "maximum_sample_age_ns":policy.lidar_maximum_measurement_age_ns}
+        layers["lidar_safety"] = {**layers["lidar_safety"], "device_id":"RPLIDAR_C1", "maximum_sample_age_ns":policy.lidar_maximum_measurement_age_ns,
+                                  "clearance_basis": "BODY_OUTLINE"}
         derived = {"speed_map", "chassis_control", "critical_device_ids"}
         hints = get_type_hints(NativeControlCompositionConfig)
         _keys(layers, {f.name for f in fields(NativeControlCompositionConfig)} - derived, "layers")
@@ -520,7 +528,10 @@ class ConfigResolver:
             maximum_input_age_ns=round(_typed(float,lr["matcher_max_input_age_s"],"matcher input age")*1e9),
             maximum_result_age_ns=policy.lidar_maximum_result_age_ns,
             matcher_start_method=lr["matcher_process_start_method"], input_queue_capacity=lr["latest_scan_queue_size"], result_queue_capacity=lr["latest_result_queue_size"],
-            global_backend=lr["global_backend"])
+            global_backend=lr["global_backend"],
+            safety_body_bounds_m=(p["footprint_center_x_m"] - p["footprint_length_m"]/2,
+                                  p["footprint_center_x_m"] + p["footprint_length_m"]/2,
+                                  -p["footprint_width_m"]/2, p["footprint_width_m"]/2))
         if lidar.global_backend == "slam_toolbox":
             # Backend identity is resolved once with the rest of the immutable
             # sensor configuration. Physical scan/safety ownership is unchanged.

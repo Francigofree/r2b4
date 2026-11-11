@@ -58,7 +58,8 @@ class Ros2FrontierExplorer:
 
         def goal_callback(goal):
             valid = (self.session is not None and self.process is not None
-                and self.process.poll() is None and len(self.executions) < 2 and frontier_pose(goal,
+                and self.process.poll() is None and not self.proposal_committed
+                and len(self.executions) < 2 and frontier_pose(goal,
                     now_ns=time.monotonic_ns(), started_ns=self.started_ns,
                     ros_offset_ns=self.ros_offset_ns) is not None)
             if not valid:
@@ -107,6 +108,14 @@ class Ros2FrontierExplorer:
             cancel_callback=lambda handle: CancelResponse.ACCEPT)
         from explore_lite_msgs.msg import ExploreStatus
         self.status_type = ExploreStatus
+
+    @property
+    def proposal_committed(self):
+        # A moving frontier centroid is a map proposal, not a reason to abort
+        # useful progress. Nav2 owns replanning and reports actual failure.
+        # Explicit explorer cancellation still revokes this commitment.
+        return (self.proposal is not None and not self.proposal.completion.done()
+            and not self.proposal.handle.is_cancel_requested)
 
 
     def start(self, session):

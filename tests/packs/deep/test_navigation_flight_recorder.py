@@ -440,16 +440,22 @@ def test_unsampled_safety_triggers_and_retains_prehistory_without_next_sample(tm
 def test_runtime_decision_callback_keeps_control_rate_while_state_is_sampled(monkeypatch):
     import v3_runtime
 
-    records = stop_records(12)
+    records = stop_records(13)
     decisions, samples = [], []
 
     class OfflineRuntime:
         """Replace physical ownership; scheduler and capture callbacks stay real."""
         lifecycle = LifecycleState.IDLE
         closed = False
+        timing_observer = None
+
+        def set_timing_observer(self, observer):
+            self.timing_observer = observer
 
         def tick_execution(self, context):
             record = records[context.tick_id]
+            if self.timing_observer is not None:
+                self.timing_observer("PIPELINE_TOTAL", 1_000_000)
             return record.result, record
 
         def dispatch_pending_planner_request(self, now_ns):
@@ -481,12 +487,19 @@ def test_runtime_decision_callback_keeps_control_rate_while_state_is_sampled(mon
     report = v3_runtime.run_resident_physical_control(
         object(), object(), object(), SimpleNamespace(snapshot=lambda: None), object(),
         resolved_config().runtime,
-        stop_requested=lambda: len(decisions) >= 11,
+        stop_requested=lambda: len(decisions) >= 12,
         monotonic_ns=clock.monotonic_ns, sleep=clock.sleep,
-        record_observer=lambda record: samples.append(record.inputs.context.tick_id),
+        record_observer=samples.append,
         record_observer_hz=5,
-        decision_observer=lambda record: decisions.append(record.inputs.context.tick_id))
-    assert report.status == 0 and report.normal_tick_count == 11
-    assert decisions == list(range(12))  # Includes the final shutdown boundary.
-    assert samples == [0, 10, 11]
+        decision_observer=lambda record: decisions.append(record.inputs.context.tick_id),
+        timing_enabled=True)
+    assert report.status == 0 and report.normal_tick_count == 12
+    assert decisions == list(range(13))  # Includes the final shutdown boundary.
+    assert [record.inputs.context.tick_id for record in samples] == [0, 10, 12]
+    # All normal 50 Hz cycles survive in 5 Hz observations plus final partial.
+    windows = [record.evidence[-1] for record in samples]
+    assert [window.tick_count for window in windows] == [1, 10, 1]
+    assert sum(window.control_count for window in windows) == 12
+    assert sum(window.pipeline_count for window in windows) == 12
+    assert all(window.pipeline_wall_max_ns == 1_000_000 for window in windows)
     assert offline.closed

@@ -25,6 +25,7 @@ from v3.capture_behavior import project_behavior_record
 from v3.capture_navigation import NAVIGATION_EVENT_TOPIC, NavigationDecisionRecorder
 from v3.hri_evidence import HriEventFollower
 from v3.host_telemetry import HOST_TELEMETRY_TOPIC, HostTelemetrySampler
+from v3.nav2_diagnostics import NAV2_OBSERVATION_TOPIC, Nav2ObservationSampler
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.public_runtime_evidence import PublicRuntimeEventFollower
@@ -147,6 +148,7 @@ def _capture_sidecar_main(
         hri_events = HriEventFollower(project_root)
         hri_events.start()
         host_telemetry = HostTelemetrySampler()
+        nav2_observations = Nav2ObservationSampler(project_root)
         expander = CaptureCoreExpander()
         ready_event.set()
 
@@ -159,6 +161,9 @@ def _capture_sidecar_main(
             metrics = host_telemetry.sample()
             if metrics is not None:
                 hub.publish(metrics, topic=HOST_TELEMETRY_TOPIC)
+            nav2_observation = nav2_observations.sample()
+            if nav2_observation is not None:
+                hub.publish(nav2_observation, topic=NAV2_OBSERVATION_TOPIC)
             for topic, payload in public_events.drain():
                 hub.publish(payload, topic=topic)
             for topic, payload in hri_events.drain():

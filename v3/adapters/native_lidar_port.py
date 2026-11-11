@@ -106,6 +106,7 @@ class NativeLidarPortConfig:
     input_queue_capacity: int = MATCHER_QUEUE_CAPACITY
     result_queue_capacity: int = MATCHER_QUEUE_CAPACITY
     global_backend: str = "native"
+    safety_body_bounds_m: tuple[float, float, float, float] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.driver, RplidarC1Config):
@@ -134,6 +135,14 @@ class NativeLidarPortConfig:
             raise TypeError("matcher must be LidarMatcherConfig")
         if self.global_backend not in {"native", "slam_toolbox"}:
             raise ValueError("global_backend must be native or slam_toolbox")
+        if self.safety_body_bounds_m is not None:
+            bounds = self.safety_body_bounds_m
+            if (not isinstance(bounds, tuple) or len(bounds) != 4
+                    or any(isinstance(v, bool) or not isinstance(v, (int, float))
+                           or not math.isfinite(v) for v in bounds)
+                    or not bounds[0] < 0 < bounds[1]
+                    or not bounds[2] < 0 < bounds[3]):
+                raise ValueError("safety_body_bounds_m must contain the drive origin")
 
     @property
     def matcher_config(self) -> dict[str, object]:
@@ -307,7 +316,8 @@ class NativeMatcherResult:
     summary: Mapping[str, object]
 
 
-def _sector_summary(scan: RplidarScan) -> Mapping[str, object]:
+def _sector_summary(scan: RplidarScan,
+                    config: NativeLidarPortConfig | None = None) -> Mapping[str, object]:
     sectors: dict[str, list[RplidarPoint]] = {
         "front": [],
         "rear": [],
@@ -325,18 +335,42 @@ def _sector_summary(scan: RplidarScan) -> Mapping[str, object]:
         if 45.0 <= angle <= 135.0:
             sectors["right"].append(point)
 
+    body_bounds = None if config is None else config.safety_body_bounds_m
+    distances: dict[int, float] = {}
+    if body_bounds is not None:
+        from v3.lidar_geometry import body_clearance_m, lidar_point_xy
+        # Calculate once in the physical acquisition edge, never per control tick.
+        sectors = {name: [] for name in sectors}
+        rear_bound, front_bound, right_bound, left_bound = body_bounds
+        for point in scan.points:
+            x, y = lidar_point_xy(math.radians(point.angle_deg), point.distance_m,
+                config.matcher.lidar_x_offset_m, config.matcher.lidar_y_offset_m)
+            distances[id(point)] = body_clearance_m(x, y, body_bounds)
+            # A corner return belongs to both exposed faces. Laser-angle-only
+            # sectors can hide a front corner on this offset chassis. Returns
+            # within the physical outline invalidate every movement direction.
+            inside = rear_bound < x < front_bound and right_bound < y < left_bound
+            for name, exposed in (("front", x >= front_bound), ("rear", x <= rear_bound),
+                                  ("left", y >= left_bound), ("right", y <= right_bound)):
+                if inside or exposed:
+                    sectors[name].append(point)
+
     def minimum(name: str) -> float:
         values = sectors[name]
-        return min((item.distance_m for item in values), default=0.0)
+        return min((distances[id(item)] if body_bounds is not None else item.distance_m
+                    for item in values), default=0.0)
 
     front = minimum("front")
     rear = minimum("rear")
     left = minimum("left")
     right = minimum("right")
-    global_minimum = min((point.distance_m for point in scan.points), default=0.0)
+    global_minimum = min(distances.values(), default=0.0) if body_bounds is not None else min(
+        (point.distance_m for point in scan.points), default=0.0)
     return _freeze(
         {
-            "safety_contract": "R2B4_V3_LIDAR_SECTOR_CLEARANCE_V1",
+            "safety_contract": ("R2B4_V3_LIDAR_BODY_CLEARANCE_V2" if body_bounds is not None
+                                else "R2B4_V3_LIDAR_SECTOR_CLEARANCE_V1"),
+            "clearance_basis": "BODY_OUTLINE" if body_bounds is not None else "LIDAR_ORIGIN",
             "raw_scan_id": scan.revision,
             # Compatibility timestamp: this is scan completion, not measurement.
             "raw_scan_timestamp": scan.captured_monotonic_ns / 1_000_000_000.0,
@@ -350,6 +384,7 @@ def _sector_summary(scan: RplidarScan) -> Mapping[str, object]:
             "raw_safety_scan_point_count": len(scan.points),
             "raw_safety_valid_point_count": len(scan.points),
             "minimum_clearance_m": global_minimum,
+            "minimum_range_m": min((p.distance_m for p in scan.points), default=0.0),
             "front_clearance_m": front,
             "rear_clearance_m": rear,
             "left_clearance_m": left,
@@ -633,7 +668,7 @@ class NativeLidarPort:
                     measurement_monotonic_ns=scan.measurement_monotonic_ns,
                     health="OK",
                     raw_scan=scan.points,
-                    summary=_sector_summary(scan),
+                    summary=_sector_summary(scan, self._config),
                 )
                 with self._lock:
                     self._raw_snapshot = snapshot

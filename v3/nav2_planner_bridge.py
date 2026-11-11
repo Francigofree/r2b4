@@ -11,6 +11,7 @@ import socket
 import time
 
 from v3.adapters.nav2_planner import MAX_PACKET_BYTES, decode_packet, encode_packet
+from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
 from v3.contracts import GLOBAL_FRAME_ID, LOCAL_FRAME_ID, Pose2D
 
 
@@ -71,7 +72,6 @@ def run(args):
     from geometry_msgs.msg import PoseStamped
     from nav_msgs.msg import OccupancyGrid
     from nav2_msgs.action import ComputePathToPose
-    from lifecycle_msgs.srv import ChangeState
 
     path, status_path = Path(args.socket), Path(args.status_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,7 +82,8 @@ def run(args):
     ingress.bind(str(path))
     os.chmod(path, 0o600)
     state = {"state": "STARTING", "pid": os.getpid(), "requests": 0, "completed": 0,
-             "rejected": 0, "timeouts": 0, "map_revision": 0, "motor_authority": False}
+             "rejected": 0, "timeouts": 0, "map_revision": 0, "motor_authority": False,
+             "lifecycle_owner": "nav2_lifecycle_manager"}
     stopped = False
 
     def stop(_signal, _frame):
@@ -94,8 +95,8 @@ def run(args):
     rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
     node = Node("r2b4_nav2_planner_bridge")
     planner = ActionClient(node, ComputePathToPose, "/compute_path_to_pose")
-    lifecycle = node.create_client(ChangeState, "/planner_server/change_state")
-    lifecycle_future, transition, active = None, 1, False
+    lifecycle = Nav2LifecycleMonitor(node, time.monotonic_ns())
+    active = False
     map_stamp_ns = 0
     map_received_ns = 0
     map_valid = False
@@ -137,19 +138,8 @@ def run(args):
         while not stopped and rclpy.ok():
             rclpy.spin_once(node, timeout_sec=.002)
             now = time.monotonic_ns()
-            if not active:
-                if lifecycle_future is not None and lifecycle_future.done():
-                    if not lifecycle_future.result().success:
-                        raise RuntimeError("NAV2_LIFECYCLE_TRANSITION_FAILED")
-                    lifecycle_future = None
-                    if transition == 3:
-                        active = True
-                        state["state"] = "RUNNING"
-                    transition = 3
-                if not active and lifecycle_future is None and lifecycle.service_is_ready():
-                    request = ChangeState.Request()
-                    request.transition.id = transition
-                    lifecycle_future = lifecycle.call_async(request)
+            active = lifecycle.poll(now)
+            state["state"] = "RUNNING" if active else "STARTING"
             if pending is not None:
                 packet, address, future, handle, revision, stamp = pending
                 if now > packet["deadline_ns"]:
@@ -229,11 +219,17 @@ def run(args):
                 temporary = status_path.with_suffix(".tmp")
                 temporary.write_text(json.dumps(state, sort_keys=True)+"\n")
                 temporary.replace(status_path)
+    except BaseException as exc:
+        state.update(state="FAILED", error=f"{type(exc).__name__}:{exc}"[:256])
+        raise
     finally:
         if pending is not None and pending[3] is not None:
             pending[3].cancel_goal_async()
         ingress.close()
         path.unlink(missing_ok=True)
+        if state["state"] != "FAILED":
+            state["state"] = "STOPPED"
+        status_path.write_text(json.dumps(state, sort_keys=True)+"\n")
         node.destroy_node()
         rclpy.shutdown()
     return 0

@@ -25,7 +25,7 @@ global_costmap:
       track_unknown_space: true
       transform_tolerance: 0.2
       # Runtime launcher overrides geometry from resolved V3 navigation config.
-      robot_radius: 0.30
+      # Physical polygon and body padding are injected from resolved V3 config.
       plugins: [static_layer, obstacle_layer, inflation_layer]
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
@@ -34,8 +34,8 @@ global_costmap:
         subscribe_to_updates: true
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.40
-        cost_scaling_factor: 3.0
+        inflation_radius: 0.45
+        cost_scaling_factor: 6.0
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         observation_sources: scan
@@ -75,20 +75,21 @@ controller_server:
     FollowPath:
       plugin: r2b4_nav2::WheelAwareRegulatedPurePursuitController
       desired_linear_vel: 0.25
-      lookahead_dist: 0.5
+      lookahead_dist: 0.35
       min_lookahead_dist: 0.3
-      max_lookahead_dist: 0.6
-      use_velocity_scaled_lookahead_dist: false
+      max_lookahead_dist: 0.5
+      lookahead_time: 1.2
+      use_velocity_scaled_lookahead_dist: true
       transform_tolerance: 0.2
       use_collision_detection: true
       max_allowed_time_to_collision_up_to_carrot: 1.0
       use_regulated_linear_velocity_scaling: true
-      regulated_linear_scaling_min_radius: 0.8
+      regulated_linear_scaling_min_radius: 0.5
       regulated_linear_scaling_min_speed: 0.19
       use_cost_regulated_linear_velocity_scaling: true
-      cost_scaling_dist: 0.3
+      cost_scaling_dist: 0.45
       cost_scaling_gain: 1.0
-      inflation_cost_scaling_factor: 3.0
+      inflation_cost_scaling_factor: 6.0
       min_approach_linear_velocity: 0.19
       approach_velocity_scaling_dist: 0.3
       use_rotate_to_heading: true
@@ -110,7 +111,7 @@ local_costmap:
       update_frequency: 10.0
       publish_frequency: 1.0
       transform_tolerance: 0.2
-      robot_radius: 0.30
+      # Same physical polygon and L12 body padding as the global map.
       plugins: [obstacle_layer, inflation_layer]
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
@@ -125,8 +126,8 @@ local_costmap:
           observation_persistence: 0.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.40
-        cost_scaling_factor: 3.0
+        inflation_radius: 0.45
+        cost_scaling_factor: 6.0
 bt_navigator:
   ros__parameters:
     use_sim_time: false

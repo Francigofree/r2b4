@@ -1,0 +1,97 @@
+[INFO] [1794384791.859759440] [controller_server]: 
+	controller_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794384791.877089216] [controller_server]: Creating controller server
+[INFO] [1794384791.955007847] [local_costmap.local_costmap]: 
+	local_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794384791.959019833] [local_costmap.local_costmap]: Creating Costmap
+[INFO] [1794384792.907818703] [controller_server]: Configuring controller interface
+[INFO] [1794384792.907883481] [controller_server]: getting progress checker plugins..
+[INFO] [1794384792.908212037] [controller_server]: getting goal checker plugins..
+[INFO] [1794384792.908665704] [controller_server]: Controller frequency set to 20.0000Hz
+[INFO] [1794384792.908714407] [local_costmap.local_costmap]: Configuring
+[INFO] [1794384792.925896350] [local_costmap.local_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794384792.934247821] [local_costmap.local_costmap]: Subscribed to Topics: scan
+[INFO] [1794384792.943750016] [local_costmap.local_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794384792.943814016] [local_costmap.local_costmap]: Using plugin "inflation_layer"
+[INFO] [1794384792.946159351] [local_costmap.local_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794384793.022234426] [controller_server]: Created progress_checker : progress_checker of type nav2_controller::PoseProgressChecker
+[INFO] [1794384793.024938206] [controller_server]: Controller Server has progress_checker  progress checkers available.
+[INFO] [1794384793.027989802] [controller_server]: Created goal checker : goal_checker of type nav2_controller::SimpleGoalChecker
+[INFO] [1794384793.030198878] [controller_server]: Controller Server has goal_checker  goal checkers available.
+[INFO] [1794384793.043763558] [controller_server]: Created controller : FollowPath of type r2b4_nav2::WheelAwareRegulatedPurePursuitController
+[INFO] [1794384793.061978131] [controller_server]: Controller Server has FollowPath  controllers available.
+[INFO] [1794384793.093666866] [controller_server]: Activating
+[INFO] [1794384793.093740718] [local_costmap.local_costmap]: Activating
+[INFO] [1794384793.093760533] [local_costmap.local_costmap]: Checking transform
+[INFO] [1794384793.093900829] [local_costmap.local_costmap]: start
+[INFO] [1794384793.197091264] [controller_server]: Activating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794384793.197155764] [controller_server]: Creating bond (controller_server) to lifecycle manager.
+[INFO] [1794384805.172041947] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794384805.172115818] [controller_server]: No progress checker was specified in parameter 'current_progress_checker'. Server will use only plugin loaded progress_checker . This warning will appear once.
+[WARN] [1794384805.314995708] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.7795 Hz.
+[WARN] [1794384805.422356691] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.3217 Hz.
+[WARN] [1794384805.516994586] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.6631 Hz.
+[WARN] [1794384805.621648844] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.5609 Hz.
+[WARN] [1794384805.715823035] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.6256 Hz.
+[INFO] [1794384805.715882369] [controller_server]: Passing new path to controller.
+[WARN] [1794384805.819322606] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.6673 Hz.
+[WARN] [1794384805.913961020] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.5734 Hz.
+[WARN] [1794384806.019686890] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.4635 Hz.
+[WARN] [1794384806.120520867] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.9234 Hz.
+[WARN] [1794384806.221816510] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.8782 Hz.
+[WARN] [1794384806.317895760] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.4172 Hz.
+[INFO] [1794384806.317959075] [controller_server]: Passing new path to controller.
+[WARN] [1794384806.412369433] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.5920 Hz.
+[WARN] [1794384806.516216635] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.6356 Hz.
+[WARN] [1794384806.612269032] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.4173 Hz.
+[WARN] [1794384806.715205326] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.7199 Hz.
+[WARN] [1794384806.812324298] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.3032 Hz.
+[WARN] [1794384806.917111075] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.5738 Hz.
+[INFO] [1794384806.917178150] [controller_server]: Passing new path to controller.
+[WARN] [1794384807.020738388] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.6561 Hz.
+[WARN] [1794384807.114650913] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.7115 Hz.
+[WARN] [1794384807.220207247] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.7067 Hz.
+[INFO] [1794384807.220274988] [controller_server]: Cancellation was successful. Stopping the robot.
+[INFO] [1794384807.220287988] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794384807.308560396] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794384807.413048303] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.5785 Hz.
+[WARN] [1794384807.519021360] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.4426 Hz.
+[WARN] [1794384807.613154848] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.6313 Hz.
+[WARN] [1794384807.715575012] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.7701 Hz.
+[WARN] [1794384807.820109808] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.5713 Hz.
+[WARN] [1794384807.917275651] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.3112 Hz.
+[INFO] [1794384807.917337484] [controller_server]: Passing new path to controller.
+[WARN] [1794384808.019982371] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.7422 Hz.
+[WARN] [1794384808.113472859] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.7030 Hz.
+[WARN] [1794384808.217417414] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.6267 Hz.
+[WARN] [1794384808.313070368] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.4615 Hz.
+[WARN] [1794384808.417935590] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.5421 Hz.
+[INFO] [1794384808.418002127] [controller_server]: Passing new path to controller.
+[WARN] [1794384808.513121376] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.5130 Hz.
+[WARN] [1794384808.616867413] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.6712 Hz.
+[WARN] [1794384808.713348182] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.4220 Hz.
+[INFO] [1794384808.713706997] [controller_server]: Cancellation was successful. Stopping the robot.
+[INFO] [1794384808.713832738] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794384809.044141922] [local_costmap.local_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794384808.769 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794384876.218704943] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1794384876.281497456] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 15.9845 Hz.
+[WARN] [1794384876.374116842] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.8041 Hz.
+[WARN] [1794384876.479895136] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.4818 Hz.
+[WARN] [1794384876.576029750] [controller_server]: Control loop missed its desired rate of 20.0000 Hz. Current loop rate is 10.4081 Hz.
+[INFO] [1794384876.576087620] [controller_server]: Cancellation was successful. Stopping the robot.
+[INFO] [1794384876.576101139] [controller_server]: [follow_path] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794384876.917833831] [local_costmap.local_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794384876.626 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794384898.811697156] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794384898.811763767] [controller_server]: Running Nav2 LifecycleNode rcl preshutdown (controller_server)
+[INFO] [1794384898.811816582] [controller_server]: Deactivating
+[INFO] [1794384898.811833230] [controller_server]: Deactivating controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794384898.811856323] [local_costmap.local_costmap]: Deactivating
+[INFO] [1794384898.812191564] [controller_server]: Destroying bond (controller_server) to lifecycle manager.
+[INFO] [1794384898.823377710] [controller_server]: Cleaning up
+[INFO] [1794384898.823442136] [controller_server]: Cleaning up controller: FollowPath of type regulated_pure_pursuit_controller::RegulatedPurePursuitController
+[INFO] [1794384898.823524673] [local_costmap.local_costmap]: Cleaning up
+[INFO] [1794384898.879051514] [controller_server]: Destroying bond (controller_server) to lifecycle manager.

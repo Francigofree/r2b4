@@ -10,7 +10,7 @@ from v3.adapters.nav2_navigation import (Nav2NavigationClient, Nav2NavigationCon
     decode_packet, encode_packet, request_packet)
 from v3.contracts import CommandMode, GLOBAL_FRAME_ID, LOCAL_FRAME_ID, TickContext, Waypoint
 from v3.contracts.navigation import Nav2NavigationRequest, Nav2NavigationStatus
-from v3.nav2_navigation_bridge import validate_request, velocity_lifetime
+from v3.nav2_navigation_bridge import fallback_status, validate_request, velocity_lifetime
 from v3.slam_toolbox_bridge import odometry_twist
 from v3.adapters.slam_toolbox_transport import SlamOdometryPacket
 
@@ -65,6 +65,35 @@ def test_latest_guidance_preserves_production_and_measurement_time(channel):
     assert result.guidance.source_context == value.context
     assert result.guidance.scan_measurement_ns == value.context.monotonic_ns-10_000_000
     assert result.guidance.valid_until_ns == value.context.monotonic_ns+150_000_000
+
+
+def test_periodic_pending_cannot_replace_unexpired_active_and_restart_v3_ramp(channel):
+    client, server = channel
+    value = request()
+    send_reply(client, server, value)
+    first = client.poll(TickContext(11, value.context.monotonic_ns+20_000_000)).guidance
+    # Reproduce the live boundary: the 100 ms heartbeat is due while the
+    # original ACTIVE still has 29.54 ms of validity, same admitted child.
+    before_expiry = first.valid_until_ns-29_540_000
+    assert fallback_status(before_expiry, first.valid_until_ns, terminal_status=None,
+        fresh=True, lifecycle_active=True, action_active=True) is None
+    retained = client.poll(TickContext(12, before_expiry)).guidance
+    assert retained == first  # no new source time, sequence or TTL
+    assert fallback_status(first.valid_until_ns, first.valid_until_ns, terminal_status=None,
+        fresh=True, lifecycle_active=True, action_active=True) == 'PENDING'
+
+
+@pytest.mark.parametrize('changes,expected', [
+    ({'terminal_status': 'FAILED'}, 'FAILED'),
+    ({'terminal_status': 'CANCELLED'}, 'CANCELLED'),
+    ({'fresh': False}, 'STALE'),
+    ({'lifecycle_active': False}, 'STALE'),
+    ({'action_active': False}, 'PENDING'),
+])
+def test_terminal_sensor_loss_or_child_change_overrides_cached_active(changes, expected):
+    state = dict(terminal_status=None, fresh=True, lifecycle_active=True, action_active=True)
+    state.update(changes)
+    assert fallback_status(100, 200, **state) == expected
 
 
 @pytest.mark.parametrize("mutation", [dict(frame_id=GLOBAL_FRAME_ID), dict(v_mps=math.nan),

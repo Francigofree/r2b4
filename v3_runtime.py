@@ -314,6 +314,10 @@ def run_resident_physical_control(
                         decision_observer(exc.capture_record)
                     raise
                 if record_observer is not None:
+                    if timing is not None and isinstance(record, ExecutionRecord):
+                        timing_window = timing.take_capture_window()
+                        if timing_window is not None:
+                            record = replace(record, evidence=record.evidence+(timing_window,))
                     record_observer(record)
                 if decision_observer is not None:
                     decision_observer(record)
@@ -390,6 +394,10 @@ def run_resident_physical_control(
                 )
             )
             if record_observer is not None and (scheduled_capture_record or force_capture_record):
+                if timing is not None and isinstance(record, ExecutionRecord):
+                    timing_window = timing.take_capture_window()
+                    if timing_window is not None:
+                        record = replace(record, evidence=record.evidence+(timing_window,))
                 checkpoint_started_ns = time.perf_counter_ns()
                 checkpoint_created = False
                 if (

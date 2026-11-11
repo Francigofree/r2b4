@@ -1,4 +1,60 @@
-# Nav2 Planner Server első integráció
+# Nav2 runtime-edge és életciklus
+
+Az aktuális teljes Nav2 út a külön Planner Server, Controller Server és BT
+Navigator folyamatokat használja. A Nav2 kizárólag navigációs javaslatot ad;
+a mission és a motor-authority a canonical V3 láncban marad. Az aktív
+`runtime.nav2_navigation` és a korábbi `runtime.nav2_planner` mód kizárják
+egymást. A Room Cruise frontier-felderítés után a már ismert szobában is
+folytathatja a térképalapú célválasztást.
+
+## Egyetlen ROS lifecycle owner
+
+A `tools/nav2_planner.py` meglévő process-supervisora továbbra is indítja,
+azonosítja és leállítja a gyermekfolyamatokat, valamint gyermekhalálnál lezárja
+a teljes Nav2 stacket. A ROS configure/activate/deactivate műveletek egyetlen
+ownere a felügyelt `nav2_lifecycle_manager` folyamat, `autostart=true` mellett.
+Teljes módban a kezelt sorrend `planner_server`, `controller_server`,
+`bt_navigator`; planner-only módban csak `planner_server`. A 2 s bond-timeout
+aktív; az önálló manager-respawn/reconnection kikapcsolt, ezért nincs második
+helyreállítási vezérlő a process-supervisor mellett.
+
+Egyik Python bridge sem hív lifecycle `ChangeState` vagy `manage_nodes`
+műveletet. Kizárólag a manager `/lifecycle_manager_navigation/is_active`
+`std_srvs/Trigger` szolgáltatását olvassa, 2 Hz-en, legfeljebb egy függő kéréssel
+és 1 s válasz-határidővel. Induláskor 25 s az aktiválási határidő. Korábban
+aktív stack inaktív válasza vagy 1,5 s óta nem friss státusza bezárja a bridge-et,
+amit a meglévő process-supervisor gyermekhibaként kezel. A régi sikeres startup
+nem marad korlátlan ideig readiness-bizonyíték. A supervisor és bridge státusza
+`lifecycle_owner=nav2_lifecycle_manager` mezőt közöl.
+
+A manager saját `diagnostic_updater` publishere 5 Hz-en ad `Nav2 Health`
+státuszt a `/diagnostics` topicra. Az alkalmazott szolgáltatás és bond-viselkedés
+az [installed verzióval azonos Nav2 1.3.13 forrásban](https://github.com/ros-navigation/navigation2/blob/1.3.13/nav2_lifecycle_manager/src/lifecycle_manager.cpp)
+ellenőrizhető.
+
+## Függőségek és reprodukálhatóság
+
+Az izolált `runtime/deps/nav2-planner` prefixhez a Jazzy/RoboStack környezetből
+`ros2-nav2-lifecycle-manager=1.3.13`, `ros2-diagnostic-updater=4.2.7` és az
+utóbbi interfészfüggősége, `ros2-diagnostic-msgs=5.3.8` került hozzá. A telepítés
+a meglévő csomagokat befagyasztva futott; nem cserélt le vagy frissített csomagot.
+A `deploy/nav2-planner-environment.yml` deklarálja a kérést, a
+`deploy/nav2-planner-linux-aarch64.lock` a teljes telepítést URL és MD5 alapján
+rögzíti. Friss prefix reprodukálása:
+
+```bash
+micromamba create --prefix runtime/deps/nav2-planner --file deploy/nav2-planner-linux-aarch64.lock
+```
+
+A launcher a diagnosztikai fizikai körvonalat és LiDAR-extrinsiceket ugyanabból
+a resolved konfigurációs snapshotból adja a bridge-nek, mint amelyből a Nav2
+geometry-paramétereket készíti. A ROS2-modulok és a teljes nyers térkép nem
+lépnek be a control interpreterbe.
+
+## Korábbi planner-only integráció és evidence
+
+Az alábbi eredeti leírás a korábbi waypoint-planner módra és annak 2026-11-07/08
+bizonyítására vonatkozik; nem a jelenlegi teljes Nav2 production wiringja.
 
 A Nav2 kizárólag globális útjavaslatot számol. A robotot továbbra is a V3
 CommandGateway → L5 → L6 → L7 → … → L12 → MotorWriter lánc vezérli.

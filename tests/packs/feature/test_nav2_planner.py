@@ -137,7 +137,7 @@ def test_only_global_navigate_requests_external_planning():
 @pytest.mark.parametrize("previous_escape", [False, True])
 def test_global_pending_and_failed_completion_cannot_use_direct_seed(previous_escape):
     config, request = scene()
-    navigation = replace(config.navigation, global_planner_enabled=True)
+    navigation = replace(config.navigation, full_nav2_enabled=False, global_planner_enabled=True)
     navigator = TrajectoryNavigator(navigation, async_config=config.async_l6)
     manager = MissionManager(config.mission)
     mission = manager.evaluate(CommandRequest(request.context, "nav", CommandMode.NAVIGATE,
@@ -167,7 +167,7 @@ def test_global_pending_and_failed_completion_cannot_use_direct_seed(previous_es
 
 def test_opt_in_global_result_requires_external_guidance_at_l6_and_replay():
     config, request = scene()
-    navigation = replace(config.navigation, global_planner_enabled=True)
+    navigation = replace(config.navigation, full_nav2_enabled=False, global_planner_enabled=True)
     recorded = TrajectoryRolloutComputer(navigation).compute(request)
     with pytest.raises(ValueError, match="GUIDANCE_MISSING"):
         compute_recorded_planner_result(navigation, request, recorded)

@@ -1,0 +1,47 @@
+[INFO] [1794388574.527713208] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794388574.544813447] [planner_server]: Creating
+[INFO] [1794388574.644908327] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794388574.653191390] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794388574.696958843] [planner_server]: Configuring
+[INFO] [1794388574.697037936] [global_costmap.global_costmap]: Configuring
+[INFO] [1794388574.722008957] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794388574.734017132] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794388574.741223447] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794388574.752308599] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794388574.752372192] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794388574.754184701] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794388574.763643121] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794388574.763706918] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794388574.765365334] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794388574.856430464] [planner_server]: Created global planner plugin GridBased of type nav2_navfn_planner::NavfnPlanner
+[INFO] [1794388574.856505168] [planner_server]: Configuring plugin GridBased of type NavfnPlanner
+[INFO] [1794388574.857011763] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 78 at 0.050000 m/pix
+[INFO] [1794388574.862367625] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794388575.372546079] [planner_server]: Activating
+[INFO] [1794388575.372618339] [global_costmap.global_costmap]: Activating
+[INFO] [1794388575.372643302] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794388575.372753006] [global_costmap.global_costmap]: start
+[INFO] [1794388575.573425677] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 78 at 0.050000 m/pix
+[INFO] [1794388575.577211457] [planner_server]: Activating plugin GridBased of type NavfnPlanner
+[INFO] [1794388575.581443664] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794388577.573040776] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 79 at 0.050000 m/pix
+[INFO] [1794388579.573034596] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 79 at 0.050000 m/pix
+[INFO] [1794388587.573041524] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 79 at 0.050000 m/pix
+[INFO] [1794388589.573026160] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 79 at 0.050000 m/pix
+[INFO] [1794388598.362944269] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794388598.363012455] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794388598.363059899] [planner_server]: Deactivating
+[INFO] [1794388598.363085474] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794388598.377964644] [planner_server]: Deactivating plugin GridBased of type NavfnPlanner
+[INFO] [1794388598.378018052] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794388598.388210532] [planner_server]: Cleaning up
+[INFO] [1794388598.421287280] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794388598.471502359] [planner_server]: Cleaning up plugin GridBased of type NavfnPlanner
+[INFO] [1794388598.472271493] [planner_server]: Destroying plugin GridBased of type NavfnPlanner
+[INFO] [1794388598.578111716] [planner_server]: Destroying bond (planner_server) to lifecycle manager.

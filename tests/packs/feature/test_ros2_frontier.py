@@ -116,6 +116,22 @@ def test_frontier_cancel_revokes_only_its_proposal_and_does_not_stop_provider():
     assert explorer.proposal is replacement and not replacement.completion.done()
 
 
+def test_active_frontier_commitment_survives_new_map_goal_proposals_until_real_outcome():
+    explorer = _explorer()
+    original = explorer.proposal
+    assert explorer.proposal_committed
+    # Goal admission rejects a replacement without completing/revoking the
+    # current proposal. The bridge can keep its original child identity.
+    assert explorer.proposal is original and not original.completion.done()
+    explorer.finish(original, "SUCCEEDED")
+    assert not explorer.proposal_committed
+    explorer.proposal = FrontierProposal((3., 4., 0.),
+        SimpleNamespace(is_cancel_requested=True), Future())
+    assert not explorer.proposal_committed
+    explorer.poll()
+    assert explorer.proposal is None
+
+
 def test_frontier_session_stop_is_nonblocking_and_waits_for_process_reap():
     explorer = _explorer()
     proposal, process = explorer.proposal, explorer.process

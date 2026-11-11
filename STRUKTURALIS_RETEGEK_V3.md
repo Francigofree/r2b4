@@ -150,6 +150,16 @@ A fizikai measurement idő, source completion idő, processing/result idő és o
 
 Multi-rate live inputnál a sample-ben acquisitionkor rögzített `age_ns` nem lehet L12 freshness authority: ugyanaz az immutable snapshot egy későbbi control tickben természetesen idősebb. A közvetlen LiDAR safety ág aktuális korát L12 a final `TickContext.monotonic_ns` és a safety sample `captured_monotonic_ns` különbségéből számítja. A sample `age_ns` mezője source-read-time diagnosztikai lineage lehet és típus/tartomány szerint validálandó, de az aktuális L12-age-dzsel való pontos egyenlősége nem követelhető meg. A freshness limitet mindig az L12-ben újraszámolt aktuális korra kell alkalmazni.
 
+A production LiDAR-clearance a `fizika.json` szerinti fizikai testkörvonaltól
+mért legkisebb euklideszi távolság, nem a LiDAR optikai középpontjától mért
+sugártávolság. A fizikai scan edge a LiDAR-extrinsic és a tengelyhez rögzített
+téglalap alapján számolja, `BODY_OUTLINE` mértékjelöléssel adja tovább; L12
+eltérő vagy hiányzó mértékalapot nem fogadhat el. A jelenlegi robot hivatalos
+STOP-clearance értéke 0,10 m a testtől; ennek konfigurációs authorityja a
+`layers.lidar_safety.minimum_clearance_m`. A Nav2 ugyanebből a feloldott
+geometriából és legalább ekkora test-paddingből dolgozik. Korábbi capture
+replayje a rögzített korábbi mértékalapot és konfigurációt használja.
+
 A capture edge használhat verziózott külső serializációt, de az nem válik minden runtime contract részévé.
 
 ## 4. Rétegek és state-ownership

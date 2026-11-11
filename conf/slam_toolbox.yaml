@@ -21,7 +21,11 @@ slam_toolbox:
     scan_queue_size: 1
     throttle_scans: 1
     minimum_time_interval: 0.18
-    transform_timeout: 0.1
+    # Finite map->odom TF horizon for Nav2's 20 Hz pose transforms. With scans
+    # admitted every ~0.18 s, +0.1 s leaves the horizon behind newer odometry
+    # and blocks RPP on TF. Physical scan/odom/global-fix ages remain separate
+    # V3 inputs with their original timestamps and 0.25 s freshness guards.
+    transform_timeout: 0.25
     tf_buffer_duration: 5.0
     transform_publish_period: 0.1
     restamp_tf: false

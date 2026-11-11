@@ -16,6 +16,7 @@ from v3.adapters.nav2_navigation import (
     decode_packet, encode_packet,
 )
 from v3.contracts import GLOBAL_FRAME_ID, LOCAL_FRAME_ID
+from v3.nav2_diagnostics import NAV2_SAMPLE_PERIOD_NS, Nav2Diagnostics
 
 
 def validate_request(packet, now_ns):
@@ -65,6 +66,29 @@ def velocity_lifetime(packet, *, now_ns, produced_ns, accepted_ns, scan_ns, odom
     return deadline if now_ns < deadline else None
 
 
+def controller_goal_parameters(packet):
+    cruising = packet["mode"] == "EXPLORE"
+    # Cruise destinations are intermediate room sectors, not final pose goals.
+    # Requiring centimetre/yaw convergence here causes avoidable stop/spin cycles.
+    return (.18 if cruising else packet["goal_tolerance_m"]*.5,
+        math.pi if cruising else packet["yaw_tolerance_rad"]*.5,
+        min(1.2, packet["max_omega_rad_s"]), packet["max_v_mps"], packet["max_omega_rad_s"])
+
+
+def fallback_status(now_ns, active_until_ns, *, terminal_status, fresh,
+                    lifecycle_active, action_active):
+    """Do not overwrite an unexpired proposal with a heartbeat-only PENDING.
+
+    Silence retains exactly the original source command and deadline in V3.
+    Terminal/cancel/unavailable evidence always revokes it immediately.
+    """
+    if terminal_status is not None:
+        return terminal_status
+    if fresh and lifecycle_active and action_active and now_ns < active_until_ns:
+        return None
+    return "PENDING" if fresh and lifecycle_active else "STALE"
+
+
 def run(args):
     import rclpy
     from rclpy.action import ActionClient
@@ -76,12 +100,13 @@ def run(args):
     from sensor_msgs.msg import LaserScan
     from nav2_msgs.action import NavigateToPose
     from nav2_msgs.msg import SpeedLimit
-    from lifecycle_msgs.srv import ChangeState
+    from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
     from rcl_interfaces.srv import SetParametersAtomically
     from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
     from tf2_ros import Buffer, TransformListener, TransformException
     from rclpy.time import Time
     from v3.adapters.ros2_frontier import Ros2FrontierExplorer
+    from v3.adapters.room_cruise import RoomCruiseGoals
 
     path, status_path = Path(args.socket), Path(args.status_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +121,7 @@ def run(args):
     ros_offset_ns = time.time_ns()-generation
     state = dict(state="STARTING", pid=os.getpid(), worker_generation=generation,
         motor_authority=False, requests=0, rejected=0, commands=0, cancellations=0,
-        map_revision=0, child_goal_id=0, error=None)
+        map_revision=0, child_goal_id=0, error=None, lifecycle_owner="nav2_lifecycle_manager")
     stopped = False
 
     def stop(_signal, _frame):
@@ -109,15 +134,15 @@ def run(args):
     node = Node("r2b4_nav2_navigation_bridge")
     frontier = Ros2FrontierExplorer(node, args.frontier_executable, args.frontier_params,
         status_path.parent / "frontier.log", ros_offset_ns)
+    cruise = RoomCruiseGoals()
     navigator = ActionClient(node, NavigateToPose, "/navigate_to_pose")
     speed_publisher = node.create_publisher(SpeedLimit, "/speed_limit", 1)
     goal_parameters = node.create_client(SetParametersAtomically, "/controller_server/set_parameters_atomically")
     parameter_future, parameter_values, applied_tolerances, parameter_started_ns = None, None, None, 0
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, node)
-    lifecycle = [node.create_client(ChangeState, f"/{name}/change_state")
-                 for name in ("planner_server", "controller_server", "bt_navigator")]
-    lifecycle_index, lifecycle_transition, lifecycle_future = 0, 1, None
+    diagnostics = Nav2Diagnostics(node, generation, ros_offset_ns, **args.robot_geometry)
+    lifecycle = Nav2LifecycleMonitor(node, generation)
     active = False
     current = None
     # All action state remains ROS-local. V3 mission identity is echoed only.
@@ -130,13 +155,14 @@ def run(args):
     scan_ns, odom_ns, tf_ns = 0, 0, 0
     scan_history, odom_history, tf_history = deque(maxlen=32), deque(maxlen=32), deque(maxlen=32)
     sequence, last_status_ns, last_reply_ns = 0, 0, 0
+    last_active_until_ns = 0
     latest_source_ns = -1
 
     def stamp_ns(message):
         return message.header.stamp.sec*1_000_000_000+message.header.stamp.nanosec-ros_offset_ns
 
     def reply(status, *, produced_ns=None, valid_until_ns=None, v=0., omega=0., evidence=None):
-        nonlocal sequence, last_reply_ns
+        nonlocal sequence, last_reply_ns, last_active_until_ns
         if current is None:
             return
         packet, address = current
@@ -159,6 +185,7 @@ def run(args):
         try:
             ingress.sendto(encode_packet(output), address)
             last_reply_ns = now
+            last_active_until_ns = output["valid_until_ns"] if status == "ACTIVE" else 0
         except OSError:
             state["rejected"] += 1
 
@@ -176,12 +203,24 @@ def run(args):
                 or abs(sum(value*value for value in (q.x, q.y, q.z, q.w))-1.) > .01):
             map_valid = False
             return
-        # Only freshness/revision scalars stay here. The ROS2 explorer owns the
-        # costmap and frontier searches; there is no second Python map policy.
+        # Only freshness/revision scalars of the SLAM map stay here. Frontier
+        # search and all path/collision work remain with ROS2/Nav2.
         map_valid = True
         map_received_ns = time.monotonic_ns()
         map_stamp_ns = measured
         state["map_revision"] += 1
+
+    def coverage_costmap_callback(message):
+        measured = stamp_ns(message)
+        cells = message.info.width*message.info.height
+        p, q = message.info.origin.position, message.info.origin.orientation
+        if (message.header.frame_id == GLOBAL_FRAME_ID and 0 < cells <= args.max_map_cells
+                and cells == len(message.data) and math.isfinite(message.info.resolution)
+                and message.info.resolution > 0 and 0 <= time.monotonic_ns()-measured <= 3_000_000_000
+                and all(math.isfinite(value) for value in (p.x, p.y, p.z, q.x, q.y, q.z, q.w))
+                and abs(q.x)+abs(q.y) <= 1e-6 and abs(p.z) <= 1e-6
+                and abs(q.z*q.z+q.w*q.w-1.) <= .01):
+            cruise.update_costmap(message, measured)
 
     def scan_callback(message):
         nonlocal scan_ns
@@ -195,6 +234,7 @@ def run(args):
                 and all(math.isnan(value) or value == math.inf or message.range_min <= value <= message.range_max
                         for value in message.ranges)):
             scan_ns = max(scan_ns, measured)
+            diagnostics.observe_scan(message, measured)
             if not scan_history or measured > scan_history[-1]:
                 scan_history.append(measured)
 
@@ -208,13 +248,15 @@ def run(args):
                     twist.linear.x, twist.angular.z))
                 and abs(sum(value*value for value in (q.x, q.y, q.z, q.w))-1.) <= .01):
             odom_ns = max(odom_ns, measured)
+            diagnostics.observe_odometry(message, measured)
             if not odom_history or measured > odom_history[-1]:
                 odom_history.append(measured)
 
     def velocity_callback(message):
+        diagnostics.observe_command(message, stamp_ns(message), time.monotonic_ns())
         if current is None or handle is None or cancelling or not active or terminal_status is not None:
             return
-        if current[0]["mode"] == "EXPLORE" and (frontier_goal is None
+        if current[0]["mode"] == "EXPLORE" and cruise.phase == "FRONTIER" and (frontier_goal is None
                 or frontier_goal is not frontier.proposal or frontier_goal.completion.done()):
             return
         now, produced = time.monotonic_ns(), stamp_ns(message)
@@ -240,12 +282,14 @@ def run(args):
     qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                      reliability=ReliabilityPolicy.RELIABLE)
     node.create_subscription(OccupancyGrid, "/map", map_callback, qos)
+    node.create_subscription(OccupancyGrid, "/global_costmap/costmap", coverage_costmap_callback, qos)
     node.create_subscription(LaserScan, "/r2b4/slam/scan", scan_callback, qos_profile_sensor_data)
     node.create_subscription(Odometry, "/r2b4/odom", odom_callback, qos_profile_sensor_data)
     node.create_subscription(TwistStamped, "/r2b4/nav2/cmd_vel", velocity_callback, 1)
 
     def begin_cancel(now, *, stop_frontier=True):
-        nonlocal cancelling, cancel_started_ns, cancel_future
+        nonlocal cancelling, cancel_started_ns, cancel_future, last_active_until_ns
+        last_active_until_ns = 0
         if stop_frontier:
             frontier.stop()
         if not cancelling and (sending is not None or handle is not None):
@@ -259,25 +303,8 @@ def run(args):
             rclpy.spin_once(node, timeout_sec=.002)
             now = time.monotonic_ns()
             frontier.poll()
-            if not active:
-                if lifecycle_future is not None and lifecycle_future.done():
-                    response = lifecycle_future.result()
-                    if response is None or not response.success:
-                        raise RuntimeError("NAV2_LIFECYCLE_TRANSITION_FAILED")
-                    lifecycle_future = None
-                    if lifecycle_transition == 1:
-                        lifecycle_transition = 3
-                    else:
-                        lifecycle_index += 1
-                        lifecycle_transition = 1
-                        if lifecycle_index == len(lifecycle):
-                            active, state["state"] = True, "RUNNING"
-                if not active and lifecycle_future is None and lifecycle[lifecycle_index].service_is_ready():
-                    request = ChangeState.Request()
-                    request.transition.id = lifecycle_transition
-                    lifecycle_future = lifecycle[lifecycle_index].call_async(request)
-                if now-generation > 25_000_000_000:
-                    raise RuntimeError("NAV2_LIFECYCLE_STARTUP_TIMEOUT")
+            active = lifecycle.poll(now)
+            state["state"] = "RUNNING" if active else "STARTING"
             robot_pose = None
             try:
                 transform = tf_buffer.lookup_transform(GLOBAL_FRAME_ID, "base_link", Time())
@@ -285,9 +312,12 @@ def run(args):
                 if not tf_history or tf_ns > tf_history[-1]:
                     tf_history.append(tf_ns)
                 p = transform.transform.translation
-                robot_pose = p.x, p.y
+                q = transform.transform.rotation
+                robot_pose = p.x, p.y, math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
             except TransformException:
                 tf_ns = 0
+            if 0 < tf_ns <= now and now-tf_ns <= SENSOR_MAX_AGE_NS:
+                cruise.observe_pose(robot_pose, now)
             # Only four small packets are decoded per ROS turn.
             for _ in range(4):
                 try:
@@ -309,6 +339,7 @@ def run(args):
                     if current is not None and all(packet[key] == current[0][key] for key in ("mission_id", "goal_id")):
                         reply("CANCELLED")
                         begin_cancel(now)
+                        cruise.stop()
                         current, selected_goal, terminal_status, frontier_goal = None, None, None, None
                     continue
                 if packet["source_ns"] <= latest_source_ns:
@@ -321,13 +352,17 @@ def run(args):
                     continue
                 if not same:
                     begin_cancel(now)
+                    cruise.stop()
                     selected_goal, terminal_status, frontier_goal = None, None, None
                 current = packet, address
                 if packet["mode"] == "EXPLORE":
+                    session = tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation"))
+                    cruise.begin(session)
                     # Overlap ROS discovery/costmap warmup with mission
                     # admission. Actual Nav2 dispatch below still requires
                     # fresh sensors/map/TF and applied mission tolerances.
-                    frontier.start(tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation")))
+                    if cruise.phase == "FRONTIER":
+                        frontier.start(session)
                 limit = SpeedLimit()
                 limit.header.stamp = node.get_clock().now().to_msg()
                 limit.percentage, limit.speed_limit = False, float(packet["max_v_mps"])
@@ -335,8 +370,17 @@ def run(args):
             if current is not None and now-current[0]["source_ns"] > HEARTBEAT_MAX_AGE_NS:
                 reply("STALE")
                 begin_cancel(now)
+                cruise.stop()
                 current, selected_goal, terminal_status, frontier_goal = None, None, None, None
             if (current is not None and current[0]["mode"] == "EXPLORE"
+                    and cruise.phase == "FRONTIER" and frontier.complete):
+                # A completed map is normal: frontier discovery gives way to
+                # persistent known-room coverage, without a V3 NO_PATH fault.
+                cruise.enter_coverage()
+                begin_cancel(now)
+                selected_goal, frontier_goal, terminal_status = None, None, None
+            if (current is not None and current[0]["mode"] == "EXPLORE"
+                    and cruise.phase == "FRONTIER"
                     and frontier_goal is not None and frontier_goal is not frontier.proposal):
                 # Upstream preemption/cancel revokes the old child's velocity
                 # immediately. Wait for real Nav2 cancellation before dispatch.
@@ -346,15 +390,21 @@ def run(args):
                 handle = sending.result()
                 sending = None
                 if handle is None or not handle.accepted:
+                    if not cancelling:
+                        diagnostics.record_error(now, "GOAL_REJECTED", 900,
+                            goal_id=state["child_goal_id"])
                     handle, terminal_status = None, None if cancelling else "NO_PATH"
                     if cancelling:
                         cancelling, settle_until_ns = False, now+150_000_000
                     elif current is not None and current[0]["mode"] == "EXPLORE":
+                        if cruise.phase == "COVERAGE":
+                            cruise.finish(selected_goal, False, now)
                         frontier.finish(frontier_goal, "ABORTED", 900)
                         selected_goal, frontier_goal, terminal_status = None, None, None
                         settle_until_ns = now+150_000_000
                 else:
                     accepted_ns = now
+                    last_active_until_ns = 0
                     result_future = handle.get_result_async()
                     if cancelling:
                         cancel_future = handle.cancel_goal_async()
@@ -365,12 +415,19 @@ def run(args):
                     cancelling, settle_until_ns = False, now+150_000_000
                 elif current is not None:
                     terminal_status = "SUCCEEDED" if envelope.status == 4 and envelope.result.error_code == 0 else "FAILED"
+                    if terminal_status == "FAILED":
+                        diagnostics.record_error(now, "NAVIGATION_FAILED", envelope.result.error_code,
+                            getattr(envelope.result, "error_msg", ""), state["child_goal_id"])
                     reply("PENDING" if current[0]["mode"] == "EXPLORE" else terminal_status)
                     if current[0]["mode"] == "EXPLORE":
+                        if cruise.phase == "COVERAGE":
+                            cruise.finish(selected_goal, terminal_status == "SUCCEEDED", now)
                         frontier.finish(frontier_goal, "SUCCEEDED" if terminal_status == "SUCCEEDED"
                             else "ABORTED", envelope.result.error_code or (900 if terminal_status != "SUCCEEDED" else 0))
+                        # Successful child completion already proves the old
+                        # action is terminal; no artificial inter-goal pause.
+                        settle_until_ns = now if terminal_status == "SUCCEEDED" else now+150_000_000
                         selected_goal, terminal_status, frontier_goal = None, None, None
-                        settle_until_ns = now+150_000_000
             if cancelling and now-cancel_started_ns > 2_000_000_000:
                 raise RuntimeError("NAV2_CANCELLATION_TIMEOUT")
             if parameter_future is not None:
@@ -381,10 +438,7 @@ def run(args):
                     applied_tolerances, parameter_future = parameter_values, None
                 elif now-parameter_started_ns > 2_000_000_000:
                     raise RuntimeError("NAV2_GOAL_TOLERANCE_TIMEOUT")
-            desired = None if current is None else (
-                current[0]["goal_tolerance_m"]*.5, current[0]["yaw_tolerance_rad"]*.5,
-                min(1.2, current[0]["max_omega_rad_s"]),
-                current[0]["max_v_mps"], current[0]["max_omega_rad_s"])
+            desired = None if current is None else controller_goal_parameters(current[0])
             if (current is not None and active and not cancelling and sending is None and handle is None
                     and terminal_status is None and now >= settle_until_ns):
                 if parameter_future is None and applied_tolerances != desired and goal_parameters.service_is_ready():
@@ -406,10 +460,13 @@ def run(args):
                 packet = current[0]
                 if selected_goal is None:
                     if packet["mode"] == "EXPLORE":
-                        session = tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation"))
-                        if frontier.start(session):
-                            frontier_goal = frontier.proposal
-                            selected_goal = None if frontier_goal is None else list(frontier_goal.goal)
+                        if cruise.phase == "COVERAGE":
+                            selected_goal = cruise.select(robot_pose, now)
+                        else:
+                            session = tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation"))
+                            if frontier.start(session):
+                                frontier_goal = frontier.proposal
+                                selected_goal = None if frontier_goal is None else list(frontier_goal.goal)
                     else:
                         selected_goal = packet["goal"]
                     if selected_goal is not None:
@@ -435,26 +492,37 @@ def run(args):
                     sending = navigator.send_goal_async(goal)
                     reply("PENDING")
                 elif now-last_reply_ns >= 100_000_000:
-                    reply("NO_PATH" if frontier.complete else "PENDING")
+                    reply("PENDING")
             if current is not None and now-last_reply_ns >= 100_000_000:
-                reply(terminal_status or ("PENDING" if fresh and active else "STALE"))
-            if now-last_status_ns >= 250_000_000:
+                status = fallback_status(now, last_active_until_ns,
+                    terminal_status=terminal_status, fresh=fresh, lifecycle_active=active,
+                    action_active=handle is not None and not cancelling)
+                if status is not None:
+                    reply(status)
+            if now-last_status_ns >= NAV2_SAMPLE_PERIOD_NS:
                 state.update(observed_monotonic_ns=now, pending=sending is not None,
                     action_active=handle is not None, cancelling=cancelling,
                     mission_id=None if current is None else current[0]["mission_id"],
                     selected_goal=selected_goal, scan_measurement_ns=scan_ns,
                     odom_measurement_ns=odom_ns, tf_measurement_ns=tf_ns,
-                    goal_provider="ros2_explore_lite", frontier_status=frontier.status,
+                    goal_provider=("nav2_costmap_coverage" if cruise.phase == "COVERAGE" else "ros2_explore_lite"),
+                    frontier_status=frontier.status,
                     frontier_running=frontier.session is not None,
                     frontier_pid=None if frontier.process is None else frontier.process.pid,
                     frontier_goals=frontier.accepted, frontier_rejected=frontier.rejected)
+                state.update(**cruise.snapshot())
                 state["goal_checker_tolerances"] = applied_tolerances
+                state["nav2_observation"] = diagnostics.snapshot(now,
+                    scan_ns=scan_ns, odom_ns=odom_ns, tf_ns=tf_ns,
+                    active=handle is not None and not cancelling,
+                    robot_pose=robot_pose, state=state)
                 temporary = status_path.with_suffix(".tmp")
                 temporary.write_text(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
                 temporary.replace(status_path)
                 last_status_ns = now
     except BaseException as exc:
         state.update(state="FAILED", error=f"{type(exc).__name__}:{exc}"[:256])
+        diagnostics.record_error(time.monotonic_ns(), "BRIDGE_FAILED", message=state["error"])
         raise
     finally:
         if handle is not None:
@@ -466,7 +534,14 @@ def run(args):
         path.unlink(missing_ok=True)
         if state["state"] != "FAILED":
             state["state"] = "STOPPED"
-        status_path.write_text(json.dumps(state, sort_keys=True)+"\n")
+        final_observed_ns = time.monotonic_ns()
+        state["observed_monotonic_ns"] = final_observed_ns
+        state["nav2_observation"] = diagnostics.snapshot(final_observed_ns,
+            scan_ns=scan_ns, odom_ns=odom_ns, tf_ns=tf_ns, active=False,
+            robot_pose=None, state=state)
+        temporary = status_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
+        temporary.replace(status_path)
         node.destroy_node()
         rclpy.shutdown()
     return 0
@@ -476,6 +551,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--socket", required=True)
     parser.add_argument("--status-path", required=True)
+    parser.add_argument("--robot-geometry", required=True, type=json.loads)
     parser.add_argument("--behavior-tree", required=True)
     parser.add_argument("--frontier-executable", required=True)
     parser.add_argument("--frontier-params", required=True)

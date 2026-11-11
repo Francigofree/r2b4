@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import fcntl
 from functools import partial
 import math
+import json
 import os
 from pathlib import Path
 import signal
@@ -29,11 +30,15 @@ def _paths(root):
             "bt": root / "conf" / "nav2_navigate.xml"}
 
 
-def _resolved_control(root):
+def _resolved_config(root):
     from v3.config import ConfigResolver
     conf = root / "conf"
     return ConfigResolver(conf/"hardver.json", conf/"fizika.json", conf/"speed_map.json",
-                          conf/"vezerles.json").resolve().runtime.composition.live_control.control
+                          conf/"vezerles.json").resolve()
+
+
+def _resolved_control(root):
+    return _resolved_config(root).runtime.composition.live_control.control
 
 
 def _navigation_environment(paths, root):
@@ -48,14 +53,21 @@ def _navigation_environment(paths, root):
 
 
 def _write_geometry(paths, control):
+    import json
     navigation = control.navigation
-    radius = math.hypot(navigation.footprint_length_m/2 + abs(navigation.footprint_center_x_m),
-                        navigation.footprint_width_m/2) + navigation.footprint_safety_margin_m
+    rear = navigation.footprint_center_x_m - navigation.footprint_length_m/2
+    front = navigation.footprint_center_x_m + navigation.footprint_length_m/2
+    half_width = navigation.footprint_width_m/2
+    padding = max(navigation.footprint_safety_margin_m,
+                  control.lidar_safety.minimum_clearance_m)
+    footprint = [[rear, -half_width], [front, -half_width],
+                 [front, half_width], [rear, half_width]]
+    radius = math.hypot(max(abs(rear), abs(front)) + padding, half_width + padding)
     text = ""
     for name in ("global_costmap", "local_costmap"):
         text += (f"{name}:\n  {name}:\n    ros__parameters:\n"
-                 f"      robot_radius: {radius}\n      inflation_layer:\n"
-                 f"        inflation_radius: {radius+.10}\n")
+                 f"      footprint: {json.dumps(json.dumps(footprint))}\n"
+                 f"      footprint_padding: {padding}\n")
     limits = control.operational_constraints
     minimum = limits.wheel_limits.target_minimum_mps
     constraints = control.mission.default_constraints
@@ -81,14 +93,13 @@ def _write_geometry(paths, control):
              f"      max_curvature_rad_per_m: {limits.max_curvature_rad_per_m}\n")
     # The default tree is loaded during lifecycle activation, before the first
     # goal can supply its own XML. It must not require unused recovery servers.
-    import json
     text += ("bt_navigator:\n  ros__parameters:\n"
              f"    default_nav_to_pose_bt_xml: {json.dumps(str(paths['bt']))}\n")
     paths["geometry"].write_text(text)
     return radius
 
 
-def _commands(paths, *, full, radius):
+def _commands(paths, *, full, radius, robot_geometry=None):
     servers = ("nav2_planner", "planner_server"),
     if full:
         servers += (("nav2_controller", "controller_server"), ("nav2_bt_navigator", "bt_navigator"))
@@ -99,13 +110,26 @@ def _commands(paths, *, full, radius):
         if executable == "controller_server":
             command += ["-r", "cmd_vel:=/r2b4/nav2/cmd_vel"]
         commands.append((executable, command))
+    # The manager is the sole ROS lifecycle owner. Process supervision remains
+    # here; disable manager respawn so two independent recovery loops cannot
+    # reconfigure the same servers.
+    managed = [executable for _, executable in servers]
+    commands.append(("lifecycle_manager", [str(paths["prefix"] / "lib" /
+        "nav2_lifecycle_manager" / "lifecycle_manager"), "--ros-args",
+        "-r", "__node:=lifecycle_manager_navigation",
+        "-p", "autostart:=true", "-p", "node_names:=[" + ",".join(managed) + "]",
+        "-p", "bond_timeout:=2.0", "-p", "attempt_respawn_reconnection:=false",
+        "-p", "diagnostic_updater.period:=0.2"]))
     command = [str(paths["prefix"] / "bin" / "python"), "-m",
                "v3.nav2_navigation_bridge" if full else "v3.nav2_planner_bridge",
                "--socket", str(paths["socket"]), "--status-path", str(paths["status"])]
     if full:
+        if robot_geometry is None:
+            raise ValueError("Nav2 diagnostics requires resolved robot geometry")
         command += ["--behavior-tree", str(paths["bt"]),
                     "--frontier-executable", str(paths["frontier"] / "lib/explore_lite/explore"),
-                    "--frontier-params", str(paths["frontier_params"])]
+                    "--frontier-params", str(paths["frontier_params"]),
+                    "--robot-geometry", json.dumps(robot_geometry, allow_nan=False, separators=(",", ":"))]
     return commands + [("bridge", command)]
 
 
@@ -147,7 +171,8 @@ def start(root, *, ros_domain_id=74):
         if _owned(_read_json(paths["state"]), root):
             return status(root)
         dependencies = [paths["prefix"] / "bin" / "python", paths["params"],
-                        paths["prefix"] / "lib" / "nav2_planner" / "planner_server"]
+                        paths["prefix"] / "lib" / "nav2_planner" / "planner_server",
+                        paths["prefix"] / "lib" / "nav2_lifecycle_manager" / "lifecycle_manager"]
         if full:
             dependencies += [paths["bt"], paths["prefix"] / "lib" / "nav2_controller" / "controller_server",
                              paths["prefix"] / "lib" / "nav2_bt_navigator" / "bt_navigator",
@@ -211,7 +236,8 @@ def _supervise(root, ros_domain_id):
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
     state = {"state": "STARTING", "pid": os.getpid(), "process_start": _process_start(os.getpid()),
-             "root": str(root), "ros_domain_id": ros_domain_id, "motor_authority": False}
+             "root": str(root), "ros_domain_id": ros_domain_id, "motor_authority": False,
+             "lifecycle_owner": "nav2_lifecycle_manager"}
     _write_json(paths["state"], state)
     children, logs = [], []
     try:
@@ -226,13 +252,17 @@ def _supervise(root, ros_domain_id):
         cpus = {min(cpus)}
         os.sched_setaffinity(0, cpus)
         state["cpus"] = sorted(cpus)
-        control = _resolved_control(root)
+        resolved = _resolved_config(root)
+        control = resolved.runtime.composition.live_control.control
         full = control.navigation.full_nav2_enabled
         state["mode"] = "NAVIGATION" if full else "PLANNER"
         radius = _write_geometry(paths, control)
         env = _navigation_environment(paths, root)
         env.update(ROS_DOMAIN_ID=str(ros_domain_id), ROS_LOG_DIR=str(paths["work"] / "ros_logs"))
-        for name, command in _commands(paths, full=full, radius=radius):
+        robot_geometry = {"body_bounds_m": resolved.lidar.safety_body_bounds_m,
+                          "lidar_xy_m": [resolved.lidar.matcher.lidar_x_offset_m,
+                                         resolved.lidar.matcher.lidar_y_offset_m]}
+        for name, command in _commands(paths, full=full, radius=radius, robot_geometry=robot_geometry):
             log = (paths["work"] / f"{name}.log").open("a")
             logs.append(log)
             children.append(subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,

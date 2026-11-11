@@ -355,6 +355,7 @@ class NativeLatestLidarBackend:
             right_observation_count=count("right_observation_count"),
             local_points=local_points,
             local_points_available=not geometry_pending,
+            clearance_basis=summary.get("clearance_basis", "LIDAR_ORIGIN"),
         )
 
     def read(self, context: TickContext) -> LidarHealthReading:

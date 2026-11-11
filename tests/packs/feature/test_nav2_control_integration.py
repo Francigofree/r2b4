@@ -48,6 +48,7 @@ def _inputs(config, tick, guidance=None, *, command_id="nav", mode=CommandMode.N
         sample("RPLIDAR_C1", "lidar_local_points", frame_id="ROBOT_BASE", point_count=1,
             point_000_x_m=1., point_000_y_m=0., point_000_quality=10),
         sample("RPLIDAR_C1", "lidar_safety_clearance", age_ns=0,
+            clearance_basis=config.lidar_safety.clearance_basis,
             **{f"{sector}_{key}": value for sector in ("front", "rear", "left", "right")
                for key, value in (("clearance_m", .02 if obstacle else 2.), ("observation_count", 10))}),
     )

@@ -36,10 +36,13 @@ class LidarSafetyConfig:
     minimum_clearance_m: float
     maximum_sample_age_ns: int
     movement_epsilon: float
+    clearance_basis: str = "LIDAR_ORIGIN"
 
     def __post_init__(self) -> None:
         if not isinstance(self.device_id, str) or not self.device_id.strip():
             raise ValueError("device_id must be a non-empty string")
+        if self.clearance_basis not in {"LIDAR_ORIGIN", "BODY_OUTLINE"}:
+            raise ValueError("invalid clearance_basis")
         for value, name in (
             (self.minimum_clearance_m, "minimum_clearance_m"),
             (self.movement_epsilon, "movement_epsilon"),
@@ -216,6 +219,8 @@ class FinalSafetyGate:
         sample = matches[0]
         fields = {field.key: field.value for field in sample.values}
         try:
+            if fields.get("clearance_basis", "LIDAR_ORIGIN") != config.clearance_basis:
+                raise ValueError("LiDAR clearance basis mismatch")
             # Canonical safety freshness belongs to the final decision time.
             # In the multi-rate live path the same immutable LiDAR snapshot may be
             # reused by a later control tick, so a source-read-time age field is
@@ -246,7 +251,12 @@ class FinalSafetyGate:
             if left_motion < -config.movement_epsilon or right_motion < -config.movement_epsilon:
                 required.append("rear")
             yaw_component = right_motion - left_motion
-            if yaw_component > config.movement_epsilon:
+            if (config.clearance_basis == "BODY_OUTLINE"
+                    and abs(yaw_component) > config.movement_epsilon):
+                # An axle-offset rectangle sweeps corners on both sides and
+                # at both ends during any turn, including forward arcs.
+                required.extend(("front", "rear", "left", "right"))
+            elif yaw_component > config.movement_epsilon:
                 required.append("left")
             elif yaw_component < -config.movement_epsilon:
                 required.append("right")

@@ -36,6 +36,7 @@ from .capture_navigation import (
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .hri_evidence import HRI_EVENT_TOPIC
 from .host_telemetry import HOST_TELEMETRY_TOPIC, HOST_TELEMETRY_SCHEMA
+from .nav2_diagnostics import NAV2_OBSERVATION_TOPIC, NAV2_OBSERVATION_SCHEMA
 from .public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
 from .navigation_map_capture import (
     NAVIGATION_MAP_TOPIC, NAVIGATION_MAP_TRANSPORT_TOPIC, validate_navigation_map,
@@ -805,6 +806,9 @@ class McapCaptureConsumer:
         elif item.topic == HOST_TELEMETRY_TOPIC and isinstance(payload, Mapping):
             event_time = _non_negative_int(payload.get("measurement_monotonic_ns"), "host measurement time")
             event_sequence = _non_negative_int(payload.get("sample_sequence"), "host sample sequence")
+        elif item.topic == NAV2_OBSERVATION_TOPIC and isinstance(payload, Mapping):
+            event_time = _non_negative_int(payload.get("measurement_monotonic_ns"), "Nav2 measurement time")
+            event_sequence = _non_negative_int(payload.get("sample_sequence", item.sequence), "Nav2 sample sequence")
         elif item.topic == NAVIGATION_MAP_TOPIC:
             validate_navigation_map(payload)
             event_time = payload["measurement_monotonic_ns"]
@@ -1032,6 +1036,8 @@ class McapCaptureConsumer:
                 "local_costmap_requested": str(bool(self._config.navigation_map_hz)).lower(),
                 "local_costmap_schema": LOCAL_COSTMAP_SCHEMA,
                 "host_telemetry_schema": HOST_TELEMETRY_SCHEMA,
+                "nav2_observation_schema": NAV2_OBSERVATION_SCHEMA,
+                "nav2_observation_delivery": "bounded_latest_snapshot",
             },
         )
         self._writer = writer

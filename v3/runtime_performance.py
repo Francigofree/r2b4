@@ -439,6 +439,31 @@ class _RuntimePhaseAccumulator:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeTimingWindow:
+    """Every normal tick in one capture interval, independent of sample rate.
+
+    Period measures scheduling. Control wall includes input closure and L0-L12;
+    pipeline wall is the existing L1-L12 region and overlaps control wall. Neither
+    elapsed clock alone attributes delays to physical I/O, GIL or preemption.
+    """
+
+    window_start_monotonic_ns: int
+    window_end_monotonic_ns: int
+    target_period_ns: int
+    tick_count: int
+    period_count: int
+    period_sum_ns: int
+    period_max_ns: int
+    lateness_max_ns: int
+    control_count: int
+    control_wall_sum_ns: int
+    control_wall_max_ns: int
+    pipeline_count: int
+    pipeline_wall_sum_ns: int
+    pipeline_wall_max_ns: int
+
+
 class RuntimeTimingAccumulator:
     """Fixed-memory timing evidence for one resident control session."""
 
@@ -456,6 +481,8 @@ class RuntimeTimingAccumulator:
         "_lateness_over_2",
         "_work_over_period",
         "_control_phases",
+        "_window",
+        "_window_start_ns",
     )
 
     def __init__(self, target_period_ns: int) -> None:
@@ -480,6 +507,9 @@ class RuntimeTimingAccumulator:
         self._control_phases = {
             name: _RuntimePhaseAccumulator() for name in CONTROL_PHASE_ORDER
         }
+        # Fixed scalar counters only; no extra histograms or per-tick objects.
+        self._window = [0] * 11
+        self._window_start_ns = None
 
     def observe_tick_start(self, now_ns: int, deadline_ns: int) -> None:
         now = int(now_ns)
@@ -489,20 +519,46 @@ class RuntimeTimingAccumulator:
             self._period.add(period)
             self._period_over_25 += int(period > 25_000_000)
             self._period_over_40 += int(period > 40_000_000)
+            self._window[1] += 1
+            self._window[2] += period
+            self._window[3] = max(self._window[3], period)
         lateness = max(0, now - deadline)
         self._lateness.add(lateness)
         self._lateness_over_2 += int(lateness > 2_000_000)
         self._last_tick_ns = now
         self._ticks += 1
+        if self._window_start_ns is None:
+            self._window_start_ns = now
+        self._window[0] += 1
+        self._window[4] = max(self._window[4], lateness)
 
     def observe_control(self, duration_ns: int) -> None:
         self._control.add(duration_ns)
+        duration = max(0, int(duration_ns))
+        self._window[5] += 1
+        self._window[6] += duration
+        self._window[7] = max(self._window[7], duration)
 
     def observe_control_phase(self, name: str, duration_ns: int) -> None:
         phase = self._control_phases.get(name)
         if phase is None:
             raise ValueError(f"unknown control timing phase: {name}")
         phase.add(duration_ns)
+        if name == "PIPELINE_TOTAL":
+            duration = max(0, int(duration_ns))
+            self._window[8] += 1
+            self._window[9] += duration
+            self._window[10] = max(self._window[10], duration)
+
+    def take_capture_window(self) -> RuntimeTimingWindow | None:
+        """Small immutable observation, called only at a requested capture tick."""
+        if self._window_start_ns is None or self._last_tick_ns is None:
+            return None
+        result = RuntimeTimingWindow(self._window_start_ns, self._last_tick_ns,
+            self._target, *self._window)
+        self._window = [0] * 11
+        self._window_start_ns = None
+        return result
 
     def observe_observer(self, duration_ns: int) -> None:
         self._observer.add(duration_ns)

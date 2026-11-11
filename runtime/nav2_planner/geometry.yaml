@@ -1,15 +1,13 @@
 global_costmap:
   global_costmap:
     ros__parameters:
-      robot_radius: 0.36622776601683793
-      inflation_layer:
-        inflation_radius: 0.4662277660168379
+      footprint: "[[-0.09999999999999999, -0.18], [0.26, -0.18], [0.26, 0.18], [-0.09999999999999999, 0.18]]"
+      footprint_padding: 0.1
 local_costmap:
   local_costmap:
     ros__parameters:
-      robot_radius: 0.36622776601683793
-      inflation_layer:
-        inflation_radius: 0.4662277660168379
+      footprint: "[[-0.09999999999999999, -0.18], [0.26, -0.18], [0.26, 0.18], [-0.09999999999999999, 0.18]]"
+      footprint_padding: 0.1
 controller_server:
   ros__parameters:
     goal_checker:

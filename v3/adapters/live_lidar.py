@@ -279,9 +279,12 @@ class LidarScanReading:
     right_observation_count: int
     local_points: tuple[LidarPointReading, ...] = ()
     local_points_available: bool = True
+    clearance_basis: str = "LIDAR_ORIGIN"
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.revision, "revision")
+        if self.clearance_basis not in {"LIDAR_ORIGIN", "BODY_OUTLINE"}:
+            raise ValueError("invalid clearance_basis")
         _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
         for value, name in (
             (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
@@ -546,6 +549,7 @@ class NativeLidarSource:
                     captured_monotonic_ns=scan.measurement_monotonic_ns,
                     values=(
                         DataField("age_ns", scan.measurement_age_ns),
+                        DataField("clearance_basis", scan.clearance_basis),
                         DataField("front_clearance_m", scan.front_clearance_m),
                         DataField("rear_clearance_m", scan.rear_clearance_m),
                         DataField("left_clearance_m", scan.left_clearance_m),
