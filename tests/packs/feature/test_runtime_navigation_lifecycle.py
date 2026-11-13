@@ -116,3 +116,24 @@ def test_finite_roomcruise_prepares_dependencies_before_behavior_and_checks_term
                                 "max_duration_s": 60.0, "completion_on_duration": True}),
         "behavior.state", "stop", ("operator.runtime.stop", {}),
     ]
+
+
+@pytest.mark.parametrize("seconds", [0, 60])
+def test_failed_cold_roomcruise_admission_releases_prepared_stack(tmp_path, monkeypatch, seconds):
+    from v3 import interface_cli, launcher_cli, runtime_performance
+
+    calls = []
+
+    class Interface:
+        def read(self, resource):
+            return {"runtime_running": False}
+
+        def execute(self, action, **parameters):
+            calls.append(action)
+            return {"lifecycle": "FAILED", "reason": "ADMISSION_FAILED"}
+
+    monkeypatch.setattr(interface_cli, "RobotInterface", lambda **kwargs: Interface())
+    monkeypatch.setattr(launcher_cli, "project_root", lambda: tmp_path)
+    monkeypatch.setattr(runtime_performance, "apply_host_affinity", lambda *args: None)
+    assert launcher_cli.main(["rc", str(seconds), "c", "full"]) == 1
+    assert calls == ["operator.runtime.start", "v3.command.explore", "operator.runtime.stop"]

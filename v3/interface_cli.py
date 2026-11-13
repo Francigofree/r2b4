@@ -426,7 +426,7 @@ def _run_timed_motion(
     except BaseException:
         # If this CLI created a resident runtime during setup, clean up only that
         # owned runtime. A pre-existing runtime belongs to the wider robot session.
-        if seconds > 0 and not runtime_preexisting:
+        if not runtime_preexisting:
             try:
                 _shutdown(interface)
             except Exception:

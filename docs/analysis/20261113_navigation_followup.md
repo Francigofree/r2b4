@@ -111,9 +111,11 @@ Az 5 Hz-es capture nem replay-complete, ezért pontos fizikai L1–L12 replay
 MATCH nem állítható. A release a persistált NAVIGATE/EXPLORE replay-t is futtatja.
 
 A végső `./r test release` és az érintett Nav2/frontier/runtime/CLI/host
-tesztfájlok együtt **298 passed**, 23,88 s alatt; a kötelező gate és a natív
+tesztfájlok együtt **300 passed**, 23,72 s alatt; a kötelező gate és a natív
 persistált NAVIGATE/EXPLORE replay is sikeres. A source diff whitespace-ellenőrzése
 tiszta; a felhasználó korábbi runtime-adatváltozásait megőriztük.
+A végső CLI-hibaág javítása a folyamatos cirkálás elutasított hidegindításánál
+is felszabadítja az előkészített stacket; sikeres folyamatos futás továbbra is fut.
 
 Az ezután végzett tényleges hardveres, kizárólag IDLE indítás–leállítás próba
 PASS: egyetlen `operator.runtime.start(full, 5 Hz)` hívás indította a teljes
