@@ -1673,7 +1673,7 @@ class NativeStateEstimator:
         heading_state = QualityState.GOOD
         if (yaw_sigma**2 > cfg.max_yaw_variance*.5
                 or source_is_stale(now, self._local._last_heading_ns, self._config.max_measurement_age_ns//2)
-                or abs(self._consistency_yaw_rad) > cfg.relative_yaw_slip_rad*.5):
+                or abs(self._relative_yaw_error_rad) > cfg.relative_yaw_slip_rad*.5):
             heading_state = QualityState.DEGRADED
         if relative_heading and (
             source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns) or self._observability < cfg.minimum_observability
@@ -1713,7 +1713,10 @@ class NativeStateEstimator:
                 received_lidar.source_sequence if received_lidar is not None else None),
             global_fix_last_accepted_ns=self._last_fix_ns,
             accumulated_translation_bias_warning=(
-                self._last_relative_ns is not None and disagreement >= cfg.consistency_good_m))
+                self._last_relative_ns is not None and disagreement >= cfg.consistency_good_m),
+            accumulated_yaw_bias_warning=(
+                self._last_relative_ns is not None
+                and abs(self._consistency_yaw_rad) > cfg.relative_yaw_slip_rad*.5))
         return replace(global_estimate, local_pose=pose, global_pose=global_pose,
                        map_to_odom=transform, localization_quality=quality,
                        transform_revision=self._transform_revision,

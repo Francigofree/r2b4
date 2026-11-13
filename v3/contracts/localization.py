@@ -93,6 +93,9 @@ class LocalizationQuality:
     # Historical wheel/LiDAR bias is passive evidence, separate from current
     # local translation capability and its interval/freshness gates.
     accumulated_translation_bias_warning: bool = False
+    # Long-memory yaw drift is diagnostic; current heading uses the accepted
+    # scan interval, covariance, observability and original sensor freshness.
+    accumulated_yaw_bias_warning: bool = False
 
     def __post_init__(self) -> None:
         for name in ("local_translation", "heading", "global_position"):
@@ -111,7 +114,7 @@ class LocalizationQuality:
             if type(getattr(self, name)) is not int or getattr(self, name) < 0:
                 raise ContractValidationError(f"invalid {name}")
         for name in ("local_pose_continuous", "pose_discontinuity", "slip_suspected",
-                     "accumulated_translation_bias_warning"):
+                     "accumulated_translation_bias_warning", "accumulated_yaw_bias_warning"):
             if type(getattr(self, name)) is not bool:
                 raise ContractValidationError(f"invalid {name}")
         if self.observability > 1.0:

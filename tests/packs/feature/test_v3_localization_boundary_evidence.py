@@ -53,6 +53,8 @@ def test_interval_error_is_distinct_from_accumulated_bias_and_keeps_accepted_lin
     assert quality.relative_interval_yaw_error_rad == pytest.approx(.001)
     assert quality.accumulated_yaw_error_rad > 50 * quality.relative_interval_yaw_error_rad
     assert quality.accumulated_translation_bias_warning
+    assert quality.accumulated_yaw_bias_warning
+    assert quality.heading is QualityState.GOOD
     assert quality.local_translation is QualityState.GOOD
     assert not quality.slip_suspected
     assert quality.relative_interval_start_ns == ns-100_000_000
@@ -162,7 +164,39 @@ def test_global_fix_diagnostics_identify_the_l3_boundary_without_refreshing_acce
         "accumulated_yaw_error_rad", "relative_interval_start_ns", "relative_interval_end_ns",
         "relative_interval_source_sequence", "relative_interval_source_id", "global_fix_status",
         "global_fix_measurement_ns", "global_fix_source_sequence", "global_fix_last_accepted_ns",
-        "accumulated_translation_bias_warning",
+        "accumulated_translation_bias_warning", "accumulated_yaw_bias_warning",
     ):
         del old[name]
     assert _decode_production_value(old, LocalizationQuality, "old_quality") == initial
+
+
+@pytest.mark.parametrize("fraction, expected", (
+    (.49, QualityState.GOOD), (.51, QualityState.DEGRADED), (1.01, QualityState.LOST),
+))
+def test_heading_uses_current_interval_and_recovers_without_waiting_for_bias_decay(fraction, expected):
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    estimator = NativeStateEstimator(config)
+    estimator(_frame(0, step_ns=100_000_000))
+    # Historical drift cannot classify a fresh, consistent heading as lost.
+    estimator.restore(replace(estimator.checkpoint(), consistency_yaw_rad=.4))
+
+    def relative(tick, error):
+        frame = _frame(tick, step_ns=100_000_000)
+        ns = frame.context.monotonic_ns
+        return replace(frame, accepted=frame.accepted + (_observation(
+            "lidar_relative_motion", tick, ns, start_ns=ns-100_000_000,
+            dx_m=0., dy_m=0., dyaw_rad=-error, rmse_m=.001, observability=.9),))
+
+    estimate = estimator(relative(1, config.quality.relative_yaw_slip_rad*fraction))
+    assert estimate.localization_quality.heading is expected
+    assert estimate.localization_quality.accumulated_yaw_bias_warning
+    # Fresh IMU alone cannot erase the last independent interval failure.
+    assert estimator(_frame(2, step_ns=100_000_000)).localization_quality.heading is expected
+    checkpoint = estimator.checkpoint()
+    restored = NativeStateEstimator(config)
+    restored.restore(checkpoint)
+    fresh = relative(3, .0124)
+    estimate = estimator(fresh)
+    assert estimate == restored(fresh)
+    assert estimate.localization_quality.heading is QualityState.GOOD
+    assert estimate.localization_quality.accumulated_yaw_bias_warning

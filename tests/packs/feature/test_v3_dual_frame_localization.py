@@ -258,7 +258,8 @@ def test_localization_accumulated_drift_keeps_local_motion_and_bad_interval_hold
     assert residuals[-1] > config.estimation.quality.consistency_good_m
     assert estimate.localization_quality.accumulated_translation_bias_warning
     assert estimate.localization_quality.local_translation is QualityState.GOOD
-    assert estimate.localization_quality.heading is QualityState.DEGRADED
+    assert estimate.localization_quality.heading is QualityState.GOOD
+    assert estimate.localization_quality.accumulated_yaw_bias_warning
     assert estimate.local_pose.yaw_rad == 0.0
 
     manager, nav, selector, realizer, limiter = layers(config)
@@ -288,7 +289,8 @@ def test_localization_accumulated_drift_keeps_local_motion_and_bad_interval_hold
             assert plan.reason == "LOCALIZATION_HOLD"
             assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
         else:
-            assert estimate.localization_quality.heading is QualityState.DEGRADED
+            assert estimate.localization_quality.heading is QualityState.GOOD
+            assert estimate.localization_quality.accumulated_yaw_bias_warning
             assert world.local_costmap.source_sequence == tick
             assert world.local_costmap.freshness_ns == 0
             assert plan.status is NavigationStatus.ACTIVE

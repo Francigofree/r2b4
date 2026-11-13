@@ -94,7 +94,7 @@ class NavigationDecisionRecorder:
                 ("safety", _get(final, "safety_decision", "reason", "latch_state", "enabled")
                  + (getattr(getattr(record, "inputs", None), "lifecycle", getattr(record, "lifecycle", None)),)),
                 ("localization", _get(quality, "generation", "local_translation", "heading", "global_position", "pose_discontinuity", "slip_suspected",
-                                      "accumulated_translation_bias_warning")
+                                      "accumulated_translation_bias_warning", "accumulated_yaw_bias_warning")
                  + _get(estimate, "transform_revision")),
                 ("coverage", (visits[-1] if visits else None,)),
                 ("fault", (record.result.trace.fault_layer, getattr(record, "reason", None))),
