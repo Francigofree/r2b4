@@ -1,0 +1,138 @@
+{
+  "schema": "R2B4_MAP_OBSERVER_V1",
+  "report_kind": "global",
+  "map": {
+    "schema": "R2B4_MAP_OBSERVER_V1",
+    "kind": "global",
+    "source_topic": "/map",
+    "frame_id": "R2B4_BOOT_ROBOT_MAP",
+    "source_stamp_ns": 1794603242290077738,
+    "received_wall_ns": 1794603242474559305,
+    "session_id": "observer_20261113T205357_533",
+    "width": 150,
+    "height": 150,
+    "resolution_m": 0.05000000074505806,
+    "origin": [
+      -4.53027167646203,
+      -4.85554814409449,
+      0.0
+    ],
+    "source_kind": "ACTUAL_ROS_OCCUPANCYGRID"
+  },
+  "cell_histogram": {
+    "unknown": 15084,
+    "free": 6717,
+    "occupied": 699,
+    "inflation": 0
+  },
+  "mission_start_observed": false,
+  "mission_stop_observed": false,
+  "provenance": {
+    "config_sha256": {
+      "conf/nav2_planner.yaml": "3449887f71b6c572c301bc272a1b8c080a0f639ad332c20c8558342e5102de42",
+      "conf/slam_toolbox.yaml": "908240d68502bc2350bc48c08bf59058214617400f496c052e72e4e4e68684e0",
+      "conf/vezerles.json": "9b1dfb2f8ddd16a16bf700e7c9fb5b07ed34025e5616f284a2eb3823cf969535",
+      "runtime/nav2_planner/geometry.yaml": "75768eafb23325d19f0e022e12688b24134c8487d7227ca28a123fe27dd2d26d"
+    },
+    "capture_hint": "/home/alba/project_r2b4/runtime/captures/v3_20261113_215304_35091_capture.mcap",
+    "git_head": "4cbc3ee90f6dab70197c7b6ef7a5f0834b4acee0"
+  },
+  "source_to_received_ms": 184.481567,
+  "path": [
+    {
+      "schema": "R2B4_MAP_OBSERVER_V1",
+      "session_id": "observer_20261113T205357_533",
+      "type": "pose",
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "source_stamp_ns": 1794603241330898829,
+      "x_m": 0.0986949215232882,
+      "y_m": -1.7259980956651908,
+      "yaw_rad": -2.2965225707279098
+    },
+    {
+      "schema": "R2B4_MAP_OBSERVER_V1",
+      "session_id": "observer_20261113T205357_533",
+      "type": "pose",
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "source_stamp_ns": 1794603241530931129,
+      "x_m": 0.09869492152328821,
+      "y_m": -1.7259980956651908,
+      "yaw_rad": -2.2965225707279098
+    },
+    {
+      "schema": "R2B4_MAP_OBSERVER_V1",
+      "session_id": "observer_20261113T205357_533",
+      "type": "pose",
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "source_stamp_ns": 1794603241751545331,
+      "x_m": 0.09869492152328789,
+      "y_m": -1.725998095665191,
+      "yaw_rad": -2.2965225707279098
+    },
+    {
+      "schema": "R2B4_MAP_OBSERVER_V1",
+      "session_id": "observer_20261113T205357_533",
+      "type": "pose",
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "source_stamp_ns": 1794603241950909571,
+      "x_m": 0.0986949215232882,
+      "y_m": -1.7259980956651908,
+      "yaw_rad": -2.2965225707279098
+    },
+    {
+      "schema": "R2B4_MAP_OBSERVER_V1",
+      "session_id": "observer_20261113T205357_533",
+      "type": "pose",
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "source_stamp_ns": 1794603242150902982,
+      "x_m": 0.0986949215232882,
+      "y_m": -1.7259980956651908,
+      "yaw_rad": -2.2965225707279098
+    },
+    {
+      "schema": "R2B4_MAP_OBSERVER_V1",
+      "session_id": "observer_20261113T205357_533",
+      "type": "pose",
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "source_stamp_ns": 1794603242370941235,
+      "x_m": 0.0986949215232882,
+      "y_m": -1.7259980956651908,
+      "yaw_rad": -2.2965225707279098
+    }
+  ],
+  "goals": [],
+  "navigation": {
+    "goal_count": 0,
+    "decision_count": 1,
+    "recent_decisions": [
+      {
+        "schema": "R2B4_MAP_OBSERVER_V1",
+        "session_id": "observer_20261113T205357_533",
+        "type": "v3_decision",
+        "source_stamp_ns": 1794603237598632086,
+        "timestamp_semantics": "OBSERVER_RECEIPT_NOT_V3_TICK_TIME",
+        "reason": "NAV2_UNAVAILABLE",
+        "tick_id": 2346,
+        "safety_decision": "ALLOW",
+        "safety_reason": null,
+        "nav_status": "IDLE",
+        "nav_reason": "NAV2_UNAVAILABLE",
+        "goal_selection_reason": null,
+        "mission_mode": "EXPLORE",
+        "mission_stop_reason": null,
+        "quality": {
+          "heading": "GOOD",
+          "local_translation": "GOOD",
+          "global_position": "GOOD"
+        }
+      }
+    ],
+    "last_nav2_observation": null
+  },
+  "warnings": [
+    "START_POSITION_ONLY_FIRST_OBSERVED_NOT_PROVEN_MISSION_START",
+    "END_POSITION_ONLY_LAST_OBSERVED_NOT_PROVEN_MISSION_END"
+  ],
+  "timestamp_policy": "SOURCE_HEADER_STAMP_UTC_NOT_EXPORT_TIME",
+  "coordinate_policy": "ONLY_NATIVE_MATCHING_FRAME; NO_FABRICATED_ALIGNMENT"
+}
