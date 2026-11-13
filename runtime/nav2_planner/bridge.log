@@ -453,3 +453,32 @@ RuntimeError: NAV2_LIFECYCLE_STATUS_STALE
   self._handle.send_cancel_response(request_header, cancel_response)
 [WARN] [1794597169.055599945] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
 [WARN] [1794597169.055633853] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794597302.289770690] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794597302.289816857] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794597407.132250949] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794597407.132295338] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794597519.266175706] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794597519.266221669] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794597559.028858861] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794597559.028906232] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794598382.507771824] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794598382.507818065] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794598490.074754640] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794598490.074801807] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794601637.109078317] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794601637.109121946] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 629, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 625, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 343, in run
+    active = lifecycle.poll(now)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/adapters/nav2_lifecycle.py", line 69, in poll
+    raise RuntimeError("NAV2_LIFECYCLE_STATUS_STALE")
+RuntimeError: NAV2_LIFECYCLE_STATUS_STALE
