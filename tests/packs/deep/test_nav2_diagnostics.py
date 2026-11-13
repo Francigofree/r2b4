@@ -58,6 +58,18 @@ def test_map_path_and_scan_alignment_are_bounded_and_use_measurement_time():
     assert len(json.dumps(row)) < 16384
 
 
+def test_recovery_events_keep_source_identity_and_explicit_truncation():
+    telemetry = helper()
+    telemetry.observe_recovery(NS(event_log=[NS(node_name="Spin", uid=i,
+        timestamp=NS(sec=1, nanosec=i), previous_status="IDLE", current_status="RUNNING")
+        for i in range(100)]), 2_000_000_000)
+    recovery = observation(telemetry, 2_000_000_000)["recovery"]
+    assert recovery["event_count"] == 64 and len(recovery["events"]) == 16
+    assert recovery["source_events_truncated"] == 36
+    assert recovery["events"][-1]["node_uid"] == 63
+    assert recovery["events"][-1]["bt_event_timestamp_ns"] == 1_000_000_063
+
+
 def test_actual_twenty_hz_stream_distinguishes_receipt_jitter_and_missing_commands():
     telemetry = helper()
     for index in range(41):

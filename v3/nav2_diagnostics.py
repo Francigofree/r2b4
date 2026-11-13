@@ -65,6 +65,7 @@ class Nav2Telemetry:
         self.path = None
         self.recovery_events = deque(maxlen=16)
         self.recovery_event_count = 0
+        self.recovery_source_events_truncated = 0
         self.recovery_feedback = None
         self.scan_map_pose = None
 
@@ -134,12 +135,16 @@ class Nav2Telemetry:
 
     def observe_recovery(self, message, received):
         # Nav2 owns all behavior state; these are passive bounded transitions.
+        self.recovery_source_events_truncated += max(0, len(message.event_log)-64)
         for event in message.event_log[:64]:
             if event.node_name not in ("Wait", "Spin", "BackUp", "RoomCruiseRecovery"):
                 continue
             self.recovery_event_count += 1
             self.recovery_events.append({"node": event.node_name,
                 "previous": event.previous_status, "status": event.current_status,
+                "node_uid": event.uid,
+                "bt_event_timestamp_ns": event.timestamp.sec*1_000_000_000+event.timestamp.nanosec,
+                "bt_event_clock": "upstream_unspecified",
                 "observer_received_monotonic_ns": received})
 
     def _map_window(self, robot_pose):
@@ -314,6 +319,7 @@ class Nav2Telemetry:
             "scan_map_alignment": self._scan_alignment(now),
             "path": self.path,
             "recovery": {"event_count": self.recovery_event_count, "events": list(self.recovery_events),
+                         "source_events_truncated": self.recovery_source_events_truncated,
                          "feedback": self.recovery_feedback},
             "sensor_age_ns": {"scan": _age(now, scan_ns), "odometry": _age(now, odom_ns), "tf": _age(now, tf_ns)},
             "sensor_measurement_ns": {"scan": scan_ns, "odometry": odom_ns, "tf": tf_ns},

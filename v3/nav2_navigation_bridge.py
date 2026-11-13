@@ -294,12 +294,13 @@ def run(args):
     node.create_subscription(BehaviorTreeLog, "/behavior_tree_log",
         lambda message: diagnostics.observe_recovery(message, time.monotonic_ns()), 4)
 
-    def navigation_feedback(message):
+    def navigation_feedback(message, child_id, mission_id):
         # ActionClient dispatch already correlates feedback to its goal UUID.
         feedback = message.feedback
         diagnostics.recovery_feedback = {
             "received_monotonic_ns": time.monotonic_ns(),
-            "child_goal_id": state["child_goal_id"],
+            "child_goal_id": child_id, "mission_id": mission_id,
+            "goal_uuid": bytes(message.goal_id.uuid).hex(),
             "number_of_recoveries": int(feedback.number_of_recoveries),
             "distance_remaining_m": float(feedback.distance_remaining)}
 
@@ -510,7 +511,9 @@ def run(args):
                     goal.pose.pose.orientation.z, goal.pose.pose.orientation.w = math.sin(yaw/2), math.cos(yaw/2)
                     goal.behavior_tree = args.behavior_tree
                     diagnostics.recovery_feedback = None
-                    sending = navigator.send_goal_async(goal, feedback_callback=navigation_feedback)
+                    sending = navigator.send_goal_async(goal, feedback_callback=(
+                        lambda message, child_id=state["child_goal_id"], mission_id=packet["mission_id"]:
+                            navigation_feedback(message, child_id, mission_id)))
                     reply("PENDING")
                 elif now-last_reply_ns >= 100_000_000:
                     reply("PENDING")

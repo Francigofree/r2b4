@@ -280,9 +280,13 @@ class LidarScanReading:
     local_points: tuple[LidarPointReading, ...] = ()
     local_points_available: bool = True
     clearance_basis: str = "LIDAR_ORIGIN"
+    runtime_error: str | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.revision, "revision")
+        if self.runtime_error is not None and (
+                not isinstance(self.runtime_error, str) or not 0 < len(self.runtime_error) <= 192):
+            raise ValueError("runtime_error must be a bounded nonempty string")
         if self.clearance_basis not in {"LIDAR_ORIGIN", "BODY_OUTLINE"}:
             raise ValueError("invalid clearance_basis")
         _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
@@ -505,7 +509,8 @@ class NativeLidarSource:
             health = DeviceHealth(
                 self.device_id,
                 DeviceHealthState.FAILED,
-                "LIDAR_TIMING_INVALID",
+                "LIDAR_TIMING_INVALID" + (
+                    ":"+"_".join(scan.runtime_error.split()) if scan.runtime_error else ""),
             )
         elif (
             physical_stale

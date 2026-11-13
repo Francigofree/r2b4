@@ -203,6 +203,16 @@ def test_raw_scan_beyond_observation_future_skew_remains_failed_closed():
     assert physical.health.state is DeviceHealthState.FAILED
     assert physical.health.reason == 'LIDAR_TIMING_INVALID'
 
+
+@pytest.mark.parametrize('cause', ('LIDAR_OWNER_PROCESS_EXITED', 'LIDAR_COLLECTOR_FAILED:ValueError:bad packet'))
+def test_failed_physical_owner_keeps_bounded_root_cause_in_sampled_health(cause):
+    port = Port(status=_status(running=False, fatal_error=cause))
+    backend = _backend(port)
+    physical = NativeLidarSource(backend, NativeLidarConfig('lidar', .3, 250000000)).read(
+        TickContext(7, 1000000000))
+    assert physical.health.state is DeviceHealthState.FAILED
+    assert physical.health.reason == 'LIDAR_TIMING_INVALID:'+'_'.join(cause.split())
+
 def test_protected_config_identifiers_cannot_be_overridden():
     with pytest.raises(ValueError, match='odometry_mode'):
         LatestLidarBackendConfig(20000000, odometry_mode='ENCODER_ONLY')

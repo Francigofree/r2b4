@@ -212,6 +212,10 @@ class NativeLatestLidarBackend:
             and type(status.get("driver_connected", True)) is bool
             and status.get("driver_connected", True) is True
         )
+        # Preserve the first edge/driver cause in the already captured health
+        # reason; a generic timing failure alone hid the failed owner's cause.
+        error = status.get("fatal_error") or status.get("driver_error")
+        runtime_error = str(error)[:192] if error else None
         if snapshot is None:
             return LidarScanReading(
                 revision=0,
@@ -223,6 +227,7 @@ class NativeLatestLidarBackend:
                 health="STALE" if physical_runtime_valid else "ERROR",
                 stale=physical_runtime_valid,
                 timing_valid=physical_runtime_valid,
+                runtime_error=runtime_error,
                 point_count=0,
                 front_clearance_m=0.0,
                 rear_clearance_m=0.0,
@@ -355,6 +360,7 @@ class NativeLatestLidarBackend:
             right_observation_count=count("right_observation_count"),
             local_points=local_points,
             local_points_available=not geometry_pending,
+            runtime_error=runtime_error,
             clearance_basis=summary.get("clearance_basis", "LIDAR_ORIGIN"),
         )
 

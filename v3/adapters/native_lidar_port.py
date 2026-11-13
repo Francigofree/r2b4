@@ -587,6 +587,7 @@ class NativeLidarPort:
                     process is not None and process.is_alive()
                 ),
                 "driver_connected": bool(driver_status.get("connected", False)),
+                "driver_error": str(driver_status.get("last_error") or "")[:192],
                 "health": health,
                 "raw_scan_revision": (
                     self._raw_snapshot.raw_scan_id
