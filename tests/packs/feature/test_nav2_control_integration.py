@@ -188,6 +188,35 @@ def test_nav2_explore_preserves_l5_identity_and_selected_map_goal_lineage():
     control.close()
 
 
+@pytest.mark.parametrize("v,omega,sector", [(-.19, 0., "rear"), (0., 1.1, "left")])
+@pytest.mark.parametrize("evidence", ["clear", "blocked", "unobserved"])
+def test_nav2_recovery_proposals_keep_final_directional_lidar_safety(v, omega, sector, evidence):
+    config = _config()
+    control = NativeControlComposition(OfflineMotorSink(), config)
+    control.run_tick(_inputs(config, 0, mode=CommandMode.EXPLORE))
+    moving = False
+    for tick in range(1, 15):
+        proposal = _guidance(control._navigation.pending_navigation_request,
+            sequence=tick, v_mps=v, omega_rad_s=omega)
+        inputs = _inputs(config, tick, proposal, mode=CommandMode.EXPLORE)
+        if evidence != "clear":
+            samples = tuple(replace(sample, values=tuple(
+                DataField(field.key, .01 if evidence == "blocked" else 0)
+                if field.key == sector+("_clearance_m" if evidence == "blocked" else "_observation_count")
+                else field for field in sample.values))
+                if sample.kind == "lidar_safety_clearance" else sample
+                for sample in inputs.raw_devices.samples)
+            inputs = replace(inputs, raw_devices=replace(inputs.raw_devices, samples=samples))
+        result = control.run_tick(inputs)
+        assert _layers(result)["L6"].status is NavigationStatus.ACTIVE
+        if evidence != "clear":
+            _zero(result)
+        else:
+            moving |= bool(result.final_actuation.left_output or result.final_actuation.right_output)
+    assert moving is (evidence == "clear")
+    control.close()
+
+
 def test_local_target_binds_once_and_old_transform_source_is_validated_against_request():
     config = _config()
     manager = MissionManager(config.mission)

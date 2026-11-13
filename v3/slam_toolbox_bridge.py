@@ -29,6 +29,44 @@ MAX_SOURCE_AGE_NS = 250_000_000
 MAX_ODOM_BRACKET_NS = 100_000_000
 
 
+def pose_latency(scan, received_ns, published_ns, callback_ns, info, ros_offset_ns, *, callback_wall_ns=None):
+    """Passive stage times; DDS timestamps never replace scan measurement time."""
+    def dds_time(name):
+        stamp = info.get(name, 0) if isinstance(info, dict) else getattr(info, name, 0)
+        # Compare DDS epoch stamps with the callback's epoch clock, then map
+        # the duration to monotonic. An NTP correction since startup must not
+        # masquerade as executor queue time.
+        offset = ros_offset_ns if callback_wall_ns is None else callback_wall_ns-callback_ns
+        value = stamp - offset
+        return value if stamp > 0 and published_ns <= value <= callback_ns else None
+
+    sent, delivered = dds_time("source_timestamp"), dds_time("received_timestamp")
+    return {"source_sequence": scan.source_sequence, "measurement_ns": scan.measurement_ns,
+        "scan_received_ns": received_ns, "scan_published_ns": published_ns,
+        "pose_sent_ns": sent, "pose_dds_received_ns": delivered, "pose_callback_ns": callback_ns,
+        "dds_timestamp_valid": sent is not None and delivered is not None and sent <= delivered,
+        "measurement_to_ingress_ns": received_ns-scan.measurement_ns,
+        "ingress_to_scan_publish_ns": published_ns-received_ns,
+        "scan_publish_to_callback_ns": callback_ns-published_ns,
+        "scan_publish_to_pose_send_ns": None if sent is None else sent-published_ns,
+        "dds_transport_ns": None if sent is None or delivered is None or delivered < sent else delivered-sent,
+        "callback_queue_ns": None if delivered is None else callback_ns-delivered,
+        "measurement_to_acceptance_ns": callback_ns-scan.measurement_ns}
+
+
+def pose_latency_window(rows):
+    """Bounded rolling evidence including rejected poses, not only survivors."""
+    result = {"sample_count": len(rows), "capacity": 64}
+    for name in ("measurement_to_ingress_ns", "ingress_to_scan_publish_ns",
+                 "scan_publish_to_callback_ns", "scan_publish_to_pose_send_ns", "dds_transport_ns", "callback_queue_ns",
+                 "measurement_to_acceptance_ns"):
+        values = sorted(row[name] for row in rows if row[name] is not None)
+        result[name] = {"count": len(values), "p50": values[(len(values)-1)//2] if values else None,
+            "p95": values[math.ceil(.95*len(values))-1] if values else None,
+            "max": max(values, default=None)}
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class ScanPose:
     generation: int
@@ -211,6 +249,7 @@ def run(args) -> int:
     lifecycle_active = False
     history = deque(maxlen=128)
     associations = OrderedDict()
+    pose_timings = deque(maxlen=64)
     pending = None
     geometry = None
     last_sequence = 0
@@ -226,7 +265,7 @@ def run(args) -> int:
         counts[reason] = counts.get(reason, 0) + 1
         state["last_rejection"] = reason
 
-    def pose_callback(message):
+    def pose_callback(message, info):
         state["poses_received"] += 1
         ros_ns = message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec
         context = associations.pop(ros_ns, None)
@@ -236,11 +275,18 @@ def run(args) -> int:
         if message.header.frame_id != MAP_FRAME:
             reject("POSE_FRAME_MISMATCH")
             return
-        scan, aligned, address = context
-        age = time.monotonic_ns() - scan.measurement_ns
+        scan, aligned, address, received_ns, published_ns = context
+        callback_ns = time.monotonic_ns()
+        timing = pose_latency(scan, received_ns, published_ns, callback_ns, info, ros_offset_ns,
+                              callback_wall_ns=time.time_ns())
+        state["last_pose_timing"] = timing
+        pose_timings.append(timing)
+        age = callback_ns - scan.measurement_ns
         q = message.pose.pose.orientation
         norm = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w
         if not 0 <= age <= MAX_SOURCE_AGE_NS:
+            timing["outcome"] = "POSE_MEASUREMENT_STALE"
+            state["last_rejected_pose_timing"] = timing
             reject("POSE_MEASUREMENT_STALE")
             return
         if (not address or not math.isfinite(norm) or abs(norm - 1.0) > 0.01
@@ -269,6 +315,10 @@ def run(args) -> int:
             reject("POSE_REPLY_TRANSPORT_FAILED")
             return
         state["poses_returned"] += 1
+        timing["pose_return_ns"] = time.monotonic_ns()
+        timing["callback_to_return_ns"] = timing["pose_return_ns"]-callback_ns
+        timing["outcome"] = "ACCEPTED"
+        state["last_accepted_pose_timing"] = timing
         state["last_pose_measurement_ns"] = scan.measurement_ns
         state["last_pose_sequence"] = scan.source_sequence
         state["last_pose"] = [p.x, p.y, result.yaw_rad]
@@ -277,6 +327,7 @@ def run(args) -> int:
         state["max_pose_age_ns"] = max(state["max_pose_age_ns"], age)
 
     def map_callback(message):
+        started_ns = time.monotonic_ns()
         cells = message.info.width * message.info.height
         if (message.header.frame_id != MAP_FRAME or cells != len(message.data)
                 or cells > args.max_map_cells):
@@ -286,8 +337,12 @@ def run(args) -> int:
         state["map"] = {"width": message.info.width, "height": message.info.height,
                         "resolution_m": message.info.resolution, "cells": cells,
                         "observed_cells": sum(v >= 0 for v in message.data)}
+        state["map_callback_max_ns"] = max(state.get("map_callback_max_ns", 0),
+                                            time.monotonic_ns()-started_ns)
 
-    node.create_subscription(PoseWithCovarianceStamped, "/pose", pose_callback, 10)
+    # Poses superseded before callback dispatch cannot become fresher by
+    # waiting in a ten-message DDS history. Keep the newest physical fix.
+    node.create_subscription(PoseWithCovarianceStamped, "/pose", pose_callback, 1)
     map_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                          reliability=ReliabilityPolicy.RELIABLE)
     node.create_subscription(OccupancyGrid, "/map", map_callback, map_qos)
@@ -314,11 +369,14 @@ def run(args) -> int:
                     lifecycle_future = change_state.call_async(request)
                 if now - bridge_generation > 20_000_000_000:
                     raise RuntimeError("SLAM_LIFECYCLE_STARTUP_TIMEOUT")
+            drain_started_ns = time.monotonic_ns()
+            drained = 0
             for _ in range(64):
                 try:
                     data, address = ingress.recvfrom(MAX_PACKET_BYTES + 1)
                 except BlockingIOError:
                     break
+                drained += 1
                 try:
                     packet = decode_packet(data)
                 except ValueError:
@@ -363,10 +421,13 @@ def run(args) -> int:
                     if packet.source_sequence > last_sequence:
                         if pending is not None:
                             state["superseded"] += 1
-                        pending = packet, address
+                        pending = packet, address, time.monotonic_ns()
                         last_sequence = packet.source_sequence
+            state["ingress_drain_max_ns"] = max(state.get("ingress_drain_max_ns", 0),
+                                                time.monotonic_ns()-drain_started_ns)
+            state["ingress_drain_max_packets"] = max(state.get("ingress_drain_max_packets", 0), drained)
             if pending is not None and lifecycle_active:
-                scan, address = pending
+                scan, address, received_ns = pending
                 age = time.monotonic_ns() - scan.measurement_ns
                 aligned = align_scan(scan, history)
                 if age < 0 or age > MAX_SOURCE_AGE_NS:
@@ -402,7 +463,8 @@ def run(args) -> int:
                     message.time_increment = 0.0
                     message.ranges = ros_scan_ranges(scan)
                     ros_ns = scan.measurement_ns + ros_offset_ns
-                    associations[ros_ns] = scan, aligned, address
+                    published_ns = time.monotonic_ns()
+                    associations[ros_ns] = scan, aligned, address, received_ns, published_ns
                     while len(associations) > 32:
                         associations.popitem(last=False)
                     publisher.publish(message)
@@ -413,8 +475,12 @@ def run(args) -> int:
                     pending = None
                     if state["scans_published"] >= args.max_scans:
                         raise RuntimeError("SLAM_SESSION_SCAN_LIMIT_SAVE_AND_RESTART")
+            spin_started_ns = time.monotonic_ns()
             rclpy.spin_once(node, timeout_sec=0.005)
-            if now - last_status_ns >= 1_000_000_000:
+            state["spin_once_max_ns"] = max(state.get("spin_once_max_ns", 0),
+                                            time.monotonic_ns()-spin_started_ns)
+            if now - last_status_ns >= 200_000_000:
+                state["pose_latency_window"] = pose_latency_window(pose_timings)
                 state["observed_monotonic_ns"] = now
                 _write_status(status_path, state)
                 last_status_ns = now

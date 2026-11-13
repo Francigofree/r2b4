@@ -96,7 +96,8 @@ def run(args):
     from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
     from rclpy.signals import SignalHandlerOptions
     from geometry_msgs.msg import PoseStamped, TwistStamped
-    from nav_msgs.msg import OccupancyGrid, Odometry
+    from nav_msgs.msg import OccupancyGrid, Odometry, Path as RosPath
+    from nav2_msgs.msg import BehaviorTreeLog
     from sensor_msgs.msg import LaserScan
     from nav2_msgs.action import NavigateToPose
     from nav2_msgs.msg import SpeedLimit
@@ -209,6 +210,7 @@ def run(args):
         map_received_ns = time.monotonic_ns()
         map_stamp_ns = measured
         state["map_revision"] += 1
+        diagnostics.observe_map(message, measured, "slam")
 
     def coverage_costmap_callback(message):
         measured = stamp_ns(message)
@@ -221,6 +223,7 @@ def run(args):
                 and abs(q.x)+abs(q.y) <= 1e-6 and abs(p.z) <= 1e-6
                 and abs(q.z*q.z+q.w*q.w-1.) <= .01):
             cruise.update_costmap(message, measured)
+            diagnostics.observe_map(message, measured, "global_costmap")
 
     def scan_callback(message):
         nonlocal scan_ns
@@ -286,6 +289,19 @@ def run(args):
     node.create_subscription(LaserScan, "/r2b4/slam/scan", scan_callback, qos_profile_sensor_data)
     node.create_subscription(Odometry, "/r2b4/odom", odom_callback, qos_profile_sensor_data)
     node.create_subscription(TwistStamped, "/r2b4/nav2/cmd_vel", velocity_callback, 1)
+    node.create_subscription(RosPath, "/plan",
+        lambda message: diagnostics.observe_path(message, stamp_ns(message)), 1)
+    node.create_subscription(BehaviorTreeLog, "/behavior_tree_log",
+        lambda message: diagnostics.observe_recovery(message, time.monotonic_ns()), 4)
+
+    def navigation_feedback(message):
+        # ActionClient dispatch already correlates feedback to its goal UUID.
+        feedback = message.feedback
+        diagnostics.recovery_feedback = {
+            "received_monotonic_ns": time.monotonic_ns(),
+            "child_goal_id": state["child_goal_id"],
+            "number_of_recoveries": int(feedback.number_of_recoveries),
+            "distance_remaining_m": float(feedback.distance_remaining)}
 
     def begin_cancel(now, *, stop_frontier=True):
         nonlocal cancelling, cancel_started_ns, cancel_future, last_active_until_ns
@@ -493,7 +509,8 @@ def run(args):
                     yaw = yaw or 0.
                     goal.pose.pose.orientation.z, goal.pose.pose.orientation.w = math.sin(yaw/2), math.cos(yaw/2)
                     goal.behavior_tree = args.behavior_tree
-                    sending = navigator.send_goal_async(goal)
+                    diagnostics.recovery_feedback = None
+                    sending = navigator.send_goal_async(goal, feedback_callback=navigation_feedback)
                     reply("PENDING")
                 elif now-last_reply_ns >= 100_000_000:
                     reply("PENDING")
@@ -504,6 +521,17 @@ def run(args):
                 if status is not None:
                     reply(status)
             if now-last_status_ns >= NAV2_SAMPLE_PERIOD_NS:
+                diagnostics.scan_map_pose = None
+                if diagnostics.scan is not None:
+                    measured = diagnostics.scan[0]
+                    try:
+                        scan_transform = tf_buffer.lookup_transform(GLOBAL_FRAME_ID, "base_link",
+                            Time(nanoseconds=measured+ros_offset_ns))
+                        p, q = scan_transform.transform.translation, scan_transform.transform.rotation
+                        diagnostics.scan_map_pose = (measured, (p.x, p.y,
+                            math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))))
+                    except TransformException:
+                        pass
                 state["lifecycle_status"] = lifecycle.snapshot(now)
                 state.update(observed_monotonic_ns=now, pending=sending is not None,
                     action_active=handle is not None, cancelling=cancelling,

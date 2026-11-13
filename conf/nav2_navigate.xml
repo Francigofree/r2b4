@@ -1,4 +1,4 @@
-<!-- Replan from the SLAM map and current obstacle layer. No recovery actuation. -->
+<!-- Recovery proposals use the same stamped ROS -> V3 L6 -> L12 path. -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
     <RecoveryNode name="ReplanAfterControllerOrPlannerFailure" number_of_retries="6">
@@ -8,8 +8,13 @@
         </RateController>
         <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker" error_code_id="{follow_path_error_code}"/>
       </PipelineSequence>
-      <!-- Re-read the live obstacle costmap; never clear it or command a recovery move. -->
-        <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
+      <!-- Keep real obstacles. Each failed attempt changes the recovery action;
+           the retry count and action execution times are finite. -->
+      <RoundRobin name="RoomCruiseRecovery">
+        <Wait wait_duration="1.0"/>
+        <Spin spin_dist="0.7854" time_allowance="5.0" error_code_id="{spin_error_code}"/>
+        <BackUp backup_dist="0.15" backup_speed="0.19" time_allowance="5.0" error_code_id="{backup_error_code}"/>
+      </RoundRobin>
     </RecoveryNode>
   </BehaviorTree>
 </root>

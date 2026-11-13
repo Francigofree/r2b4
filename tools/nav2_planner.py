@@ -95,8 +95,12 @@ def _write_geometry(paths, control):
              f"      platform_max_v_mps: {limits.max_v_mps}\n"
              f"      platform_max_omega_rad_s: {limits.max_omega_rad_s}\n"
              f"      max_curvature_rad_per_m: {limits.max_curvature_rad_per_m}\n")
-    # The default tree is loaded during lifecycle activation, before the first
-    # goal can supply its own XML. It must not require unused recovery servers.
+    # Recovery proposals cross the same physical wheel and L9/L12 boundaries.
+    text += ("behavior_server:\n  ros__parameters:\n"
+             f"    min_rotational_vel: {limits.wheel_limits.target_center_spin_rad_s}\n"
+             f"    max_rotational_vel: {max(limits.wheel_limits.target_center_spin_rad_s, min(1.2, limits.max_omega_rad_s))}\n"
+             f"    rotational_acc_lim: {limits.max_angular_acceleration_rad_s2}\n")
+    # Load the maintained tree during lifecycle activation, before admission.
     text += ("bt_navigator:\n  ros__parameters:\n"
              f"    default_nav_to_pose_bt_xml: {json.dumps(str(paths['bt']))}\n")
     paths["geometry"].write_text(text)
@@ -106,12 +110,13 @@ def _write_geometry(paths, control):
 def _commands(paths, *, full, radius, robot_geometry=None):
     servers = ("nav2_planner", "planner_server"),
     if full:
-        servers += (("nav2_controller", "controller_server"), ("nav2_bt_navigator", "bt_navigator"))
+        servers += (("nav2_controller", "controller_server"),
+                    ("nav2_behaviors", "behavior_server"), ("nav2_bt_navigator", "bt_navigator"))
     commands = []
     for package, executable in servers:
         command = [str(paths["prefix"] / "lib" / package / executable), "--ros-args",
                    "--params-file", str(paths["params"]), "--params-file", str(paths["geometry"])]
-        if executable == "controller_server":
+        if executable in ("controller_server", "behavior_server"):
             command += ["-r", "cmd_vel:=/r2b4/nav2/cmd_vel"]
         commands.append((executable, command))
     # The manager is the sole ROS lifecycle owner. Process supervision remains
@@ -180,6 +185,7 @@ def start(root, *, ros_domain_id=74):
                         paths["prefix"] / "lib" / "nav2_lifecycle_manager" / "lifecycle_manager"]
         if full:
             dependencies += [paths["bt"], paths["prefix"] / "lib" / "nav2_controller" / "controller_server",
+                             paths["prefix"] / "lib" / "nav2_behaviors" / "behavior_server",
                              paths["prefix"] / "lib" / "nav2_bt_navigator" / "bt_navigator",
                              paths["prefix"] / "lib" / "libnav2_regulated_pure_pursuit_controller.so",
                              paths["overlay"] / "lib" / "libr2b4_nav2_wheel_adapter.so",

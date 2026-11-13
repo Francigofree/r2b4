@@ -60,6 +60,107 @@ class Nav2Telemetry:
         self.distance_m = 0.0
         self.previous_pose = None
         self.latest = None
+        self.maps = {}
+        self.map_summaries = {}
+        self.path = None
+        self.recovery_events = deque(maxlen=16)
+        self.recovery_event_count = 0
+        self.recovery_feedback = None
+        self.scan_map_pose = None
+
+    def _scan_alignment(self, now):
+        message = self.maps.get("slam")
+        if message is None or self.scan is None or self.scan_map_pose is None:
+            return {"available": False}
+        measured, scan = self.scan
+        pose_ns, pose = self.scan_map_pose
+        if pose_ns != measured or not 0 <= now-measured <= SENSOR_MAX_AGE_NS:
+            return {"available": False, "measurement_monotonic_ns": measured}
+        info = message.info
+        origin = info.origin
+        if abs(origin.orientation.x)+abs(origin.orientation.y)+abs(origin.orientation.z) > 1e-6:
+            return {"available": False, "reason": "ROTATED_MAP_ORIGIN"}
+        x, y, yaw = pose
+        cosine, sine = math.cos(yaw), math.sin(yaw)
+        known = unknown = hits = total = 0
+        # Fixed work and original scan-time TF. This is map consistency, not
+        # independent localization ground truth or a collision proof.
+        for index in range(0, len(scan.ranges), max(1, math.ceil(len(scan.ranges)/96))):
+            distance = scan.ranges[index]
+            if not math.isfinite(distance) or not scan.range_min <= distance <= scan.range_max:
+                continue
+            angle = scan.angle_min+index*scan.angle_increment
+            lx, ly = distance*math.cos(angle), distance*math.sin(angle)
+            if self.lidar_xy_m is not None:
+                lx, ly = lx+self.lidar_xy_m[0], ly+self.lidar_xy_m[1]
+            mx, my = x+cosine*lx-sine*ly, y+sine*lx+cosine*ly
+            cx = math.floor((mx-origin.position.x)/info.resolution)
+            cy = math.floor((my-origin.position.y)/info.resolution)
+            total += 1
+            if not (0 <= cx < info.width and 0 <= cy < info.height) or message.data[cy*info.width+cx] < 0:
+                unknown += 1
+                continue
+            known += 1
+            hits += int(any(message.data[j*info.width+i] >= 65
+                for j in range(max(0, cy-1), min(info.height, cy+2))
+                for i in range(max(0, cx-1), min(info.width, cx+2))))
+        return {"available": True, "measurement_monotonic_ns": measured,
+            "pose_measurement_monotonic_ns": pose_ns,
+            "map_measurement_monotonic_ns": self.map_summaries["slam"]["measurement_monotonic_ns"],
+            "sampled_returns": total, "known_endpoints": known, "unknown_endpoints": unknown,
+            "occupied_neighbour_hits": hits, "occupied_neighbour_ratio": hits/known if known else None,
+            "neighbour_radius_cells": 1, "basis": "scan_time_tf_against_slam_map_not_ground_truth"}
+
+    def observe_map(self, message, measured, kind):
+        """Retain ROS-local geometry; only a bounded patch leaves this edge."""
+        self.maps[kind] = message
+        data = message.data
+        self.map_summaries[kind] = {"measurement_monotonic_ns": measured,
+            "frame_id": message.header.frame_id, "width": message.info.width,
+            "height": message.info.height, "resolution_m": message.info.resolution,
+            "unknown_cells": sum(v < 0 for v in data),
+            "free_cells": sum(v == 0 for v in data),
+            "occupied_cells": sum(v >= 65 for v in data)}
+
+    def observe_path(self, message, measured):
+        count = len(message.poses)
+        # Equally spaced original indices, including both endpoints. No
+        # interpolation, and no second route planner in the observer.
+        kept = min(32, count)
+        indices = [round(i*(count-1)/max(1, kept-1)) for i in range(kept)]
+        self.path = {"measurement_monotonic_ns": measured, "frame_id": message.header.frame_id,
+            "pose_count": count, "truncated": count > 32,
+            "points": [[message.poses[i].pose.position.x, message.poses[i].pose.position.y] for i in indices]}
+
+    def observe_recovery(self, message, received):
+        # Nav2 owns all behavior state; these are passive bounded transitions.
+        for event in message.event_log[:64]:
+            if event.node_name not in ("Wait", "Spin", "BackUp", "RoomCruiseRecovery"):
+                continue
+            self.recovery_event_count += 1
+            self.recovery_events.append({"node": event.node_name,
+                "previous": event.previous_status, "status": event.current_status,
+                "observer_received_monotonic_ns": received})
+
+    def _map_window(self, robot_pose):
+        message = self.maps.get("global_costmap")
+        if message is None or robot_pose is None:
+            return None
+        info = message.info
+        q = info.origin.orientation
+        if abs(q.x)+abs(q.y)+abs(q.z) > 1e-6 or abs(q.w-1) > 1e-6:
+            return None
+        cx = math.floor((robot_pose[0]-info.origin.position.x)/info.resolution)
+        cy = math.floor((robot_pose[1]-info.origin.position.y)/info.resolution)
+        x0, y0 = max(0, cx-20), max(0, cy-20)
+        x1, y1 = min(info.width, cx+21), min(info.height, cy+21)
+        if x1 <= x0 or y1 <= y0:
+            return None
+        return {**self.map_summaries["global_costmap"],
+            "origin_x_m": info.origin.position.x+x0*info.resolution,
+            "origin_y_m": info.origin.position.y+y0*info.resolution,
+            "width": x1-x0, "height": y1-y0, "meaning": "actual_nav2_global_costmap_occupancy_encoding",
+            "cells": [int(message.data[y*info.width+x]) for y in range(y0, y1) for x in range(x0, x1)]}
 
     def observe_scan(self, message, measured):
         # Keep only the already validated latest ROS scan. Geometry is inspected
@@ -208,6 +309,12 @@ class Nav2Telemetry:
             "lifecycle_status": state.get("lifecycle_status"),
             "mission_id": state.get("mission_id"), "selected_goal": state.get("selected_goal"),
             "child_goal_id": state.get("child_goal_id"),
+            "cruise": {key: state.get(key) for key in ("cruise_phase", "coverage_goals", "coverage_reached", "coverage_failed")},
+            "maps": self.map_summaries, "global_costmap_window": self._map_window(robot_pose),
+            "scan_map_alignment": self._scan_alignment(now),
+            "path": self.path,
+            "recovery": {"event_count": self.recovery_event_count, "events": list(self.recovery_events),
+                         "feedback": self.recovery_feedback},
             "sensor_age_ns": {"scan": _age(now, scan_ns), "odometry": _age(now, odom_ns), "tf": _age(now, tf_ns)},
             "sensor_measurement_ns": {"scan": scan_ns, "odometry": odom_ns, "tf": tf_ns},
             "controller": self._rate(now), "odometry": self.odometry,
@@ -273,11 +380,31 @@ class Nav2ObservationSampler:
 
     def __init__(self, project_root):
         self.path = Path(project_root)/"runtime"/"nav2_planner"/"bridge_status.json"
+        self.slam_path = Path(project_root)/"runtime"/"slam_toolbox"/"bridge_status.json"
         self._next_poll_ns = 0
         self._identity = None
         self._previous = None
         self._last_unavailable = None
         self._last_source_ns = None
+
+    def _slam(self, now):
+        # Producer -> capture sidecar, without entering the control process.
+        try:
+            with self.slam_path.open("rb") as stream:
+                encoded = stream.read(_MAX_STATUS_BYTES+1)
+            if len(encoded) > _MAX_STATUS_BYTES:
+                raise ValueError("SLAM_STATUS_EXCEEDS_BOUND")
+            state = json.loads(encoded)
+            observed = state.get("observed_monotonic_ns")
+            fresh = type(observed) is int and 0 <= now-observed <= 1_000_000_000
+            return {**{key: state.get(key) for key in (
+                "state", "bridge_generation", "observed_monotonic_ns", "error", "scans_received",
+                "scans_published", "poses_received", "poses_returned", "superseded",
+                "rejected_by_reason", "last_rejection", "last_pose_timing", "last_accepted_pose_timing",
+                "last_rejected_pose_timing", "pose_latency_window", "map",
+                "map_callback_max_ns", "ingress_drain_max_ns", "ingress_drain_max_packets", "spin_once_max_ns")}, "available": fresh}
+        except (OSError, ValueError, TypeError, AttributeError):
+            return {"available": False}
 
     def sample(self, monotonic_ns=None):
         now = time.monotonic_ns() if monotonic_ns is None else monotonic_ns
@@ -317,7 +444,8 @@ class Nav2ObservationSampler:
             self._last_source_ns = source
             self._identity = identity
             row = dict(row, observer_received_monotonic_ns=now, snapshots_superseded=skipped,
-                available=True, recovered_after_unavailable=self._last_unavailable is not None)
+                available=True, recovered_after_unavailable=self._last_unavailable is not None,
+                slam=self._slam(now))
             self._last_unavailable = None
             return row
         except FileNotFoundError:

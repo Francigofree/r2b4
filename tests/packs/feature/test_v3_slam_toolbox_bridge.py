@@ -8,10 +8,37 @@ import pytest
 from v3.adapters.slam_toolbox_transport import SlamOdometryPacket, SlamScanPacket
 from v3.slam_toolbox_bridge import (
     MAX_ODOM_BRACKET_NS, align_scan, conservative_covariance, ros_scan_ranges,
+    pose_latency, pose_latency_window,
 )
 
 
 MEASURED_NS = 2_000_000_000
+
+
+def test_pose_latency_preserves_rejected_measurement_and_separates_dds_queue():
+    from types import SimpleNamespace
+    epoch_offset = 1_700_000_000_000_000_000
+    timing = pose_latency(_scan(), MEASURED_NS+100_000_000, MEASURED_NS+110_000_000,
+        MEASURED_NS+280_000_000, SimpleNamespace(
+            source_timestamp=epoch_offset+MEASURED_NS+200_000_000,
+            received_timestamp=epoch_offset+MEASURED_NS+205_000_000), epoch_offset)
+    assert timing["measurement_ns"] == MEASURED_NS
+    assert timing["measurement_to_acceptance_ns"] == 280_000_000
+    assert timing["scan_publish_to_pose_send_ns"] == 90_000_000
+    assert timing["dds_transport_ns"] == 5_000_000
+    assert timing["callback_queue_ns"] == 75_000_000
+    assert timing["dds_timestamp_valid"]
+    assert pose_latency(_scan(), MEASURED_NS+100_000_000, MEASURED_NS+110_000_000,
+        MEASURED_NS+280_000_000, {
+            "source_timestamp": epoch_offset+MEASURED_NS+200_000_000,
+            "received_timestamp": epoch_offset+MEASURED_NS+205_000_000}, epoch_offset) == timing
+    window = pose_latency_window([timing])
+    assert window["measurement_to_acceptance_ns"]["max"] == 280_000_000
+    missing = pose_latency(_scan(), MEASURED_NS, MEASURED_NS+1, MEASURED_NS+10,
+        SimpleNamespace(source_timestamp=0, received_timestamp=0), epoch_offset)
+    assert missing["callback_queue_ns"] is None
+    assert not missing["dds_timestamp_valid"]
+    assert pose_latency_window([missing])["callback_queue_ns"]["count"] == 0
 
 
 def _scan(**changes):

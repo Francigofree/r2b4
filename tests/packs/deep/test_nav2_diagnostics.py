@@ -30,6 +30,34 @@ def helper():
     return Nav2Telemetry(10, 0, body_bounds_m=(-.10, .26, -.18, .18), lidar_xy_m=(-.005, 0.))
 
 
+def test_map_path_and_scan_alignment_are_bounded_and_use_measurement_time():
+    telemetry = helper()
+    now = 2_000_000_000
+    grid = NS(header=NS(frame_id=GLOBAL_FRAME_ID), info=NS(width=100, height=100,
+        resolution=.05, origin=NS(position=NS(x=-2.5, y=-2.5),
+            orientation=NS(x=0., y=0., z=0., w=1.))), data=[0]*10000)
+    # One return ends in an occupied neighbour of its scan-time transformed cell.
+    grid.data[50*100+70] = 100
+    telemetry.observe_map(grid, now-100_000_000, "slam")
+    telemetry.observe_map(grid, now-100_000_000, "global_costmap")
+    telemetry.observe_scan(NS(ranges=[1.005], angle_min=0., angle_increment=.1,
+        range_min=.08, range_max=8.), now)
+    telemetry.scan_map_pose = (now, (0., 0., 0.))
+    path = NS(header=NS(frame_id=GLOBAL_FRAME_ID), poses=[
+        NS(pose=NS(position=NS(x=float(i), y=0.))) for i in range(1000)])
+    telemetry.observe_path(path, now)
+    row = observation(telemetry, now)
+    assert len(row["global_costmap_window"]["cells"]) <= 41*41
+    assert row["global_costmap_window"]["measurement_monotonic_ns"] == now-100_000_000
+    assert row["path"]["points"][0] == [0., 0.]
+    assert row["path"]["points"][-1] == [999., 0.]
+    assert len(row["path"]["points"]) == 32 and row["path"]["truncated"]
+    assert row["scan_map_alignment"]["occupied_neighbour_ratio"] == 1.
+    telemetry.scan_map_pose = (now-1, (0., 0., 0.))
+    assert not observation(telemetry, now)["scan_map_alignment"]["available"]
+    assert len(json.dumps(row)) < 16384
+
+
 def test_actual_twenty_hz_stream_distinguishes_receipt_jitter_and_missing_commands():
     telemetry = helper()
     for index in range(41):

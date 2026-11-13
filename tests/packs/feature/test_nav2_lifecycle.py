@@ -145,5 +145,9 @@ def test_supervisor_spawns_one_manager_with_exact_managed_servers(full):
     assert "bond_timeout:=2.0" in manager
     assert commands[-1][0] == "bridge"
     if full:
+        assert "behavior_server" in nodes
+        for name, command in commands:
+            if name in ("controller_server", "behavior_server"):
+                assert "cmd_vel:=/r2b4/nav2/cmd_vel" in command
         bridge = commands[-1][1]
         assert json.loads(bridge[bridge.index("--robot-geometry")+1]) == geometry
