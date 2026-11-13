@@ -1,7 +1,7 @@
 # Nav2 runtime-edge és életciklus
 
-Az aktuális teljes Nav2 út a külön Planner Server, Controller Server és BT
-Navigator folyamatokat használja. A Nav2 kizárólag navigációs javaslatot ad;
+Az aktuális teljes Nav2 út külön Planner Server, Controller Server, Behavior
+Server és BT Navigator folyamatokat használ. A Nav2 kizárólag navigációs javaslatot ad;
 a mission és a motor-authority a canonical V3 láncban marad. Az aktív
 `runtime.nav2_navigation` és a korábbi `runtime.nav2_planner` mód kizárják
 egymást. A Room Cruise frontier-felderítés után a már ismert szobában is
@@ -14,7 +14,7 @@ azonosítja és leállítja a gyermekfolyamatokat, valamint gyermekhalálnál le
 a teljes Nav2 stacket. A ROS configure/activate/deactivate műveletek egyetlen
 ownere a felügyelt `nav2_lifecycle_manager` folyamat, `autostart=true` mellett.
 Teljes módban a kezelt sorrend `planner_server`, `controller_server`,
-`bt_navigator`; planner-only módban csak `planner_server`. A 2 s bond-timeout
+`behavior_server`, `bt_navigator`; planner-only módban csak `planner_server`. A 2 s bond-timeout
 aktív; az önálló manager-respawn/reconnection kikapcsolt, ezért nincs második
 helyreállítási vezérlő a process-supervisor mellett.
 
@@ -26,6 +26,19 @@ aktív stack inaktív válasza vagy 1,5 s óta nem friss státusza bezárja a br
 amit a meglévő process-supervisor gyermekhibaként kezel. A régi sikeres startup
 nem marad korlátlan ideig readiness-bizonyíték. A supervisor és bridge státusza
 `lifecycle_owner=nav2_lifecycle_manager` mezőt közöl.
+
+Az `./r rc 60 c full` maga készíti elő a konfigurált stacket: SLAM → resident
+runtime → Nav2, friss készállapotra várva, majd a canonical behavior/command
+úton kéri a 60 másodperces cirkálást, 5 Hz-es capture-rel. A hidegindítás nem
+fogyasztja a végrehajtási időt. A runtime host-supervisora kilépéskor a saját
+Nav2-, majd SLAM-folyamatát is leállítja. Korábban külön indított szolgáltatást
+nem vesz át és nem állít le. A `./r rt start c full c 5` ugyanezt a stacket
+készíti elő mozgáskérés nélkül; a `./r sd` leállítja a runtime-ot és saját
+függőségeit. A külön `slam`/`nav2` parancsok diagnosztikai használatra megmaradnak.
+
+Az ismételt Nav2-indítás is friss, azonosított bridge- és lifecycle-készállapotot
+vár. A gyermekek leállítására közös határidő vonatkozik; kényszerített leállítás
+után csak a bizonyítottan saját, már nem élő session socketje takarítható el.
 
 A Nav2 edge külön `conf/nav2_fastdds.xml` service-writer profilt tölt be.
 A reliable válasz továbbra is reliable; a még fel nem fedezett vagy megszűnő

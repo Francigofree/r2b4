@@ -524,6 +524,18 @@ def run(args):
                 if status is not None:
                     reply(status)
             if now-last_status_ns >= NAV2_SAMPLE_PERIOD_NS:
+                # The map->odom TF head is a transform horizon, not a physical
+                # measurement. Observe its coverage of odometry without waits.
+                try:
+                    map_tf = tf_buffer.lookup_transform(GLOBAL_FRAME_ID, LOCAL_FRAME_ID, Time())
+                    head = stamp_ns(map_tf)
+                    state["transform_observation"] = {
+                        "available": True, "observed_monotonic_ns": now,
+                        "map_to_odom_head_ns": head, "odom_measurement_ns": odom_ns,
+                        "horizon_from_observation_ns": head-now,
+                        "odom_headroom_ns": head-odom_ns}
+                except TransformException:
+                    state["transform_observation"] = {"available": False, "observed_monotonic_ns": now}
                 diagnostics.scan_map_pose = None
                 if diagnostics.scan is not None:
                     measured = diagnostics.scan[0]
@@ -546,6 +558,7 @@ def run(args):
                     frontier_running=frontier.session is not None,
                     frontier_pid=None if frontier.process is None else frontier.process.pid,
                     frontier_goals=frontier.accepted, frontier_rejected=frontier.rejected)
+                state["frontier_startup"] = frontier.startup_timing
                 state.update(**cruise.snapshot())
                 state["goal_checker_tolerances"] = applied_tolerances
                 state["nav2_observation"] = diagnostics.snapshot(now,

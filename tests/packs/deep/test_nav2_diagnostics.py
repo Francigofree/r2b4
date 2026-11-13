@@ -30,6 +30,26 @@ def helper():
     return Nav2Telemetry(10, 0, body_bounds_m=(-.10, .26, -.18, .18), lidar_xy_m=(-.005, 0.))
 
 
+def test_controller_errors_are_bounded_and_transform_headroom_is_not_measurement_age():
+    telemetry = helper()
+    for index in range(20):
+        telemetry.observe_ros_error(NS(level=40, name="RPPPathHandler",
+            msg="Exception in transformPose: future extrapolation", stamp=NS(sec=1, nanosec=index)),
+            1_100_000_000+index)
+    telemetry.observe_ros_error(NS(level=30, name="controller_server", msg="rate warning"), 1_200_000_000)
+    telemetry.observe_ros_error(NS(level=40, name="controller_server", msg="Collision ahead",
+        stamp=NS(sec=1, nanosec=25)), 1_200_000_000)
+    transform = {"map_to_odom_head_ns": 900_000_000, "odom_headroom_ns": -100_000_000}
+    row = telemetry.snapshot(1_200_000_000, scan_ns=1_100_000_000,
+        odom_ns=1_000_000_000, tf_ns=1_000_000_000, active=True, robot_pose=None,
+        state={"transform_observation": transform})
+    assert row["transforms"] == transform
+    assert row["sensor_age_ns"]["scan"] == 100_000_000
+    assert row["controller_error_counts"] == {"TF_ERROR": 20, "COLLISION": 1}
+    assert len(row["controller_errors"]) == 16
+    assert row["controller_errors"][-1]["measurement_monotonic_ns"] == 1_000_000_025
+
+
 def test_map_path_and_scan_alignment_are_bounded_and_use_measurement_time():
     telemetry = helper()
     now = 2_000_000_000
@@ -60,13 +80,14 @@ def test_map_path_and_scan_alignment_are_bounded_and_use_measurement_time():
 
 def test_recovery_events_keep_source_identity_and_explicit_truncation():
     telemetry = helper()
-    telemetry.observe_recovery(NS(event_log=[NS(node_name="Spin", uid=i,
+    telemetry.observe_recovery(NS(event_log=[NS(node_name="BackUpThenTurn" if i == 63 else "Spin", uid=i,
         timestamp=NS(sec=1, nanosec=i), previous_status="IDLE", current_status="RUNNING")
         for i in range(100)]), 2_000_000_000)
     recovery = observation(telemetry, 2_000_000_000)["recovery"]
     assert recovery["event_count"] == 64 and len(recovery["events"]) == 16
     assert recovery["source_events_truncated"] == 36
     assert recovery["events"][-1]["node_uid"] == 63
+    assert recovery["events"][-1]["node"] == "BackUpThenTurn"
     assert recovery["events"][-1]["bt_event_timestamp_ns"] == 1_000_000_063
 
 

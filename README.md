@@ -92,12 +92,10 @@ The [`r`](r) launcher is the primary operator/developer entry point. Its command
 ./r test
 ```
 
-**Inspect ROS services and prepare them for an operator-authorized experiment:**
+**Inspect the stack or start it without requesting movement:**
 
 ```bash
-./r slam start
 ./r rt start c full c 5
-./r nav2 start
 ./r slam status
 ./r nav2 status
 ```
@@ -105,17 +103,21 @@ The [`r`](r) launcher is the primary operator/developer entry point. Its command
 Startup is not a request for autonomous exploration. The following example **does request physical motion** and must only be used by an operator with the robot's environment, health, stop path and supervision prepared:
 
 ```bash
-./r rc 30                # 30-second Room Cruise request — MOVES THE ROBOT
+./r rc 60 c full         # 60-second Room Cruise, full 5 Hz capture — MOVES THE ROBOT
 ./r x                    # canonical STOP
 ```
 
-For the corresponding shutdown and an explicitly saved live SLAM map:
+Room Cruise automatically prepares the configured SLAM, runtime and Nav2 stack.
+Its requested duration starts when the mission executes. The runtime supervisor
+stops the services it started when the runtime exits; services started separately
+remain owned by their original session.
+
+To save a separate live SLAM map, use the runtime prepared above, which stays
+running after Room Cruise. Save before shutting it down:
 
 ```bash
-./r nav2 stop
 ./r slam save --output room_map
 ./r sd
-./r slam stop
 ```
 
 The standard full capture is sampled at **5 Hz**; request `c 50` only when the more expensive full sensor/debug evidence is needed for replay analysis. `c alap` is a bounded event-oriented ring, and `c nincs` disables capture. Capture settings must be chosen for the intended runtime session.

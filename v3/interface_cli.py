@@ -403,13 +403,20 @@ def _run_timed_motion(
     })
     if seconds > 0.0:
         parameters["session_owner_pid"] = os.getpid()
-        parameters["session_watchdog_s"] = seconds + 5.0
+        parameters["session_watchdog_s"] = seconds + (30.0 if command == "roomcruise" else 5.0)
+        if command == "roomcruise":
+            parameters.update(max_duration_s=seconds, completion_on_duration=True)
 
     print(
         f"R2B4: {command} | {'continuous' if seconds == 0 else f'{seconds:g} s'}"
         f" | capture {effective_mode} @ {effective_hz} Hz"
     )
     try:
+        if command == "roomcruise" and not runtime_preexisting:
+            # Cold SLAM/runtime/Nav2 preparation precedes behavior admission
+            # and the requested interval of actual navigation.
+            interface.execute("operator.runtime.start", capture_mode=effective_mode,
+                              capture_hz=effective_hz)
         handle = interface.execute(action, **parameters)
         # Behavior start returns its terminal state when the underlying action
         # fails. A successful RPC alone is not a successful motion admission.
@@ -431,33 +438,52 @@ def _run_timed_motion(
         print(f"command {status}; runtime remains running.  STOP: ./r x   shutdown: ./r sd")
         return {"status": status, "command": command, "handle": str(handle)}
 
-    deadline = time.monotonic() + seconds
+    deadline = time.monotonic() + seconds + (30.0 if command == "roomcruise" else 0.0)
     last_bucket: int | None = None
     interrupted = False
+    final: Mapping[str, object] = {"state": "RUNTIME_REUSED", "runtime_kept_running": True}
     try:
         while True:
+            if command == "roomcruise":
+                state = interface.read("behavior.state")
+                if not isinstance(state, Mapping) or state.get("behavior_id") != handle.get("behavior_id"):
+                    raise RobotInterfaceError("roomcruise behavior was replaced or unavailable")
+                if state.get("lifecycle") == "COMPLETED":
+                    break
+                if state.get("lifecycle") not in {"STARTING", "ACTIVE"}:
+                    raise RobotInterfaceError(f"roomcruise {state.get('lifecycle')}: {state.get('reason')}")
             remaining = deadline - time.monotonic()
             if remaining <= 0:
+                if command == "roomcruise":
+                    raise RobotInterfaceError("roomcruise completion timeout")
                 break
-            bucket = int(math.ceil(remaining / 5.0) * 5)
+            progress_remaining = remaining
+            if command == "roomcruise":
+                execution_deadline = state.get("deadline_ns")
+                if state.get("execution_started_ns") is None or type(execution_deadline) is not int:
+                    if last_bucket != -1:
+                        print("waiting for navigation admission", flush=True)
+                        last_bucket = -1
+                    time.sleep(min(.25, remaining))
+                    continue
+                progress_remaining = max(0.0, (execution_deadline - time.monotonic_ns()) / 1e9)
+            bucket = int(math.ceil(progress_remaining / 5.0) * 5)
             if bucket != last_bucket and seconds >= 10.0:
-                print(f"running: {max(0, int(math.ceil(remaining)))} s remaining", flush=True)
+                print(f"running: {max(0, int(math.ceil(progress_remaining)))} s remaining", flush=True)
                 last_bucket = bucket
             time.sleep(min(0.25, remaining))
     except KeyboardInterrupt:
         interrupted = True
         print("\nCtrl+C -> STOP", file=sys.stderr, flush=True)
     finally:
-        interface.stop()
+        try:
+            interface.stop()
+        finally:
+            if not runtime_preexisting:
+                final = _shutdown(interface)
 
     if runtime_preexisting:
-        final: Mapping[str, object] = {
-            "state": "RUNTIME_REUSED",
-            "runtime_kept_running": True,
-        }
         print("runtime kept running (pre-existing resident session)")
-    else:
-        final = _shutdown(interface)
 
     return {
         "status": "INTERRUPTED" if interrupted else "FINISHED",

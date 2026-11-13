@@ -68,6 +68,19 @@ class Nav2Telemetry:
         self.recovery_source_events_truncated = 0
         self.recovery_feedback = None
         self.scan_map_pose = None
+        self.controller_error_counts = {}
+        self.controller_errors = deque(maxlen=16)
+
+    def observe_ros_error(self, message, received):
+        if message.level < 40 or message.name not in ("controller_server", "RPPPathHandler", "tf_help"):
+            return
+        description = message.msg.lower()
+        kind = "TF_ERROR" if ("transform" in description or "extrapolat" in description) else (
+            "COLLISION" if "collision" in description else "OTHER")
+        self.controller_error_counts[kind] = self.controller_error_counts.get(kind, 0)+1
+        self.controller_errors.append({"kind": kind, "node": message.name,
+            "measurement_monotonic_ns": message.stamp.sec*1_000_000_000+message.stamp.nanosec-self.ros_offset_ns,
+            "observer_received_monotonic_ns": received, "message": message.msg[:192]})
 
     def _scan_alignment(self, now):
         message = self.maps.get("slam")
@@ -137,7 +150,7 @@ class Nav2Telemetry:
         # Nav2 owns all behavior state; these are passive bounded transitions.
         self.recovery_source_events_truncated += max(0, len(message.event_log)-64)
         for event in message.event_log[:64]:
-            if event.node_name not in ("Wait", "Spin", "BackUp", "RoomCruiseRecovery"):
+            if event.node_name not in ("Wait", "Spin", "BackUp", "BackUpThenTurn", "RoomCruiseRecovery"):
                 continue
             self.recovery_event_count += 1
             self.recovery_events.append({"node": event.node_name,
@@ -314,6 +327,10 @@ class Nav2Telemetry:
             "lifecycle_status": state.get("lifecycle_status"),
             "mission_id": state.get("mission_id"), "selected_goal": state.get("selected_goal"),
             "child_goal_id": state.get("child_goal_id"),
+            "transforms": state.get("transform_observation"),
+            "goal_lifecycle": {key: state.get(key) for key in (
+                "cancellations", "action_active", "cancelling", "frontier_goals", "frontier_rejected")},
+            "frontier_startup": state.get("frontier_startup"),
             "cruise": {key: state.get(key) for key in ("cruise_phase", "coverage_goals", "coverage_reached", "coverage_failed")},
             "maps": self.map_summaries, "global_costmap_window": self._map_window(robot_pose),
             "scan_map_alignment": self._scan_alignment(now),
@@ -327,6 +344,8 @@ class Nav2Telemetry:
             "measured_stop_count": self.measured_stops, "wall_clearance": self._walls(),
             "coverage": self._coverage(robot_pose, tf_ns, now),
             "navigation_error_count": self.error_count, "navigation_errors": list(self.errors),
+            "controller_error_counts": dict(self.controller_error_counts),
+            "controller_errors": list(self.controller_errors),
             "diagnostics": diagnostics, "diagnostics_truncated_count": self.diagnostics_truncated,
             "delivery_semantics": "bounded_latest_snapshot"}
         return self.latest
@@ -338,10 +357,13 @@ class Nav2Diagnostics(Nav2Telemetry):
     def __init__(self, node, generation, ros_offset_ns, **geometry):
         from diagnostic_updater import Updater
         from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
+        from rcl_interfaces.msg import Log
         super().__init__(generation, ros_offset_ns, **geometry)
         self._levels = (DiagnosticStatus.OK, DiagnosticStatus.WARN, DiagnosticStatus.ERROR, DiagnosticStatus.STALE)
         self.subscription = node.create_subscription(DiagnosticArray, "/diagnostics",
             lambda message: self.observe_diagnostics(message, time.monotonic_ns()), 4)
+        self.rosout_subscription = node.create_subscription(Log, "/rosout",
+            lambda message: self.observe_ros_error(message, time.monotonic_ns()), 32)
         self.updater = Updater(node, period=1.0)
         self.updater.setHardwareID("r2b4_nav2_edge")
         for name in ("components", "controller_frequency", "sensor_tf_freshness", "navigation_errors"):

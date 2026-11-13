@@ -173,6 +173,12 @@ def test_frontier_status_is_isolated_from_previous_explorer_generation(monkeypat
     explorer.executable, explorer.parameters, explorer.log = "/explore", "/params.yaml", object()
     monkeypatch.setattr("v3.adapters.ros2_frontier.subprocess.Popen", launch)
     assert explorer.start(("first", "goal", 1))
+    timing = dict(explorer.startup_timing)
+    assert timing["generation"] == explorer.started_ns
+    assert timing["phase"] == "READY"
+    assert all(timing[name] >= 0 for name in ("previous_cleanup_ns", "subscription_ns", "launch_ns"))
+    assert explorer.start(("first", "goal", 1))
+    assert explorer.startup_timing == timing  # A heartbeat cannot restart startup timing.
     old = subscriptions[-1]
     old.callback(SimpleNamespace(status="exploration_complete"))
     assert explorer.status == "exploration_complete"
@@ -183,6 +189,7 @@ def test_frontier_status_is_isolated_from_previous_explorer_generation(monkeypat
     assert explorer.start(("second", "goal", 1))
     current = subscriptions[-1]
     assert old.topic != current.topic and explorer.status is None
+    assert explorer.startup_timing["generation"] > timing["generation"]
     assert f"explore/status:={current.topic}" in commands[-1]
     old.callback(SimpleNamespace(status="exploration_complete"))
     assert explorer.status is None

@@ -364,18 +364,25 @@ class OperatorController:
             )
 
         pid: int | None = None
-        for _ in range(40):
-            pid = self._read_pid_file(self.runtime_pid_file)
-            if pid is not None:
-                break
-            if supervisor.poll() is not None:
-                break
-            self._transition_sleep(0.05)
-        self._transition_sleep(0.20)
+        # The existing host supervisor first prepares configured sensor edges.
+        # Their cold startup is not the resident's readiness budget.
+        try:
+            for _ in range(700):
+                pid = self._read_pid_file(self.runtime_pid_file)
+                if pid is not None:
+                    break
+                if supervisor.poll() is not None:
+                    break
+                self._transition_sleep(0.05)
+            self._transition_sleep(0.20)
+        except BaseException:
+            self._cancel_runtime_start(supervisor)
+            raise
 
         if pid is None or not self._pid_matches(pid, ("v3_process_runtime.py",)):
             self._unlink(self.runtime_pid_file)
             diag = self.diagnostics()
+            self._cancel_runtime_start(supervisor)
             error = _runtime_failure_error(diag, "runtime failed to start", baseline=baseline)
             try:
                 self._emit("error", str(error), diag)
@@ -387,7 +394,12 @@ class OperatorController:
         # can release its own failed startup without adopting a manual session.
         self._runtime_start_identity = (self._runtime_start_identity[0] + 1, pid)
 
-        if not self._wait_fresh_ready(pid, baseline, timeout=20.0):
+        try:
+            ready = self._wait_fresh_ready(pid, baseline, timeout=20.0)
+        except BaseException:
+            self._cancel_runtime_start(supervisor)
+            raise
+        if not ready:
             diag = self.diagnostics()
             try:
                 self.runtime_stop()
@@ -399,6 +411,15 @@ class OperatorController:
             except Exception:
                 pass
             raise error
+
+        try:
+            self._wait_runtime_dependencies(pid, supervisor)
+        except BaseException:
+            try:
+                self.runtime_stop()
+            finally:
+                self._cancel_runtime_start(supervisor)
+            raise
 
         self._emit("info", f"runtime: STARTED (PID {pid})")
         if mode == "alap":
@@ -415,6 +436,25 @@ class OperatorController:
             self._emit("info", "capture: OFF (no native capture consumer/writer)")
         self._emit("info", f"runtime log: {runtime_log}")
         return pid
+
+    def _cancel_runtime_start(self, supervisor):
+        """A cancelled cold start must not outlive the requesting invocation."""
+        try:
+            if supervisor.poll() is None:
+                supervisor.terminate()
+                try:
+                    supervisor.wait(timeout=45.0)
+                except subprocess.TimeoutExpired:
+                    # This unreaped Popen child created its own session here;
+                    # a failed cold startup cannot retain a resident process.
+                    if supervisor.poll() is None and os.getpgid(supervisor.pid) == supervisor.pid:
+                        os.killpg(supervisor.pid, signal.SIGKILL)
+                    supervisor.wait(timeout=5.0)
+        except Exception as exc:
+            try:
+                self._emit("warning", f"runtime startup cleanup failed: {exc}")
+            except Exception:
+                pass
 
     @_serialized_operator_transition
     def ensure_runtime(
@@ -547,6 +587,16 @@ class OperatorController:
             self._emit("info", "runtime: already STOPPED")
             return
 
+        # The resident inherits the existing host supervisor's process group.
+        # Wait for that verified host to release its owned compute edges too.
+        try:
+            session_pid = os.getpgid(pid)
+        except ProcessLookupError:
+            session_pid = None
+        if session_pid is not None and not self._pid_matches(
+                session_pid, ("v3.operator_cli", "__runtime-session")):
+            session_pid = None
+
         mode = self.current_capture_mode()
         if mode == "alap":
             if not self._capture_used():
@@ -566,6 +616,8 @@ class OperatorController:
         while time.monotonic() < deadline:
             if not self._pid_matches(pid, ("v3_process_runtime.py",)):
                 self._unlink(self.runtime_pid_file)
+                if session_pid is not None and not self._wait_gone(session_pid, timeout=25.0):
+                    raise OperatorError("runtime supervisor did not release its dependencies")
                 self._emit("info", f"runtime: STOPPED (PID {pid})")
                 capture = self.current_capture_path()
                 if capture and capture.is_file():
@@ -1083,13 +1135,15 @@ class OperatorController:
                 "--capture-mode", "append_only",
             ]
 
-        proc = subprocess.Popen(command, cwd=self.root)
-        self._write_private_text(self.runtime_pid_file, str(proc.pid))
-
+        proc = None
+        stopped = False
+        started = []
         old_handlers: dict[int, object] = {}
 
         def forward_signal(signum: int, _frame: object) -> None:
-            if proc.poll() is None:
+            nonlocal stopped
+            stopped = True
+            if proc is not None and proc.poll() is None:
                 try:
                     proc.send_signal(signum)
                 except ProcessLookupError:
@@ -1099,16 +1153,97 @@ class OperatorController:
             old_handlers[sig] = signal.getsignal(sig)
             signal.signal(sig, forward_signal)
         try:
+            dependencies = self._runtime_dependencies()
+            # SLAM accepts the first scan from the resident. Nav2 activation
+            # requires that resident's scans, odometry and transforms.
+            for name, service in dependencies:
+                if name == "slam":
+                    self._start_runtime_dependency(name, service, started)
+            if stopped:
+                return 130
+            baseline = self._read_status_optional()
+            proc = subprocess.Popen(command, cwd=self.root)
+            self._write_private_text(self.runtime_pid_file, str(proc.pid))
+            if any(name == "nav2" for name, _ in dependencies):
+                if not self._wait_fresh_ready(proc.pid, baseline, timeout=20.0):
+                    raise OperatorError("resident not ready for Nav2 startup")
+                for name, service in dependencies:
+                    if name == "nav2" and not stopped:
+                        self._start_runtime_dependency(name, service, started)
             rc = proc.wait()
         finally:
-            for sig, handler in old_handlers.items():
-                signal.signal(sig, handler)
+            # Resident shutdown closes the only motor owner before compute
+            # dependencies are released. Never adopt a manually started edge.
+            try:
+                if proc is not None and proc.poll() is None:
+                    from v3.process_sidecars import observation_shutdown_budget_s
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10 + observation_shutdown_budget_s(capture_enabled=mode != "nincs"))
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=5)
+            finally:
+                for name, service, identity in reversed(started):
+                    try:
+                        current = service.status(self.root)
+                        if (current.get("pid"), current.get("process_start")) == identity:
+                            service.stop(self.root)
+                    except Exception as exc:
+                        try:
+                            self._emit("warning", f"{name} shutdown failed: {exc}")
+                        except Exception:
+                            pass
+                for sig, handler in old_handlers.items():
+                    signal.signal(sig, handler)
 
         if capture.is_file():
             self._emit("info", f"capture: finalized -> {self._display_path(capture)}")
         else:
             self._emit("info", "capture: no finalized MCAP for this runtime session")
         return rc
+
+    def _runtime_dependencies(self):
+        """Configured host compute edges; production layers do not call this."""
+        from v3.config import ConfigResolver
+        from tools import nav2_planner, slam_toolbox
+
+        resolved = ConfigResolver.for_project(self.root).resolve()
+        navigation = resolved.runtime.composition.live_control.control.navigation
+        dependencies = []
+        if resolved.lidar.global_backend == "slam_toolbox":
+            dependencies.append(("slam", slam_toolbox))
+        if navigation.full_nav2_enabled or navigation.global_planner_enabled:
+            dependencies.append(("nav2", nav2_planner))
+        return dependencies
+
+    def _start_runtime_dependency(self, name, service, started):
+        before = service.status(self.root)
+        result = service.start(self.root)
+        if before.get("running") is not True:
+            started.append((name, service, (result.get("pid"), result.get("process_start"))))
+        if (result.get("running") is not True or result.get("state") != "RUNNING"
+                or name == "nav2" and result.get("ready") is not True):
+            raise OperatorError(f"{name} did not become ready", reason_code="DEPENDENCY_NOT_READY")
+
+    def _wait_runtime_dependencies(self, runtime_pid, supervisor):
+        dependencies = self._runtime_dependencies()
+        deadline = time.monotonic() + 35.0
+        while True:
+            pending = []
+            for name, service in dependencies:
+                state = service.status(self.root)
+                if (state.get("running") is not True or state.get("state") != "RUNNING"
+                        or name == "nav2" and state.get("ready") is not True):
+                    pending.append(name)
+            if not pending:
+                return
+            if (supervisor.poll() is not None
+                    or not self._pid_matches(runtime_pid, ("v3_process_runtime.py",))
+                    or time.monotonic() >= deadline):
+                raise OperatorError("runtime dependencies unavailable: " + ", ".join(pending),
+                                    reason_code="DEPENDENCY_NOT_READY")
+            self._transition_sleep(.1)
 
     # ------------------------------------------------------------------
     # Internal motion/session helpers

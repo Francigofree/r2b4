@@ -92,12 +92,10 @@ Az [`r`](r) launcher a közös operátori és fejlesztői belépési pont. A par
 ./r test
 ```
 
-**ROS-szolgáltatások állapota és előkészítése, már telepített roboton:**
+**A teljes stack előkészítése mozgáskérés nélkül, már telepített roboton:**
 
 ```bash
-./r slam start
 ./r rt start c full c 5
-./r nav2 start
 ./r slam status
 ./r nav2 status
 ```
@@ -105,17 +103,23 @@ Az [`r`](r) launcher a közös operátori és fejlesztői belépési pont. A par
 Ezek az indítások önmagukban nem kérnek helyiségbejárást. Az alábbi példa viszont **fizikai robotmozgást indít**, ezért csak felügyelt, előkészített környezetben, a STOP-út és a szenzorok ellenőrzése után használható:
 
 ```bash
-./r rc 30                # 30 másodperces Room Cruise — A ROBOT MOZOG
+./r rc 60 c full         # 60 másodperces Room Cruise, full 5 Hz capture — A ROBOT MOZOG
 ./r x                    # egységes STOP
 ```
 
+A Room Cruise automatikusan előkészíti a konfigurált SLAM-, runtime- és Nav2-stacket.
+A kért idő a mission végrehajtásakor indul. A runtime felügyelője kilépéskor
+leállítja az általa indított szolgáltatásokat; a külön elindított szolgáltatások
+az eredeti indítójukhoz tartoznak.
+
 **Leállítás és az élő SLAM-térkép külön mentése:**
 
+A külön térképmentést még futó runtime mellett végezd. A fenti előkészítéssel
+indított runtime a cirkálás után is fut; a mentés után állítsd le:
+
 ```bash
-./r nav2 stop
 ./r slam save --output room_map
 ./r sd
-./r slam stop
 ```
 
 Az alapértelmezett folyamatos `full` felvétel **5 Hz-es** mintavételt használ. A nagyobb erőforrás-igényű `c 50` a teljes szenzor-/hibakeresési és replay-bizonyítékhoz kérhető. A `c alap` rövid, eseményorientált gyűrűpuffer, a `c nincs` kikapcsolja a felvételt. A capture-módot az adott runtime-session előtt kell megválasztani.

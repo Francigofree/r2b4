@@ -53,6 +53,7 @@ class Ros2FrontierExplorer:
         self.executions = {}
         self.status = None
         self.status_subscription = None
+        self.startup_timing = None
         self.accepted = self.rejected = 0
         self.log = open(log_path, "a")
 
@@ -123,6 +124,7 @@ class Ros2FrontierExplorer:
             if self.process is None or self.process.poll() is not None:
                 raise RuntimeError("FRONTIER_EXPLORER_EXITED")
             return True
+        requested_ns = time.monotonic_ns()
         self.stop()
         if self.process is not None:
             return False  # Reap the old generation before accepting another.
@@ -131,6 +133,8 @@ class Ros2FrontierExplorer:
         self.status = None
         generation = self.started_ns
         status_topic = f"/r2b4/frontier/status_{generation}"
+        self.startup_timing = {"generation": generation, "requested_ns": requested_ns,
+            "previous_cleanup_ns": generation-requested_ns, "phase": "SUBSCRIBING"}
 
         def status_callback(message):
             if self.session is not None and self.started_ns == generation:
@@ -138,12 +142,15 @@ class Ros2FrontierExplorer:
 
         self.status_subscription = self.node.create_subscription(
             self.status_type, status_topic, status_callback, 1)
+        subscribed_ns = time.monotonic_ns()
+        self.startup_timing.update(subscription_ns=subscribed_ns-generation, phase="LAUNCHING")
         self.process = subprocess.Popen([self.executable, "--ros-args", "--params-file",
             self.parameters, "-r", "navigate_to_pose:=/r2b4/frontier/navigate_to_pose",
             "-r", f"explore/status:={status_topic}"],
             stdin=subprocess.DEVNULL, stdout=self.log, stderr=subprocess.STDOUT,
             preexec_fn=partial(_terminate_with_parent, os.getpid()))
         self.session = session
+        self.startup_timing.update(launch_ns=time.monotonic_ns()-subscribed_ns, phase="READY")
         return True
 
     def finish(self, proposal, status, error_code=0):

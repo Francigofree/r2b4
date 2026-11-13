@@ -10,11 +10,47 @@ import json
 import os
 from pathlib import Path
 import signal
+import stat
 import subprocess
 import sys
 import time
 
 from tools.slam_toolbox import _read_json, _write_json, _process_start, _ros_environment, _terminate_with_parent
+from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
+
+
+def _bridge_ready(bridge, now_ns, *, pid):
+    lifecycle = bridge.get("lifecycle_status", {})
+    checked = lifecycle.get("last_response_checked_ns")
+    return (type(pid) is int and pid > 1 and bridge.get("pid") == pid and bridge.get("state") == "RUNNING"
+            and lifecycle.get("active") is True and type(checked) is int
+            and 0 < checked <= now_ns and now_ns-checked < Nav2LifecycleMonitor.FRESHNESS_NS)
+
+
+def _socket_identity(path):
+    try:
+        value = path.stat()
+        return [value.st_dev, value.st_ino] if stat.S_ISSOCK(value.st_mode) else None
+    except FileNotFoundError:
+        return None
+
+
+def _children_alive(state):
+    return any(started is not None and _process_start(int(pid)) == started
+               for pid, started in state.get("child_process_starts", {}).items())
+
+
+def _remove_owned_socket(paths, state, root):
+    """Recover only the exact endpoint recorded by a now-dead own session."""
+    children = state.get("child_process_starts", {})
+    identity = state.get("socket_identity")
+    if (state.get("root") != str(root) or _process_start(state.get("pid")) is not None
+            or not identity or not children or any(value is None for value in children.values())
+            or _children_alive(state)
+            or _socket_identity(paths["socket"]) != identity):
+        return False
+    paths["socket"].unlink(missing_ok=True)
+    return True
 
 
 def _paths(root):
@@ -169,7 +205,30 @@ def status(root):
               "state": state.get("state", "STOPPED"), "bridge": _read_json(paths["status"])}
     if not running and result["state"] in ("RUNNING", "STARTING"):
         result["state"] = "PROCESS_LOST"
+    result["ready"] = (running and result["state"] == "RUNNING"
+                       and _bridge_ready(result["bridge"], time.monotonic_ns(),
+                                         pid=state.get("bridge_pid")))
     return result
+
+
+def _wait_ready(root, pid, child=None):
+    deadline = time.monotonic()+30
+    while time.monotonic() < deadline:
+        current = status(root)
+        if current.get("pid") == pid:
+            if current["ready"]:
+                return current
+            if not current["running"] or current["state"] == "FAILED":
+                raise RuntimeError(f"Nav2 startup failed: {current.get('error', current['state'])}")
+            bridge = current["bridge"]
+            if bridge.get("pid") == current.get("bridge_pid") and bridge.get("state") == "FAILED":
+                raise RuntimeError(f"Nav2 bridge failed: {bridge.get('error')}")
+        elif child is None:
+            raise RuntimeError("Nav2 supervisor identity changed while waiting for readiness")
+        if child is not None and child.poll() is not None:
+            raise RuntimeError(f"Nav2 startup failed; see {_paths(root)['work']}")
+        time.sleep(.1)
+    raise RuntimeError(f"Nav2 readiness timeout; see {_paths(root)['work']}")
 
 
 def start(root, *, ros_domain_id=74):
@@ -177,8 +236,13 @@ def start(root, *, ros_domain_id=74):
     control = _resolved_control(root)
     full = control.navigation.full_nav2_enabled
     with _lock(paths):
-        if _owned(_read_json(paths["state"]), root):
-            return status(root)
+        previous = _read_json(paths["state"])
+        if _owned(previous, root):
+            if previous.get("ros_domain_id") != ros_domain_id:
+                raise RuntimeError("Nav2 is already running in a different ROS domain")
+            return _wait_ready(root, previous["pid"])
+        if previous.get("root") == str(root) and _children_alive(previous):
+            raise RuntimeError("Nav2 previous session still has live children; refusing duplicate start")
         dependencies = [paths["prefix"] / "bin" / "python", paths["params"],
                         root / "conf" / "nav2_fastdds.xml",
                         paths["prefix"] / "lib" / "nav2_planner" / "planner_server",
@@ -193,31 +257,65 @@ def start(root, *, ros_domain_id=74):
         for dependency in dependencies:
             if not dependency.is_file():
                 raise RuntimeError(f"Nav2 dependency missing: {dependency}")
-        if paths["socket"].exists():
+        if paths["socket"].exists() and not _remove_owned_socket(paths, previous, root):
             raise RuntimeError(f"Nav2 socket already exists: {paths['socket']}")
         paths["status"].unlink(missing_ok=True)
         with (paths["work"] / "supervisor.log").open("a") as log:
             child = subprocess.Popen([sys.executable, "-m", "tools.nav2_planner", "__supervise",
                 "--root", str(root), "--ros-domain-id", str(ros_domain_id)], cwd=root,
                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        deadline = time.monotonic()+30
         try:
-            while time.monotonic() < deadline:
-                current = status(root)
-                if current.get("pid") == child.pid and current["state"] == "RUNNING":
-                    return current
-                if child.poll() is not None:
-                    raise RuntimeError(f"Nav2 startup failed; see {paths['work']}")
-                time.sleep(.1)
-            raise RuntimeError(f"Nav2 startup timeout; see {paths['work']}")
+            return _wait_ready(root, child.pid, child)
         except BaseException:
             if child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    os.killpg(child.pid, signal.SIGKILL)
+                current = _read_json(paths["state"])
+                if current.get("pid") == child.pid and _owned(current, root):
+                    _stop_owned(paths, current, root)
+                else:
+                    child.terminate()
+                    try:
+                        child.wait(timeout=4)
+                    except subprocess.TimeoutExpired:
+                        # Popen created this dedicated group in this call.
+                        os.killpg(child.pid, signal.SIGKILL)
+            child.wait(timeout=1)
             raise
+
+
+def _stop_owned(paths, state, root):
+    if not _owned(state, root):
+        return
+    pid = state["pid"]
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic()+5
+    while time.monotonic() < deadline and _owned(state, root):
+        time.sleep(.05)
+    latest = _read_json(paths["state"])
+    if latest.get("pid") == pid and latest.get("process_start") == state.get("process_start"):
+        state = latest
+    forced = _owned(state, root)
+    if forced:
+        # Rechecked identity includes the dedicated process group.
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic()+1
+    while time.monotonic() < deadline:
+        if not _owned(state, root) and not _children_alive(state):
+            break
+        time.sleep(.05)
+    else:
+        raise RuntimeError("Nav2 shutdown deadline exceeded")
+    _remove_owned_socket(paths, state, root)
+    if forced:
+        current = _read_json(paths["state"])
+        if current.get("pid") == pid and current.get("process_start") == state.get("process_start"):
+            current.update(state="STOPPED", forced_shutdown=True)
+            _write_json(paths["state"], current)
 
 
 def stop(root):
@@ -225,15 +323,36 @@ def stop(root):
     with _lock(paths):
         state = _read_json(paths["state"])
         if _owned(state, root):
-            os.kill(state["pid"], signal.SIGTERM)
-            deadline = time.monotonic()+6
-            while time.monotonic() < deadline and _owned(state, root):
-                time.sleep(.1)
-            if _owned(state, root):
-                os.killpg(state["pid"], signal.SIGKILL)
+            _stop_owned(paths, state, root)
         elif state.get("state") in ("RUNNING", "STARTING"):
             raise RuntimeError("Nav2 process identity lost; refusing to signal unverified process")
+        else:
+            _remove_owned_socket(paths, state, root)
         return status(root)
+
+
+def _stop_children(children):
+    """One grace period for the whole group, then one bounded reap period."""
+    for child in reversed(children):
+        if child.poll() is None:
+            child.terminate()
+    deadline = time.monotonic()+2
+    for child in reversed(children):
+        try:
+            child.wait(timeout=max(0., deadline-time.monotonic()))
+        except subprocess.TimeoutExpired:
+            pass
+    for child in reversed(children):
+        if child.poll() is None:
+            child.kill()
+    deadline = time.monotonic()+1
+    pending = []
+    for child in reversed(children):
+        try:
+            child.wait(timeout=max(0., deadline-time.monotonic()))
+        except subprocess.TimeoutExpired:
+            pending.append(child.pid)
+    return pending
 
 
 def _supervise(root, ros_domain_id):
@@ -248,7 +367,7 @@ def _supervise(root, ros_domain_id):
     signal.signal(signal.SIGINT, request_stop)
     state = {"state": "STARTING", "pid": os.getpid(), "process_start": _process_start(os.getpid()),
              "root": str(root), "ros_domain_id": ros_domain_id, "motor_authority": False,
-             "lifecycle_owner": "nav2_lifecycle_manager"}
+             "lifecycle_owner": "nav2_lifecycle_manager", "children": [], "child_process_starts": {}}
     _write_json(paths["state"], state)
     children, logs = [], []
     try:
@@ -279,11 +398,20 @@ def _supervise(root, ros_domain_id):
             children.append(subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,
                 stdout=log, stderr=subprocess.STDOUT,
                 preexec_fn=partial(_terminate_with_parent, os.getpid())))
-        state["children"] = [child.pid for child in children]
+            child = children[-1]
+            state["children"].append(child.pid)
+            state["child_process_starts"][str(child.pid)] = _process_start(child.pid)
+            if name == "bridge":
+                state["bridge_pid"] = child.pid
+        _write_json(paths["state"], state)
         while not stopped:
             if any(child.poll() is not None for child in children):
                 raise RuntimeError("NAV2_CHILD_EXITED")
-            if _read_json(paths["status"]).get("state") == "RUNNING" and state["state"] != "RUNNING":
+            if "socket_identity" not in state and paths["socket"].exists():
+                state["socket_identity"] = _socket_identity(paths["socket"])
+                _write_json(paths["state"], state)
+            if (_bridge_ready(_read_json(paths["status"]), time.monotonic_ns(), pid=state["bridge_pid"])
+                    and state["state"] != "RUNNING"):
                 state["state"] = "RUNNING"
                 _write_json(paths["state"], state)
             time.sleep(.1)
@@ -291,18 +419,14 @@ def _supervise(root, ros_domain_id):
         state["state"], state["error"] = "FAILED", f"{type(exc).__name__}:{exc}"[:256]
         raise
     finally:
-        for child in reversed(children):
-            if child.poll() is None:
-                child.terminate()
-        for child in reversed(children):
-            try:
-                child.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait(timeout=2)
+        pending = _stop_children(children)
         for log in logs:
             log.close()
-        paths["socket"].unlink(missing_ok=True)
+        if pending:
+            state.update(state="FAILED", error=f"NAV2_CHILD_SHUTDOWN_TIMEOUT:{pending}")
+        else:
+            # Children have exited; no still-running bridge owns the endpoint.
+            paths["socket"].unlink(missing_ok=True)
         if state["state"] != "FAILED":
             state["state"] = "STOPPED"
         _write_json(paths["state"], state)

@@ -174,6 +174,7 @@ def test_runtime_and_control_producer_receive_identical_canonical_paths(live_pro
 
     root, directory = live_project
     controller = OperatorController(root, live_io_dir=directory)
+    monkeypatch.setattr(controller, "_runtime_dependencies", lambda: [])
     calls = []
     monkeypatch.setattr(module.subprocess, "Popen", lambda command, **kwargs: (
         calls.append((command, kwargs)) or SimpleNamespace(pid=123, wait=lambda: 0, poll=lambda: 0)))

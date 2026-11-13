@@ -13,7 +13,13 @@
       <RoundRobin name="RoomCruiseRecovery">
         <Wait wait_duration="1.0"/>
         <Spin spin_dist="0.7854" time_allowance="5.0" error_code_id="{spin_error_code}"/>
-        <BackUp backup_dist="0.15" backup_speed="0.19" time_allowance="5.0" error_code_id="{backup_error_code}"/>
+        <!-- Do not let FollowPath drive straight back into the same corner
+             between the retreat and the escape turn. Both actions retain
+             Nav2 collision checks and the unchanged V3 final safety path. -->
+        <Sequence name="BackUpThenTurn">
+          <BackUp backup_dist="0.30" backup_speed="0.19" time_allowance="5.0" error_code_id="{backup_error_code}"/>
+          <Spin spin_dist="0.7854" time_allowance="5.0" error_code_id="{spin_error_code}"/>
+        </Sequence>
       </RoundRobin>
     </RecoveryNode>
   </BehaviorTree>

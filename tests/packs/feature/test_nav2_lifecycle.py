@@ -2,6 +2,10 @@
 from concurrent.futures import Future
 import json
 from pathlib import Path
+import socket
+import subprocess
+import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -151,3 +155,161 @@ def test_supervisor_spawns_one_manager_with_exact_managed_servers(full):
                 assert "cmd_vel:=/r2b4/nav2/cmd_vel" in command
         bridge = commands[-1][1]
         assert json.loads(bridge[bridge.index("--robot-geometry")+1]) == geometry
+
+
+def test_status_readiness_requires_own_bridge_and_fresh_manager_response(monkeypatch, tmp_path):
+    import tools.nav2_planner as host
+    state = {"state": "RUNNING", "pid": 10, "bridge_pid": 11}
+    bridge = {"state": "RUNNING", "pid": 11,
+              "lifecycle_status": {"active": True, "last_response_checked_ns": 9_000_000_000}}
+    paths = {"state": tmp_path/"supervisor.json", "status": tmp_path/"bridge.json"}
+    monkeypatch.setattr(host, "_paths", lambda _: paths)
+    monkeypatch.setattr(host, "_read_json", lambda path: state if path == paths["state"] else bridge)
+    monkeypatch.setattr(host, "_owned", lambda *_: True)
+    monkeypatch.setattr(host.time, "monotonic_ns", lambda: 10_000_000_000)
+    assert host.status(tmp_path)["ready"]
+    bridge["pid"] = 12
+    assert not host.status(tmp_path)["ready"]
+    bridge["pid"] = 11
+    bridge["lifecycle_status"]["last_response_checked_ns"] = 8_000_000_000
+    assert not host.status(tmp_path)["ready"]
+    bridge["lifecycle_status"]["last_response_checked_ns"] = 11_000_000_000
+    assert not host.status(tmp_path)["ready"]
+
+
+def test_existing_start_waits_for_readiness_and_does_not_launch_again(monkeypatch, tmp_path):
+    import tools.nav2_planner as host
+    paths = {"work": tmp_path, "state": tmp_path/"supervisor.json"}
+    previous = {"state": "STARTING", "pid": 10, "ros_domain_id": 74}
+    states = iter([
+        {**previous, "ready": False, "running": True, "bridge": {}},
+        {**previous, "state": "RUNNING", "ready": False, "running": True, "bridge": {}},
+        {**previous, "state": "RUNNING", "ready": True, "running": True, "bridge": {}},
+    ])
+    calls = []
+    monkeypatch.setattr(host, "_paths", lambda _: paths)
+    monkeypatch.setattr(host, "_resolved_control", lambda _: SimpleNamespace(
+        navigation=SimpleNamespace(full_nav2_enabled=True)))
+    monkeypatch.setattr(host, "_read_json", lambda _: previous)
+    monkeypatch.setattr(host, "_owned", lambda *_: True)
+    monkeypatch.setattr(host, "status", lambda _: next(states))
+    monkeypatch.setattr(host.time, "sleep", lambda value: calls.append(value))
+    monkeypatch.setattr(host.subprocess, "Popen", lambda *_a, **_kw: pytest.fail("duplicate supervisor"))
+    assert host.start(tmp_path)["ready"]
+    assert len(calls) == 2
+    with pytest.raises(RuntimeError, match="different ROS domain"):
+        host.start(tmp_path, ros_domain_id=75)
+
+
+def test_existing_failed_or_permanently_stale_session_cannot_pass_start(monkeypatch, tmp_path):
+    import tools.nav2_planner as host
+    current = {"pid": 10, "state": "FAILED", "error": "NAV2_CHILD_EXITED",
+               "running": True, "ready": False, "bridge": {}}
+    monkeypatch.setattr(host, "status", lambda _: current)
+    with pytest.raises(RuntimeError, match="NAV2_CHILD_EXITED"):
+        host._wait_ready(tmp_path, 10)
+    current["state"] = "RUNNING"
+    clock = [0.]
+    monkeypatch.setattr(host.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(host.time, "sleep", lambda value: clock.__setitem__(0, clock[0]+value))
+    with pytest.raises(RuntimeError, match="readiness timeout"):
+        host._wait_ready(tmp_path, 10)
+    assert 30 <= clock[0] < 31
+
+
+def test_lost_supervisor_cannot_start_over_its_live_children(monkeypatch, tmp_path):
+    import tools.nav2_planner as host
+    paths = {"work": tmp_path, "state": tmp_path/"supervisor.json"}
+    previous = {"state": "RUNNING", "pid": 10, "root": str(tmp_path),
+                "child_process_starts": {"11": "still-alive", "12": None}}
+    monkeypatch.setattr(host, "_paths", lambda _: paths)
+    monkeypatch.setattr(host, "_resolved_control", lambda _: SimpleNamespace(
+        navigation=SimpleNamespace(full_nav2_enabled=True)))
+    monkeypatch.setattr(host, "_read_json", lambda _: previous)
+    monkeypatch.setattr(host, "_owned", lambda *_: False)
+    monkeypatch.setattr(host, "_process_start", lambda pid: "still-alive" if pid == 11 else None)
+    with pytest.raises(RuntimeError, match="live children"):
+        host.start(tmp_path)
+
+
+def test_stale_socket_cleanup_requires_exact_dead_owned_session(monkeypatch, tmp_path):
+    import tools.nav2_planner as host
+    path = tmp_path/"nav2.sock"
+    endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    endpoint.bind(str(path))
+    endpoint.close()
+    paths = {"socket": path}
+    state = {"root": str(tmp_path), "pid": 10,
+             "child_process_starts": {"11": "old-child"},
+             "socket_identity": host._socket_identity(path)}
+    starts = {11: "old-child"}
+    monkeypatch.setattr(host, "_process_start", lambda pid: starts.get(pid))
+    assert not host._remove_owned_socket(paths, state, tmp_path)
+    assert path.exists()
+    starts.clear()
+    identity = state["socket_identity"]
+    state["socket_identity"] = [identity[0], identity[1]+1]
+    assert not host._remove_owned_socket(paths, state, tmp_path)
+    state["socket_identity"] = identity
+    state["root"] = str(tmp_path/"other")
+    assert not host._remove_owned_socket(paths, state, tmp_path)
+    state["root"] = str(tmp_path)
+    assert host._remove_owned_socket(paths, state, tmp_path)
+    assert not path.exists()
+
+
+def test_all_hung_children_share_one_shutdown_deadline_and_are_reaped():
+    import tools.nav2_planner as host
+    script = ("import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+              "print('ready',flush=True); time.sleep(30)")
+    children = [subprocess.Popen([sys.executable, "-c", script],
+                 stdout=subprocess.PIPE, text=True) for _ in range(6)]
+    try:
+        for child in children:
+            assert child.stdout.readline().strip() == "ready"
+        started = time.monotonic()
+        assert host._stop_children(children) == []
+        assert time.monotonic()-started < 4
+        assert all(child.returncode is not None for child in children)
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+            child.wait(timeout=1)
+            child.stdout.close()
+
+
+def test_forced_stop_waits_for_verified_group_and_cleans_its_endpoint(monkeypatch, tmp_path):
+    import tools.nav2_planner as host
+    paths = {"work": tmp_path, "state": tmp_path/"supervisor.json",
+             "status": tmp_path/"bridge.json", "socket": tmp_path/"nav2.sock"}
+    script = ("import signal,socket,sys,time; "
+              "signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+              "s=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM); s.bind(sys.argv[1]); "
+              "print('ready',flush=True); time.sleep(30)")
+    # Only the command-line identity and isolated process group are emulated;
+    # no ROS process, runtime or motor device is started.
+    child = subprocess.Popen([sys.executable, "-c", script, str(paths["socket"]),
+                              "tools.nav2_planner", "__supervise"],
+                             start_new_session=True, stdout=subprocess.PIPE, text=True)
+    try:
+        assert child.stdout.readline().strip() == "ready"
+        started = host._process_start(child.pid)
+        state = {"state": "RUNNING", "pid": child.pid, "root": str(tmp_path),
+                 "process_start": started, "child_process_starts": {str(child.pid): started},
+                 "socket_identity": host._socket_identity(paths["socket"])}
+        host._write_json(paths["state"], state)
+        monkeypatch.setattr(host, "_paths", lambda _: paths)
+        assert host._owned(state, tmp_path)
+        before = time.monotonic()
+        stopped = host.stop(tmp_path)
+        assert time.monotonic()-before < 7
+        assert not stopped["running"] and not stopped["ready"]
+        assert stopped["state"] == "STOPPED" and stopped["forced_shutdown"] is True
+        assert not paths["socket"].exists()
+        child.wait(timeout=1)
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait(timeout=1)
+        child.stdout.close()
