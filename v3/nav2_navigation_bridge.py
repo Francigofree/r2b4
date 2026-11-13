@@ -225,6 +225,18 @@ def run(args):
             cruise.update_costmap(message, measured)
             diagnostics.observe_map(message, measured, "global_costmap")
 
+    def local_costmap_callback(message):
+        measured = stamp_ns(message)
+        cells = message.info.width*message.info.height
+        p, q = message.info.origin.position, message.info.origin.orientation
+        if (message.header.frame_id == LOCAL_FRAME_ID and 0 < cells <= args.max_map_cells
+                and cells == len(message.data) and math.isfinite(message.info.resolution)
+                and message.info.resolution > 0 and 0 <= time.monotonic_ns()-measured <= 3_000_000_000
+                and all(math.isfinite(value) for value in (p.x, p.y, p.z, q.x, q.y, q.z, q.w))
+                and abs(q.x)+abs(q.y) <= 1e-6 and abs(p.z) <= 1e-6
+                and abs(q.z*q.z+q.w*q.w-1.) <= .01):
+            diagnostics.observe_map(message, measured, "local_costmap")
+
     def scan_callback(message):
         nonlocal scan_ns
         measured = stamp_ns(message)
@@ -250,6 +262,9 @@ def run(args):
                 and all(math.isfinite(value) for value in (p.x, p.y, p.z, q.x, q.y, q.z, q.w,
                     twist.linear.x, twist.angular.z))
                 and abs(sum(value*value for value in (q.x, q.y, q.z, q.w))-1.) <= .01):
+            if measured >= odom_ns:
+                diagnostics.local_pose = (measured, (p.x, p.y,
+                    math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))))
             odom_ns = max(odom_ns, measured)
             diagnostics.observe_odometry(message, measured)
             if not odom_history or measured > odom_history[-1]:
@@ -286,6 +301,7 @@ def run(args):
                      reliability=ReliabilityPolicy.RELIABLE)
     node.create_subscription(OccupancyGrid, "/map", map_callback, qos)
     node.create_subscription(OccupancyGrid, "/global_costmap/costmap", coverage_costmap_callback, qos)
+    node.create_subscription(OccupancyGrid, "/local_costmap/costmap", local_costmap_callback, qos)
     node.create_subscription(LaserScan, "/r2b4/slam/scan", scan_callback, qos_profile_sensor_data)
     node.create_subscription(Odometry, "/r2b4/odom", odom_callback, qos_profile_sensor_data)
     node.create_subscription(TwistStamped, "/r2b4/nav2/cmd_vel", velocity_callback, 1)

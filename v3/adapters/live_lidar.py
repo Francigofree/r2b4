@@ -55,8 +55,12 @@ class NativeLidarConfig:
     local_perception_max_points: int = 96
     lidar_x_offset_m: float = 0.0
     lidar_y_offset_m: float = 0.0
+    global_pose_max_age_ns: int | None = None
 
     def __post_init__(self) -> None:
+        if self.global_pose_max_age_ns is not None and (
+                type(self.global_pose_max_age_ns) is not int or self.global_pose_max_age_ns <= 0):
+            raise ValueError("global_pose_max_age_ns must be a positive integer or None")
         if not isinstance(self.device_id, str) or not self.device_id.strip():
             raise ValueError("device_id must be a non-empty string")
         confidence = _finite(self.minimum_confidence, "minimum_confidence")
@@ -467,7 +471,7 @@ class NativeLidarSource:
             name="lidar.localization", observed_monotonic_ns=observed_monotonic_ns,
             source_sequence=None if reading is None or reading.revision == 0 else reading.revision,
             source_monotonic_ns=None if reading is None else reading.captured_monotonic_ns,
-            stale_after_ns=self._config.maximum_measurement_age_ns, running=True,
+            stale_after_ns=self._config.global_pose_max_age_ns or self._config.maximum_measurement_age_ns, running=True,
             error=self._error,
             stale=reading is not None and reading.stale,
             timing_valid=reading is None or reading.timing_valid,
@@ -623,7 +627,7 @@ class NativeLidarSource:
             reading.timing_valid
             and not reading.stale
             and reading.measurement_age_ns
-            <= self._config.maximum_measurement_age_ns
+            <= (self._config.global_pose_max_age_ns or self._config.maximum_measurement_age_ns)
             and _localization_publication_ready(
                 reading,
                 self._config.minimum_confidence,

@@ -40,6 +40,25 @@ def _children_alive(state):
                for pid, started in state.get("child_process_starts", {}).items())
 
 
+def _child_process_status(state, root):
+    """Observe recorded child identities; the launch PID list is historical."""
+    starts = state.get("child_process_starts", {})
+    children = dict.fromkeys([str(pid) for pid in state.get("children", [])] + list(starts))
+    result = {}
+    for key in children:
+        pid = int(key)
+        current, recorded = _process_start(pid), starts.get(key)
+        if state.get("root") != str(root) or recorded is None:
+            identity = "UNVERIFIED"
+        elif current is None:
+            identity = "EXITED"
+        else:
+            identity = "MATCH" if current == recorded else "PID_REUSED"
+        result[key] = {"pid": pid, "identity": identity, "running": identity == "MATCH",
+                       "observed_process_start": current}
+    return result
+
+
 def _remove_owned_socket(paths, state, root):
     """Recover only the exact endpoint recorded by a now-dead own session."""
     children = state.get("child_process_starts", {})
@@ -205,9 +224,29 @@ def status(root):
               "state": state.get("state", "STOPPED"), "bridge": _read_json(paths["status"])}
     if not running and result["state"] in ("RUNNING", "STARTING"):
         result["state"] = "PROCESS_LOST"
+    now = time.monotonic_ns()
+    children = _child_process_status(state, root)
+    result["child_process_status"] = children
+    result["running_children"] = [entry["pid"] for entry in children.values() if entry["running"]]
+    bridge, expected = result["bridge"], state.get("bridge_pid")
+    identity_verified = (type(expected) is int and bridge.get("pid") == expected
+                         and children.get(str(expected), {}).get("running") is True)
+    live = (running and identity_verified and result["state"] in ("STARTING", "RUNNING")
+            and bridge.get("state") in ("STARTING", "RUNNING"))
+    observed = bridge.get("observed_monotonic_ns")
+    age = now-observed if type(observed) is int and 0 < observed <= now else None
+    checked = bridge.get("lifecycle_status", {}).get("last_response_checked_ns")
+    query_age = now-checked if type(checked) is int and 0 < checked <= now else None
+    result["bridge_snapshot_status"] = {
+        "checked_monotonic_ns": now,
+        "kind": "LIVE" if live else "HISTORICAL" if bridge else "MISSING",
+        "identity_verified": identity_verified, "age_ns": age,
+        "fresh": live and age is not None and age < Nav2LifecycleMonitor.FRESHNESS_NS,
+        "lifecycle_response_age_ns": query_age,
+        "lifecycle_response_fresh": (live and query_age is not None
+                                     and query_age < Nav2LifecycleMonitor.FRESHNESS_NS)}
     result["ready"] = (running and result["state"] == "RUNNING"
-                       and _bridge_ready(result["bridge"], time.monotonic_ns(),
-                                         pid=state.get("bridge_pid")))
+                       and identity_verified and _bridge_ready(bridge, now, pid=expected))
     return result
 
 

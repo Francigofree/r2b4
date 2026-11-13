@@ -276,8 +276,12 @@ class NativeStateEstimatorConfig:
     minimum_reliable_wheel_speed_mps: float = 0.15
     stationary_prediction_hold_ns: int = 50_000_000
     wheel_velocity_unreliable_below_mps: float = 0.13
+    global_pose_max_age_ns: int | None = None
 
     def __post_init__(self) -> None:
+        if self.global_pose_max_age_ns is not None and (
+                type(self.global_pose_max_age_ns) is not int or self.global_pose_max_age_ns <= 0):
+            raise ValueError("global_pose_max_age_ns must be a positive integer or None")
         validate_velocity_quality_band(self.wheel_velocity_unreliable_below_mps, self.minimum_reliable_wheel_speed_mps)
         if not isinstance(self.frame_id, str) or not self.frame_id:
             raise ValueError("frame_id must be non-empty")
@@ -1460,7 +1464,9 @@ class NativeStateEstimator:
             age = now - received_lidar.captured_monotonic_ns
             global_fix_status = "INVALID_MEASUREMENT_TIME" if age < 0 else "STALE"
         # Consumer freshness is evaluated here, even when L2 admits no new event.
-        fresh = tuple(o for o in frame.accepted if 0 <= now-o.captured_monotonic_ns <= self._config.max_measurement_age_ns)
+        global_pose_age_ns = self._config.global_pose_max_age_ns or self._config.max_measurement_age_ns
+        fresh = tuple(o for o in frame.accepted if 0 <= now-o.captured_monotonic_ns <= (
+            global_pose_age_ns if o.kind == "lidar_pose" else self._config.max_measurement_age_ns))
         frame = replace(frame, accepted=fresh)
         local = self._local(replace(frame, accepted=tuple(o for o in fresh if o.kind != "lidar_pose")))
         pose = Pose2D(LOCAL_FRAME_ID, local.x_m, local.y_m, local.yaw_rad)

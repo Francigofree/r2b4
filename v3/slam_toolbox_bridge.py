@@ -29,6 +29,11 @@ MAX_SOURCE_AGE_NS = 250_000_000
 MAX_ODOM_BRACKET_NS = 100_000_000
 
 
+def pose_measurement_is_fresh(measurement_ns, observed_ns, maximum_age_ns):
+    """Global-fix admission uses the original scan midpoint, never receipt."""
+    return 0 <= observed_ns - measurement_ns <= maximum_age_ns
+
+
 def pose_latency(scan, received_ns, published_ns, callback_ns, info, ros_offset_ns, *, callback_wall_ns=None):
     """Passive stage times; DDS timestamps never replace scan measurement time."""
     def dds_time(name):
@@ -228,6 +233,7 @@ def run(args) -> int:
              "rejected_by_reason": {}, "last_rejection": None,
              "map_messages": 0, "map_frame": MAP_FRAME,
              "max_scan_age_ns": 0, "max_pose_age_ns": 0,
+             "maximum_pose_age_ns": args.maximum_pose_age_ns,
              "session_id": None, "generation": None, "error": None}
     stopped = False
 
@@ -284,7 +290,7 @@ def run(args) -> int:
         age = callback_ns - scan.measurement_ns
         q = message.pose.pose.orientation
         norm = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w
-        if not 0 <= age <= MAX_SOURCE_AGE_NS:
+        if not pose_measurement_is_fresh(scan.measurement_ns, callback_ns, args.maximum_pose_age_ns):
             timing["outcome"] = "POSE_MEASUREMENT_STALE"
             state["last_rejected_pose_timing"] = timing
             reject("POSE_MEASUREMENT_STALE")
@@ -503,11 +509,12 @@ def main(argv=None) -> int:
     parser.add_argument("--socket", required=True)
     parser.add_argument("--status-path", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--maximum-pose-age-ns", type=int, required=True)
     parser.add_argument("--max-duration-s", type=int, default=7200)
     parser.add_argument("--max-scans", type=int, default=30000)
     parser.add_argument("--max-map-cells", type=int, default=1_000_000)
     args = parser.parse_args(argv)
-    if min(args.max_duration_s, args.max_scans, args.max_map_cells) <= 0:
+    if min(args.max_duration_s, args.max_scans, args.max_map_cells, args.maximum_pose_age_ns) <= 0:
         parser.error("resource budgets must be positive")
     return run(args)
 

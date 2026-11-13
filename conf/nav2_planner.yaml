@@ -111,6 +111,9 @@ local_costmap:
       update_frequency: 10.0
       publish_frequency: 1.0
       transform_tolerance: 0.2
+      # Passive 5 Hz snapshots reuse this bounded 60x60 full grid. Without
+      # full publication a stationary rolling window emits updates only.
+      always_send_full_costmap: true
       # Same physical polygon and L12 body padding as the global map.
       plugins: [obstacle_layer, inflation_layer]
       obstacle_layer:

@@ -6,7 +6,7 @@ import time
 from types import SimpleNamespace as NS
 
 from v3.capture_behavior import encode_behavior_record, project_behavior_record
-from v3.contracts import GLOBAL_FRAME_ID
+from v3.contracts import GLOBAL_FRAME_ID, LOCAL_FRAME_ID
 from v3.mcap_capture import EVENT_TOPIC, TICK_TOPIC, McapCaptureConfig
 from v3.mcap_reader import McapReader
 from v3.nav2_diagnostics import (
@@ -89,6 +89,51 @@ def test_recovery_events_keep_source_identity_and_explicit_truncation():
     assert recovery["events"][-1]["node_uid"] == 63
     assert recovery["events"][-1]["node"] == "BackUpThenTurn"
     assert recovery["events"][-1]["bt_event_timestamp_ns"] == 1_000_000_063
+
+
+def test_local_costmap_keeps_its_odom_frame_and_distinguishes_inflation_from_obstacles():
+    telemetry = helper()
+    now = 2_000_000_000
+    grid = NS(header=NS(frame_id=LOCAL_FRAME_ID), info=NS(width=60, height=60,
+        resolution=.05, origin=NS(position=NS(x=8.5, y=-1.5),
+            orientation=NS(x=0., y=0., z=0., w=1.))), data=[0]*3600)
+    grid.data[:5] = [-1, 1, 65, 98, 99]
+    grid.data[30*60+30] = 100
+    telemetry.observe_map(grid, now-200_000_000, "local_costmap")
+    telemetry.local_pose = (now-100_000_000, (10., 0., 0.))
+    row = observation(telemetry, now, pose=(100., 100., 0.))
+    summary = row["maps"]["local_costmap"]
+    assert summary["encoding"] == "nav2_costmap_occupancy_grid"
+    assert summary["age_ns"] == 200_000_000
+    assert summary["inflated_cells"] == 3 and summary["inscribed_cells"] == 1
+    assert summary["lethal_cells"] == 1 and summary["unknown_cells"] == 1
+    assert summary["occupied_cells"] == 4  # Legacy >=65 also includes inflation.
+    assert summary["occupied_cells_semantics"] == "legacy_ge_65_includes_inflation"
+    assert sum(summary[key] for key in ("free_cells", "inflated_cells", "inscribed_cells",
+        "lethal_cells", "unknown_cells")) == summary["cell_count"]
+    window = row["local_costmap_window"]
+    assert window["frame_id"] == LOCAL_FRAME_ID and window["robot_pose_in_frame"] == [10., 0., 0.]
+    assert window["pose_measurement_monotonic_ns"] == now-100_000_000
+    assert window["origin_x_m"] == 9.0 and window["robot_in_bounds"]
+    assert window["window_truncated"] and len(window["cells"]) == 41*41
+    assert window["cells"][20*41+20] == 100
+
+
+def test_terminal_observation_preserves_last_lifecycle_reply_as_historical():
+    telemetry = helper()
+    telemetry.observe_diagnostics(NS(header=NS(stamp=NS(sec=1, nanosec=0)),
+        status=[NS(name="manager", level=0, message="Managed nodes are active",
+            hardware_id="Nav2", values=[])]), 1_000_000_000)
+    row = telemetry.snapshot(2_400_000_000, scan_ns=1_000_000_000,
+        odom_ns=1_000_000_000, tf_ns=1_000_000_000, active=False, robot_pose=None,
+        state={"state": "STOPPED", "lifecycle_status": {"active": True}})
+    assert row["observation_scope"] == "TERMINAL"
+    assert row["lifecycle_status"]["active"] is True  # No invented deactivation reply.
+    assert row["sensor_age_ns"]["scan"] == 1_400_000_000
+    assert row["sensor_freshness"] == {"required": False,
+        "evaluated_monotonic_ns": 2_400_000_000, "fresh": False}
+    assert row["diagnostics"][0]["stale"]
+    assert row["diagnostics"][0]["observation_scope"] == "TERMINAL"
 
 
 def test_actual_twenty_hz_stream_distinguishes_receipt_jitter_and_missing_commands():

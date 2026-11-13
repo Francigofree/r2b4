@@ -20,12 +20,16 @@ class AdmissionConfig:
 
     max_sample_age_ns: int
     max_future_skew_ns: int
+    global_pose_max_age_ns: int | None = None
 
     def __post_init__(self) -> None:
         for name in ("max_sample_age_ns", "max_future_skew_ns"):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
+        if self.global_pose_max_age_ns is not None and (
+                type(self.global_pose_max_age_ns) is not int or self.global_pose_max_age_ns <= 0):
+            raise ValueError("global_pose_max_age_ns must be a positive integer or None")
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +96,9 @@ class InputAdmission:
             reason: RejectionReason | None = None
             age_ns = max(0, frame.context.monotonic_ns - sample.captured_monotonic_ns)
             values = {field.key: field.value for field in sample.values}
+            maximum_age_ns = (self._config.global_pose_max_age_ns
+                              if sample.kind == "lidar_pose" and self._config.global_pose_max_age_ns is not None
+                              else self._config.max_sample_age_ns)
             measurement_timing_valid = values.get("measurement_timing_valid", True)
             measurement_stale = values.get("measurement_stale", False)
             generation = values.get("owner_generation", "") if sample.kind in {
@@ -125,7 +132,7 @@ class InputAdmission:
                 reason = generation_error
             elif not measurement_timing_valid:
                 reason = RejectionReason.TIME_ALIGNMENT_FAILED
-            elif measurement_stale or age_ns > self._config.max_sample_age_ns:
+            elif measurement_stale or age_ns > maximum_age_ns:
                 reason = RejectionReason.STALE
             elif previous_sequence is not None and sample.sequence == previous_sequence:
                 reason = RejectionReason.DUPLICATE

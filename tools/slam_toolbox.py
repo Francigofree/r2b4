@@ -227,11 +227,15 @@ def _supervise(root: Path) -> int:
         os.sched_setaffinity(0, cpus)
         state["cpus"] = sorted(cpus)
         env = _ros_environment(root, paths["prefix"])
+        from v3.config import ConfigResolver
+        resolved = ConfigResolver.for_project(root).resolve()
+        maximum_pose_age_ns = resolved.runtime.composition.live_control.control.admission.global_pose_max_age_ns
         commands = {
             "node": [str(paths["prefix"] / "lib" / "slam_toolbox" / "async_slam_toolbox_node"),
                      "--ros-args", "--params-file", str(paths["params"]), "-p", "use_sim_time:=false"],
             "bridge": [str(paths["prefix"] / "bin" / "python"), "-m", "v3.slam_toolbox_bridge",
                        "--socket", str(paths["socket"]), "--status-path", str(paths["bridge"]),
+                       "--maximum-pose-age-ns", str(maximum_pose_age_ns),
                        "--output-dir", str(paths["work"])],
         }
         for name, command in commands.items():

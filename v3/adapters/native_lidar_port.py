@@ -107,8 +107,11 @@ class NativeLidarPortConfig:
     result_queue_capacity: int = MATCHER_QUEUE_CAPACITY
     global_backend: str = "native"
     safety_body_bounds_m: tuple[float, float, float, float] | None = None
+    global_pose_max_age_ns: int | None = None
 
     def __post_init__(self) -> None:
+        if self.global_pose_max_age_ns is not None:
+            _positive_int(self.global_pose_max_age_ns, "global_pose_max_age_ns")
         if not isinstance(self.driver, RplidarC1Config):
             raise TypeError("driver must be RplidarC1Config")
         _positive_float(self.danger_zone_m, "danger_zone_m")

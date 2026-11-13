@@ -316,9 +316,10 @@ class SlamToolboxSender:
 class SlamLocalizationReceiver:
     """Validate compact poses against successfully exported physical scans."""
 
-    def __init__(self, session_id: int, maximum_age_ns: int) -> None:
+    def __init__(self, session_id: int, maximum_age_ns: int, *, maximum_odometry_age_ns: int | None = None) -> None:
         self.session_id = session_id
         self.maximum_age_ns = maximum_age_ns
+        self.maximum_odometry_age_ns = maximum_age_ns if maximum_odometry_age_ns is None else maximum_odometry_age_ns
         self._scans: OrderedDict[int, tuple[int, int, int]] = OrderedDict()
         self._last_sequence = 0
         self.bridge_generation: int | None = None
@@ -360,7 +361,7 @@ class SlamLocalizationReceiver:
             reason = "SLAM_POSE_STALE"
         elif (not odometry_valid or current_generation is None
               or packet.generation != current_generation
-              or not 0 <= now_ns-odometry_ns <= self.maximum_age_ns):
+              or not 0 <= now_ns-odometry_ns <= self.maximum_odometry_age_ns):
             reason = "SLAM_ODOMETRY_GENERATION_INVALID"
         elif self.bridge_generation is not None and packet.bridge_generation != self.bridge_generation:
             self.error = reason = "SLAM_BRIDGE_RESTART_REQUIRES_RUNTIME_RESTART"

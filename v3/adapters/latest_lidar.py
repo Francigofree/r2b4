@@ -116,8 +116,12 @@ class LatestLidarBackendConfig:
     maximum_future_skew_ns: int = 0
     global_backend: str = "native"
     pose_measurement_variance: tuple[float, float, float] | None = None
+    global_pose_max_age_ns: int | None = None
 
     def __post_init__(self) -> None:
+        if self.global_pose_max_age_ns is not None and (
+                type(self.global_pose_max_age_ns) is not int or self.global_pose_max_age_ns <= 0):
+            raise ValueError("global_pose_max_age_ns must be a positive integer or None")
         maximum_age = _nonnegative_int(
             self.maximum_result_age_ns,
             "maximum_result_age_ns",
@@ -479,7 +483,7 @@ class NativeLatestLidarBackend:
             timing_valid
             and (
                 status.get("health") != "OK"
-                or measurement_age_ns > self._config.maximum_result_age_ns
+                or measurement_age_ns > (self._config.global_pose_max_age_ns or self._config.maximum_result_age_ns)
             )
         )
         r_scale = self._config.pose_r_scale

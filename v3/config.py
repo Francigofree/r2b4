@@ -408,7 +408,7 @@ class ConfigResolver:
         local = _keys(c["local_perception"], {"min_range_m", "max_range_m", "max_points"}, "local_perception")
         layers = dict(c["layers"])
         for section, derived_names in {
-            "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps"},
+            "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps", "global_pose_max_age_ns"},
             "wheel_pi": {"minimum_reliable_speed_mps", "velocity_unreliable_below_mps"},
             "navigation": {"footprint_length_m", "footprint_width_m", "footprint_center_x_m", "wheel_limits", "localization_recovery_omega_rad_s", "global_planner_enabled", "full_nav2_enabled",
                            "operational_max_v_mps", "operational_max_omega_rad_s",
@@ -447,6 +447,7 @@ class ConfigResolver:
                             target_minimum_mps=layers["operational_constraints"]["minimum_target_wheel_speed_mps"])
         recovery_omega = _typed(WheelMotionLimits, wheel_limits, "wheel_limits").target_center_spin_rad_s
         layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID,
+                                "global_pose_max_age_ns": layers["admission"]["global_pose_max_age_ns"],
                                 "minimum_reliable_wheel_speed_mps":policy.encoder_minimum_reliable_speed_mps,
                                 "wheel_velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}
         layers["wheel_pi"] = {**layers["wheel_pi"],
@@ -529,6 +530,7 @@ class ConfigResolver:
             maximum_result_age_ns=policy.lidar_maximum_result_age_ns,
             matcher_start_method=lr["matcher_process_start_method"], input_queue_capacity=lr["latest_scan_queue_size"], result_queue_capacity=lr["latest_result_queue_size"],
             global_backend=lr["global_backend"],
+            global_pose_max_age_ns=resolved_control.admission.global_pose_max_age_ns,
             safety_body_bounds_m=(p["footprint_center_x_m"] - p["footprint_length_m"]/2,
                                   p["footprint_center_x_m"] + p["footprint_length_m"]/2,
                                   -p["footprint_width_m"]/2, p["footprint_width_m"]/2))
@@ -537,10 +539,13 @@ class ConfigResolver:
             # sensor configuration. Physical scan/safety ownership is unchanged.
             backend = replace(sensors.inputs.lidar_backend,
                 global_backend="slam_toolbox", matcher_contract_id=SLAM_CONTRACT_ID,
+                global_pose_max_age_ns=resolved_control.admission.global_pose_max_age_ns,
                 matcher_confidence_model=SLAM_CONFIDENCE_MODEL,
                 matcher_transport=SLAM_TRANSPORT,
                 pose_measurement_variance=resolved_control.estimation.lidar_measurement_variance)
-            sensors = replace(sensors, inputs=replace(sensors.inputs, lidar_backend=backend))
+            source = replace(sensors.inputs.lidar_source,
+                global_pose_max_age_ns=resolved_control.admission.global_pose_max_age_ns)
+            sensors = replace(sensors, inputs=replace(sensors.inputs, lidar_backend=backend, lidar_source=source))
         tick_ns = _typed(int,runtime["tick_period_ns"],"runtime.tick_period_ns")
         _validate_temporal_invariants(
             tick_ns=tick_ns,

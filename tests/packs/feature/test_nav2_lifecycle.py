@@ -159,15 +159,24 @@ def test_supervisor_spawns_one_manager_with_exact_managed_servers(full):
 
 def test_status_readiness_requires_own_bridge_and_fresh_manager_response(monkeypatch, tmp_path):
     import tools.nav2_planner as host
-    state = {"state": "RUNNING", "pid": 10, "bridge_pid": 11}
-    bridge = {"state": "RUNNING", "pid": 11,
+    state = {"state": "RUNNING", "pid": 10, "bridge_pid": 11, "root": str(tmp_path),
+             "children": [11], "child_process_starts": {"11": "bridge-start"}}
+    bridge = {"state": "RUNNING", "pid": 11, "observed_monotonic_ns": 9_900_000_000,
               "lifecycle_status": {"active": True, "last_response_checked_ns": 9_000_000_000}}
     paths = {"state": tmp_path/"supervisor.json", "status": tmp_path/"bridge.json"}
     monkeypatch.setattr(host, "_paths", lambda _: paths)
     monkeypatch.setattr(host, "_read_json", lambda path: state if path == paths["state"] else bridge)
     monkeypatch.setattr(host, "_owned", lambda *_: True)
+    monkeypatch.setattr(host, "_process_start", lambda pid: "bridge-start" if pid == 11 else None)
     monkeypatch.setattr(host.time, "monotonic_ns", lambda: 10_000_000_000)
-    assert host.status(tmp_path)["ready"]
+    current = host.status(tmp_path)
+    assert current["ready"]
+    assert current["running_children"] == [11]
+    snapshot = current["bridge_snapshot_status"]
+    assert snapshot["kind"] == "LIVE" and snapshot["fresh"] and snapshot["identity_verified"]
+    assert snapshot["age_ns"] == 100_000_000
+    assert snapshot["lifecycle_response_age_ns"] == 1_000_000_000
+    assert snapshot["lifecycle_response_fresh"]
     bridge["pid"] = 12
     assert not host.status(tmp_path)["ready"]
     bridge["pid"] = 11
@@ -175,6 +184,57 @@ def test_status_readiness_requires_own_bridge_and_fresh_manager_response(monkeyp
     assert not host.status(tmp_path)["ready"]
     bridge["lifecycle_status"]["last_response_checked_ns"] = 11_000_000_000
     assert not host.status(tmp_path)["ready"]
+
+
+def test_stopped_status_marks_raw_active_snapshot_historical_and_checks_children(monkeypatch, tmp_path):
+    import tools.nav2_planner as host
+    state = {"state": "STOPPED", "pid": 10, "bridge_pid": 16, "root": str(tmp_path),
+             "children": list(range(11, 17)),
+             "child_process_starts": {str(pid): f"start-{pid}" for pid in range(11, 17)}}
+    bridge = {"state": "STOPPED", "pid": 16, "observed_monotonic_ns": 9_900_000_000,
+              "lifecycle_status": {"active": True, "last_response_checked_ns": 9_500_000_000,
+                                   "last_response_age_ns": 100_000_000},
+              "nav2_observation": {"sensor_age_ns": {"scan": 1_400_000_000}}}
+    original = json.dumps(bridge, sort_keys=True)
+    paths = {"state": tmp_path/"supervisor.json", "status": tmp_path/"bridge.json"}
+    monkeypatch.setattr(host, "_paths", lambda _: paths)
+    monkeypatch.setattr(host, "_read_json", lambda path: state if path == paths["state"] else bridge)
+    monkeypatch.setattr(host, "_owned", lambda *_: False)
+    monkeypatch.setattr(host, "_process_start", lambda _: None)
+    monkeypatch.setattr(host.time, "monotonic_ns", lambda: 100_000_000_000)
+    current = host.status(tmp_path)
+    assert current["state"] == "STOPPED" and not current["running"] and not current["ready"]
+    assert current["children"] == list(range(11, 17))
+    assert current["running_children"] == []
+    assert all(value["identity"] == "EXITED" for value in current["child_process_status"].values())
+    snapshot = current["bridge_snapshot_status"]
+    assert snapshot["kind"] == "HISTORICAL" and not snapshot["fresh"]
+    assert not snapshot["identity_verified"] and not snapshot["lifecycle_response_fresh"]
+    assert snapshot["age_ns"] == 90_100_000_000
+    assert snapshot["lifecycle_response_age_ns"] == 90_500_000_000
+    assert json.dumps(current["bridge"], sort_keys=True) == original
+
+
+@pytest.mark.parametrize("observed,identity", [(None, "EXITED"), ("new-start", "PID_REUSED")])
+def test_fresh_reply_from_exited_or_reused_bridge_cannot_report_live_ready(
+        monkeypatch, tmp_path, observed, identity):
+    import tools.nav2_planner as host
+    state = {"state": "RUNNING", "pid": 10, "bridge_pid": 11, "root": str(tmp_path),
+             "children": [11], "child_process_starts": {"11": "old-start"}}
+    bridge = {"state": "RUNNING", "pid": 11, "observed_monotonic_ns": 9_900_000_000,
+              "lifecycle_status": {"active": True, "last_response_checked_ns": 9_900_000_000}}
+    paths = {"state": tmp_path/"supervisor.json", "status": tmp_path/"bridge.json"}
+    monkeypatch.setattr(host, "_paths", lambda _: paths)
+    monkeypatch.setattr(host, "_read_json", lambda path: state if path == paths["state"] else bridge)
+    monkeypatch.setattr(host, "_owned", lambda *_: True)
+    monkeypatch.setattr(host, "_process_start", lambda _: observed)
+    monkeypatch.setattr(host.time, "monotonic_ns", lambda: 10_000_000_000)
+    current = host.status(tmp_path)
+    assert current["child_process_status"]["11"]["identity"] == identity
+    assert not current["ready"] and current["running_children"] == []
+    assert current["bridge_snapshot_status"]["kind"] == "HISTORICAL"
+    assert not current["bridge_snapshot_status"]["identity_verified"]
+    assert current["bridge"]["lifecycle_status"]["active"] is True
 
 
 def test_existing_start_waits_for_readiness_and_does_not_launch_again(monkeypatch, tmp_path):

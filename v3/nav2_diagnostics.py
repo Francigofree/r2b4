@@ -6,7 +6,7 @@ Source times, truncation and missed snapshots remain explicit in capture.
 """
 from __future__ import annotations
 
-from collections import OrderedDict, deque
+from collections import Counter, OrderedDict, deque
 import json
 import math
 from pathlib import Path
@@ -68,6 +68,7 @@ class Nav2Telemetry:
         self.recovery_source_events_truncated = 0
         self.recovery_feedback = None
         self.scan_map_pose = None
+        self.local_pose = None
         self.controller_error_counts = {}
         self.controller_errors = deque(maxlen=16)
 
@@ -128,13 +129,28 @@ class Nav2Telemetry:
     def observe_map(self, message, measured, kind):
         """Retain ROS-local geometry; only a bounded patch leaves this edge."""
         self.maps[kind] = message
-        data = message.data
+        counts = Counter(message.data)
+        costmap = kind in ("global_costmap", "local_costmap")
+        origin = message.info.origin
+        q = origin.orientation
         self.map_summaries[kind] = {"measurement_monotonic_ns": measured,
             "frame_id": message.header.frame_id, "width": message.info.width,
             "height": message.info.height, "resolution_m": message.info.resolution,
-            "unknown_cells": sum(v < 0 for v in data),
-            "free_cells": sum(v == 0 for v in data),
-            "occupied_cells": sum(v >= 65 for v in data)}
+            "cell_count": len(message.data),
+            "origin_x_m": origin.position.x, "origin_y_m": origin.position.y,
+            "origin_yaw_rad": math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z)),
+            "encoding": "nav2_costmap_occupancy_grid" if costmap else "slam_occupancy_grid",
+            "timestamp_basis": "map_header_stamp",
+            "unknown_cells": sum(count for value, count in counts.items() if value < 0),
+            "free_cells": counts[0],
+            "occupied_cells": sum(count for value, count in counts.items() if value >= 65),
+            "occupied_cells_semantics": "legacy_ge_65_includes_inflation" if costmap else "occupancy_ge_65"}
+        if costmap:
+            # Nav2's OccupancyGrid visualization is not SLAM probability:
+            # 1..98 are scaled costs, 99 inscribed, 100 lethal, -1 unknown.
+            self.map_summaries[kind].update(
+                inflated_cells=sum(count for value, count in counts.items() if 1 <= value <= 98),
+                inscribed_cells=counts[99], lethal_cells=counts[100])
 
     def observe_path(self, message, measured):
         count = len(message.poses)
@@ -160,8 +176,8 @@ class Nav2Telemetry:
                 "bt_event_clock": "upstream_unspecified",
                 "observer_received_monotonic_ns": received})
 
-    def _map_window(self, robot_pose):
-        message = self.maps.get("global_costmap")
+    def _map_window(self, robot_pose, kind="global_costmap", pose_ns=None):
+        message = self.maps.get(kind)
         if message is None or robot_pose is None:
             return None
         info = message.info
@@ -174,10 +190,16 @@ class Nav2Telemetry:
         x1, y1 = min(info.width, cx+21), min(info.height, cy+21)
         if x1 <= x0 or y1 <= y0:
             return None
-        return {**self.map_summaries["global_costmap"],
+        return {**self.map_summaries[kind],
+            "summary_scope": "full_source_grid",
+            "source_width": info.width, "source_height": info.height,
+            "window_cell_count": (x1-x0)*(y1-y0),
             "origin_x_m": info.origin.position.x+x0*info.resolution,
             "origin_y_m": info.origin.position.y+y0*info.resolution,
-            "width": x1-x0, "height": y1-y0, "meaning": "actual_nav2_global_costmap_occupancy_encoding",
+            "width": x1-x0, "height": y1-y0, "meaning": f"actual_nav2_{kind}_occupancy_encoding",
+            "robot_pose_in_frame": list(robot_pose), "pose_measurement_monotonic_ns": pose_ns,
+            "robot_in_bounds": 0 <= cx < info.width and 0 <= cy < info.height,
+            "window_truncated": (x1-x0)*(y1-y0) < info.width*info.height,
             "cells": [int(message.data[y*info.width+x]) for y in range(y0, y1) for x in range(x0, x1)]}
 
     def observe_scan(self, message, measured):
@@ -314,16 +336,20 @@ class Nav2Telemetry:
 
     def snapshot(self, now, *, scan_ns, odom_ns, tf_ns, active, robot_pose, state):
         self.sequence += 1
+        live = state.get("state") in ("STARTING", "RUNNING")
+        sensor_ages = {"scan": _age(now, scan_ns), "odometry": _age(now, odom_ns), "tf": _age(now, tf_ns)}
         diagnostics = []
         for value in self.diagnostics.values():
             row = dict(value)
             row["source_age_ns"] = _age(now, row["measurement_monotonic_ns"])
-            row["stale"] = row["source_age_ns"] is None or row["source_age_ns"] > 3_000_000_000
+            row["stale"] = not live or row["source_age_ns"] is None or row["source_age_ns"] > 3_000_000_000
+            row["observation_scope"] = "LIVE" if live else "TERMINAL"
             diagnostics.append(row)
         self.latest = {"schema": NAV2_OBSERVATION_SCHEMA, "event_type": "nav2_observation",
             "worker_generation": self.generation, "sample_sequence": self.sequence,
             "measurement_monotonic_ns": now, "sample_period_ns": NAV2_SAMPLE_PERIOD_NS,
             "state": state.get("state"), "active": active,
+            "observation_scope": "LIVE" if live else "TERMINAL",
             "lifecycle_status": state.get("lifecycle_status"),
             "mission_id": state.get("mission_id"), "selected_goal": state.get("selected_goal"),
             "child_goal_id": state.get("child_goal_id"),
@@ -332,13 +358,19 @@ class Nav2Telemetry:
                 "cancellations", "action_active", "cancelling", "frontier_goals", "frontier_rejected")},
             "frontier_startup": state.get("frontier_startup"),
             "cruise": {key: state.get(key) for key in ("cruise_phase", "coverage_goals", "coverage_reached", "coverage_failed")},
-            "maps": self.map_summaries, "global_costmap_window": self._map_window(robot_pose),
+            "maps": {kind: dict(summary, age_ns=_age(now, summary["measurement_monotonic_ns"]))
+                     for kind, summary in self.map_summaries.items()},
+            "global_costmap_window": self._map_window(robot_pose, pose_ns=tf_ns),
+            "local_costmap_window": None if self.local_pose is None else self._map_window(
+                self.local_pose[1], "local_costmap", self.local_pose[0]),
             "scan_map_alignment": self._scan_alignment(now),
             "path": self.path,
             "recovery": {"event_count": self.recovery_event_count, "events": list(self.recovery_events),
                          "source_events_truncated": self.recovery_source_events_truncated,
                          "feedback": self.recovery_feedback},
-            "sensor_age_ns": {"scan": _age(now, scan_ns), "odometry": _age(now, odom_ns), "tf": _age(now, tf_ns)},
+            "sensor_age_ns": sensor_ages,
+            "sensor_freshness": {"required": live, "evaluated_monotonic_ns": now,
+                "fresh": all(age is not None and age <= SENSOR_MAX_AGE_NS for age in sensor_ages.values())},
             "sensor_measurement_ns": {"scan": scan_ns, "odometry": odom_ns, "tf": tf_ns},
             "controller": self._rate(now), "odometry": self.odometry,
             "measured_stop_count": self.measured_stops, "wall_clearance": self._walls(),
@@ -391,7 +423,10 @@ class Nav2Diagnostics(Nav2Telemetry):
         elif kind == "sensor_tf_freshness":
             ages = {key: _age(now, value) for key, value in row["sensor_measurement_ns"].items()}
             fresh = all(age is not None and age <= SENSOR_MAX_AGE_NS for age in ages.values())
-            stat.summary(self._levels[0 if fresh else 1], "Fresh scan, odometry and TF" if fresh else "Missing or stale sensor/TF")
+            if row.get("observation_scope") == "TERMINAL":
+                stat.summary(self._levels[3], "Inactive bridge; last sensor measurements retained")
+            else:
+                stat.summary(self._levels[0 if fresh else 1], "Fresh scan, odometry and TF" if fresh else "Missing or stale sensor/TF")
             for key, age in ages.items():
                 stat.add(key+"_age_ns", str(age))
         else:

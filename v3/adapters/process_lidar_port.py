@@ -441,7 +441,9 @@ def _lidar_owner_process_main(
     slam_enabled = config.global_backend == "slam_toolbox"
     slam_sender = SlamToolboxSender(
         slam_socket_path, reply_session_id=slam_session_id if slam_enabled else None)
-    slam_receiver = SlamLocalizationReceiver(slam_session_id, config.maximum_result_age_ns)
+    slam_receiver = SlamLocalizationReceiver(
+        slam_session_id, config.global_pose_max_age_ns or config.maximum_result_age_ns,
+        maximum_odometry_age_ns=config.maximum_result_age_ns)
     slam_result = None
     deskew_reason = "NO_SCAN"
     deskew_applied_scans = 0
