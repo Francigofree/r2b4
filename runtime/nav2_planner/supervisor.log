@@ -166,3 +166,75 @@ Traceback (most recent call last):
   File "/home/alba/project_r2b4/tools/nav2_planner.py", line 285, in _supervise
     raise RuntimeError("NAV2_CHILD_EXITED")
 RuntimeError: NAV2_CHILD_EXITED
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 328, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 321, in main
+    return _supervise(root, args.ros_domain_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 285, in _supervise
+    raise RuntimeError("NAV2_CHILD_EXITED")
+RuntimeError: NAV2_CHILD_EXITED
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 328, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 321, in main
+    return _supervise(root, args.ros_domain_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 285, in _supervise
+    raise RuntimeError("NAV2_CHILD_EXITED")
+RuntimeError: NAV2_CHILD_EXITED
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 328, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 321, in main
+    return _supervise(root, args.ros_domain_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 285, in _supervise
+    raise RuntimeError("NAV2_CHILD_EXITED")
+RuntimeError: NAV2_CHILD_EXITED
+Traceback (most recent call last):
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 285, in _supervise
+    raise RuntimeError("NAV2_CHILD_EXITED")
+RuntimeError: NAV2_CHILD_EXITED
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 299, in _supervise
+    child.wait(timeout=2)
+  File "/usr/lib/python3.11/subprocess.py", line 1262, in wait
+    return self._wait(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 1989, in _wait
+    raise TimeoutExpired(self.args, timeout)
+subprocess.TimeoutExpired: Command '['/home/alba/project_r2b4/runtime/deps/nav2-planner/lib/nav2_lifecycle_manager/lifecycle_manager', '--ros-args', '-r', '__node:=lifecycle_manager_navigation', '-p', 'autostart:=true', '-p', 'node_names:=[planner_server,controller_server,behavior_server,bt_navigator]', '-p', 'bond_timeout:=2.0', '-p', 'attempt_respawn_reconnection:=false', '-p', 'diagnostic_updater.period:=0.2']' timed out after 2 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 328, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 321, in main
+    return _supervise(root, args.ros_domain_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 302, in _supervise
+    child.wait(timeout=2)
+  File "/usr/lib/python3.11/subprocess.py", line 1262, in wait
+    return self._wait(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 1989, in _wait
+    raise TimeoutExpired(self.args, timeout)
+subprocess.TimeoutExpired: Command '['/home/alba/project_r2b4/runtime/deps/nav2-planner/lib/nav2_lifecycle_manager/lifecycle_manager', '--ros-args', '-r', '__node:=lifecycle_manager_navigation', '-p', 'autostart:=true', '-p', 'node_names:=[planner_server,controller_server,behavior_server,bt_navigator]', '-p', 'bond_timeout:=2.0', '-p', 'attempt_respawn_reconnection:=false', '-p', 'diagnostic_updater.period:=0.2']' timed out after 2 seconds

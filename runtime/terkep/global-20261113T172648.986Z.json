@@ -1,0 +1,56 @@
+{
+  "schema": "R2B4_MAP_OBSERVER_V1",
+  "report_kind": "global",
+  "map": {
+    "schema": "R2B4_MAP_OBSERVER_V1",
+    "kind": "global",
+    "source_topic": "/map",
+    "frame_id": "R2B4_BOOT_ROBOT_MAP",
+    "source_stamp_ns": 1794590808986804093,
+    "received_wall_ns": 1794591096711752811,
+    "session_id": "nav2_5238363737467",
+    "width": 146,
+    "height": 103,
+    "resolution_m": 0.05000000074505806,
+    "origin": [
+      -2.4987380284676983,
+      -2.024934877530835,
+      0.0
+    ],
+    "source_kind": "ACTUAL_ROS_OCCUPANCYGRID"
+  },
+  "cell_histogram": {
+    "unknown": 8995,
+    "free": 5643,
+    "occupied": 400,
+    "inflation": 0
+  },
+  "mission_start_observed": false,
+  "mission_stop_observed": false,
+  "provenance": {
+    "config_sha256": {
+      "conf/nav2_planner.yaml": "074d94eeb622f17927e148ed50a5fb831f7b2d0fae38b426790ee78a1f7523c5",
+      "conf/slam_toolbox.yaml": "c5fbcebe1442b0bdc7e548f662977c672d3d91432e1f2c4f7bb2a643a2716971",
+      "conf/vezerles.json": "2c7750c12fcd53a996821998e7ce3727fe0c346dee8d90b56500dc1d8b85256c",
+      "runtime/nav2_planner/geometry.yaml": "75768eafb23325d19f0e022e12688b24134c8487d7227ca28a123fe27dd2d26d"
+    },
+    "capture_hint": "/home/alba/project_r2b4/runtime/captures/v3_20261113_185619_2767_capture.mcap",
+    "git_head": "6f54a4b81fa03a226e7b26bf0a8dea5dbafea124"
+  },
+  "source_to_received_ms": 287724.948718,
+  "path": [],
+  "goals": [],
+  "navigation": {
+    "goal_count": 0,
+    "decision_count": 0,
+    "recent_decisions": [],
+    "last_nav2_observation": null
+  },
+  "warnings": [
+    "NO_PATH_SAME_FRAME_SESSION",
+    "START_POSITION_ONLY_FIRST_OBSERVED_NOT_PROVEN_MISSION_START",
+    "END_POSITION_ONLY_LAST_OBSERVED_NOT_PROVEN_MISSION_END"
+  ],
+  "timestamp_policy": "SOURCE_HEADER_STAMP_UTC_NOT_EXPORT_TIME",
+  "coordinate_policy": "ONLY_NATIVE_MATCHING_FRAME; NO_FABRICATED_ALIGNMENT"
+}

@@ -369,3 +369,73 @@ RuntimeError: NAV2_LIFECYCLE_STATUS_STALE
 [WARN] [1794589988.296075745] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
 [WARN] [1794590776.840310340] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
 [WARN] [1794590776.840361989] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794591600.954902251] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794591600.954948788] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 600, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 596, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 327, in run
+    active = lifecycle.poll(now)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/adapters/nav2_lifecycle.py", line 71, in poll
+    raise RuntimeError("NAV2_LIFECYCLE_STARTUP_TIMEOUT")
+RuntimeError: NAV2_LIFECYCLE_STARTUP_TIMEOUT
+[WARN] [1794591839.960028764] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794591839.960072968] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 600, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 596, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 327, in run
+    active = lifecycle.poll(now)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/adapters/nav2_lifecycle.py", line 71, in poll
+    raise RuntimeError("NAV2_LIFECYCLE_STARTUP_TIMEOUT")
+RuntimeError: NAV2_LIFECYCLE_STARTUP_TIMEOUT
+[WARN] [1794592019.138430511] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794592019.138473345] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 600, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 596, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 327, in run
+    active = lifecycle.poll(now)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/adapters/nav2_lifecycle.py", line 71, in poll
+    raise RuntimeError("NAV2_LIFECYCLE_STARTUP_TIMEOUT")
+RuntimeError: NAV2_LIFECYCLE_STARTUP_TIMEOUT
+[WARN] [1794592594.982771622] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794592595.141384279] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+/home/alba/project_r2b4/runtime/deps/nav2-planner/lib/python3.12/site-packages/rclpy/action/server.py:421: RuntimeWarning: failed to send response (timeout): client will not receive response, at /home/runner/conda-bld/bld/rattler-build_ros2-rmw-fastrtps-shared-cpp_1791448957/work/ros2-rmw-fastrtps-shared-cpp/src/work/src/rmw_response.cpp:153, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/service.c:400
+  self._handle.send_cancel_response(request_header, cancel_response)
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 600, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 596, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 327, in run
+    active = lifecycle.poll(now)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/adapters/nav2_lifecycle.py", line 69, in poll
+    raise RuntimeError("NAV2_LIFECYCLE_STATUS_STALE")
+RuntimeError: NAV2_LIFECYCLE_STATUS_STALE
