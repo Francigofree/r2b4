@@ -32,6 +32,7 @@ class RoomCruiseGoals:
         self.last_rejection = None
         self.rejection_events = deque(maxlen=32)
         self.frontier_adjustment = None
+        self.robot_pose = None
 
     def begin(self, session):
         if self.session != session:
@@ -61,6 +62,7 @@ class RoomCruiseGoals:
         if self.session is None or pose is None or now_ns-self._last_observed_ns < 200_000_000:
             return
         self._last_observed_ns = now_ns
+        self.robot_pose = tuple(pose)
         key = self._key(*pose[:2])
         # An ordered bounded history keeps room coverage cheap for long runs.
         self._visits.pop(key, None)
@@ -118,6 +120,7 @@ class RoomCruiseGoals:
         # Empty/unreachable rooms must not turn an idle action loop into a
         # continuously running goal scorer.
         self._next_selection_ns = now_ns+1_000_000_000
+        self.robot_pose = tuple(pose)
         self._sample()
         x, y, heading = pose
         scored = []
@@ -164,6 +167,8 @@ class RoomCruiseGoals:
             measurement_monotonic_ns=now_ns, map_measurement_ns=self.grid_ns,
             map_revision=self.grid_revision, frame_id=self.grid.header.frame_id if hasattr(self.grid, "header") else None,
             original_goal=list(goal), modified_goal=None, first_blocking=blocking,
+            robot_pose=None if self.robot_pose is None else list(self.robot_pose),
+            trajectory=dict(model="destination_footprint", pose=list(goal)),
             body_bounds_m=list(self.body_bounds_m), padding_m=self.padding_m)
         self.rejection_events.append(self.last_rejection)
         return False
@@ -177,6 +182,7 @@ class RoomCruiseGoals:
         """
         if proposal is None or pose is None:
             return None
+        self.robot_pose = tuple(pose)
         distance = math.hypot(proposal[0]-pose[0], proposal[1]-pose[1])
         if distance < .35:
             return None

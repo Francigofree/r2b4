@@ -111,3 +111,5 @@ def test_frontier_is_inset_into_known_space_for_the_entire_body():
     assert goal is not None and goal[0]+.36 < 2.
     assert selector.valid_goal(goal, now)
     assert selector.frontier_adjustment['inset_m'] > 0
+    assert selector.last_rejection['robot_pose'] == [1., 1.5, 0.]
+    assert selector.last_rejection['first_blocking']['cost'] == -1

@@ -16,9 +16,15 @@ időkerettel; a BT 2 Hz-en tervez újra. Az
 20 Hz-en, 400 mintával, egy iterációval és 32 × 50 ms-os horizonttal dolgozik.
 Nincs trajectory-visualization. A V3 control továbbra is 50 Hz-es.
 
-A native adapter megtartja a resolved fizikai kerékhatárokra vetítést, majd a
-megváltozott parancs pontos körívét egy másodpercre, fél costmap-cellánál és
-0,05 radiánnál nem nagyobb lépésekkel újraellenőrzi. Ismeretlen vagy térképen
+A native adapter megtartja a resolved fizikai kerékhatárokra vetítést. MPPI-nél
+egy kerék az eredeti irányú hajtás mellett STOP-ra is válthat; az ellentétes
+irányú kerekek tiszta forgásra vetíthetők. Test- és kerékamplitúdó nem nőhet.
+A natív `R2B4WheelCritic` kerékenként bünteti a fizikai holtsávot, a STOP-ot és
+a helyben forgást megengedi. Az eredeti V3 projekció szemantikája nem változott.
+A végleges parancs pontos körívét egy másodpercre, a legtávolabbi testpont
+legfeljebb félcellányi elmozdulásával újraellenőrzi. A teljes téglalap által
+metszett cellákat vizsgálja; a puha inflációt nem alkalmazza újabb testmargin
+gyanánt. Ismeretlen vagy térképen
 kívüli geometria nem fogadható el. Az optimizer indulási gyorsulási kerete
 átlépheti a kerékholtsávot; a tényleges fizikai gyorsulást változatlanul L9
 korlátozza. A két modell eltérését élő evidence-ben ellenőrizni kell.
@@ -26,6 +32,31 @@ Az 5 Hz-es `v3.nav2_observation.mppi_raw_command` az eredeti ROS source-idővel
 rögzíti a vetítés előtti javaslatot; a meglévő controller-, odometria-, recovery-,
 coverage- és lifecycle-adatokkal együtt vizsgálható. Ez mintavett evidence,
 nem teljes ROS bag vagy exact-replay input.
+
+Az RC célválasztó a resolved aszimmetrikus teljes testet és egyszer alkalmazott
+paddinget ellenőrzi a global costmapen. Frontier esetén a szabad/ismeretlen
+határon fekvő centroid helyett legfeljebb 0,60 m-rel beljebb választ igazoltan
+szabad megközelítési célt. A puha infláció sugara 0,50 m, a fizikai 0,36 × 0,36 m
+test és a 0,10 m L12-clearance változatlan. A local costmap 5 Hz-en publikál.
+
+A fix BT recovery-sorozat helyett a meglévő ROS bridge választ hátramenetet,
+bal/jobb forgást vagy Smac-tervvel ellenőrzött kerülőt a friss local costmapből.
+Csak az előző action terminális eredménye után indulhat új action; a sikertelen
+manőver az epizódon belül kizárt. A natív BackUp/Spin/kerülő sikere után az
+eredeti cél újraindul. Kiszabadulást az ezutáni legalább 0,25 m odometriai
+elmozdulás és 0,15 m célirányú tervhaladás, illetve az eredeti cél elérése igazol.
+A 4,5 s-os transzláció nélküli elakadás és a legfeljebb 5 s-os progress-ellenőrzés
+ROS-oldali munka; V3 továbbra is a canonical parancs-, frissességi és safety-út.
+
+A `motion_evidence` legfeljebb 16 natív eseményt és kumulatív számlálókat ad
+5 Hz-en: raw/projected/forwarded parancs és keréksebesség, mért sebesség, pose,
+körívdefiníció, első tiltó cella és ok. A `goal_geometry` és `rc_recovery` bounded
+eseményei a cél- és manőverelutasításokat, valamint a tényleges recovery-outcome-ot
+rögzítik. A `bridge_execution.navigation_executor` wall/CPU maximuma segíti a
+ROS-várakozás és a Python-munka elkülönítését. Upstream solver-/behavior-hiba
+esetén a Nav2 nem minden esetben teszi elérhetővé a belső első ütköző cellát.
+Az élő elfogadás eredménye és korlátai a
+[2026-11-14-i stabilizálási jelentésben](analysis/20261114_rc_navigation_stability.md) vannak.
 
 A ROS supervisorok követik az aktív `runtime_affinity` policyt. Kikapcsolt
 policy mellett nincs saját CPU-szűkítés: a jelenlegi gépen SLAM és Nav2 minden
@@ -76,6 +107,8 @@ vett igénybe. A profil csak a Nav2 processzkörnyezetére hat; a lifecycle és
 command freshness határidők nem változtak. A bridge-státusz és az MCAP
 `nav2_observation.lifecycle_status` fix skalármezői külön mutatják a query idejét,
 az utolsó válasz korát, a timeoutokat és a legnagyobb poll-közt.
+Ez az egy DDS-várakozás limitje, nem a teljes Python callback felső időkorlátja;
+a 2026-11-14-i élő próbában továbbra is előfordult 1,657 s-os poll-kimaradás.
 
 A manager saját `diagnostic_updater` publishere 5 Hz-en ad `Nav2 Health`
 státuszt a `/diagnostics` topicra. Az alkalmazott szolgáltatás és bond-viselkedés

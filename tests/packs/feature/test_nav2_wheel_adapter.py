@@ -50,6 +50,8 @@ int main() {
   check(0., .3, -1.4); // opposite arc remains free
   map.setCost(50, 50, nav2_costmap_2d::LETHAL_OBSTACLE);
   check(0., 0., 0.); // t=0 checked even for a stop
+  const auto e=r2b4_nav2::commandEvidence(&map, footprint, 0., 0., 0., 0., 0.);
+  std::cout << e.reason << " " << e.sample << " " << e.cell_x << " " << e.cell_y << " " << e.cost << "\n";
 }
 ''')
     (tmp_path / "CMakeLists.txt").write_text('''
@@ -78,7 +80,8 @@ target_link_libraries(collision "''' + str(prefix / "lib/libmppi_controller.so")
     result = subprocess.run([str(build / "collision")], env=env,
         capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["0", "1", "0", "1", "1", "1", "0", "1"]
+    assert result.stdout.splitlines() == ["0", "1", "0", "1", "1", "1", "0", "1",
+        "lethal_cell 0 50 50 254"]
 
 
 @pytest.fixture(scope="module")

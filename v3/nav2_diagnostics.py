@@ -381,6 +381,7 @@ class Nav2Telemetry:
             "goal_lifecycle": {key: state.get(key) for key in (
                 "cancellations", "action_active", "cancelling", "frontier_goals", "frontier_rejected")},
             "frontier_startup": state.get("frontier_startup"),
+            "bridge_execution": state.get("bridge_execution"),
             "cruise": {key: state.get(key) for key in ("cruise_phase", "coverage_goals", "coverage_reached", "coverage_failed")},
             "maps": {kind: dict(summary, age_ns=_age(now, summary["measurement_monotonic_ns"]))
                      for kind, summary in self.map_summaries.items()},

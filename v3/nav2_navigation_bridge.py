@@ -170,6 +170,7 @@ def run(args):
     scan_history, odom_history, tf_history = deque(maxlen=32), deque(maxlen=32), deque(maxlen=32)
     sequence, last_status_ns, last_reply_ns = 0, 0, 0
     last_active_until_ns = 0
+    spin_timing = dict(count=0, max_wall_ns=0, max_cpu_ns=0)
     latest_source_ns = -1
 
     def stamp_ns(message):
@@ -449,7 +450,12 @@ def run(args):
     executor.add_node(node)
     try:
         while not stopped and rclpy.ok():
+            spin_wall, spin_cpu = time.monotonic_ns(), time.thread_time_ns()
             executor.spin_once(timeout_sec=.002)
+            elapsed, used = time.monotonic_ns()-spin_wall, time.thread_time_ns()-spin_cpu
+            spin_timing.update(count=spin_timing["count"]+1,
+                max_wall_ns=max(spin_timing["max_wall_ns"], elapsed),
+                max_cpu_ns=max(spin_timing["max_cpu_ns"], used), last_wall_ns=elapsed, last_cpu_ns=used)
             now = time.monotonic_ns()
             frontier.poll()
             active = lifecycle.poll(now)
@@ -591,6 +597,9 @@ def run(args):
                         valid = succeeded and blocking is None
                         recovery.event(now, "detour_plan_checked", candidate=recovery.selected["name"],
                             ok=valid, first_blocking=blocking,
+                            rejecting_component=None if valid else "nav2_planner_or_rc_path_check",
+                            error_code=int(getattr(envelope.result, "error_code", 0)),
+                            error_message=str(getattr(envelope.result, "error_msg", ""))[:192],
                             path=diagnostics.path,
                             reason="plan_safe" if valid else "smac_plan_failed" if not succeeded else "footprint_blocked")
                         if valid:
@@ -599,6 +608,14 @@ def run(args):
                         else:
                             recovery.action_finished(False, local_pose, now)
                     elif action_kind != "NAVIGATE":
+                        recovery.event(now, "native_action_result", action_kind=action_kind,
+                            rejecting_component=None if succeeded else
+                                "nav2_behavior_server" if action_kind in ("BACKUP", "SPIN") else "nav2_bt_navigator",
+                            status=int(envelope.status), error_code=int(getattr(envelope.result, "error_code", 0)),
+                            error_message=str(getattr(envelope.result, "error_msg", ""))[:192],
+                            robot_pose=None if local_pose is None else list(local_pose),
+                            requested_maneuver=recovery.selected,
+                            first_blocking=None, native_internal_trajectory_exposed=False)
                         recovery.action_finished(succeeded, local_pose, now)
                         settle_until_ns = now+150_000_000
                     elif succeeded:
@@ -777,6 +794,7 @@ def run(args):
                     frontier_pid=None if frontier.process is None else frontier.process.pid,
                     frontier_goals=frontier.accepted, frontier_rejected=frontier.rejected)
                 state["frontier_startup"] = frontier.startup_timing
+                state["bridge_execution"] = dict(navigation_executor=dict(spin_timing))
                 state.update(**cruise.snapshot())
                 state["rc_recovery"] = recovery.snapshot()
                 state["action_kind"] = action_kind
@@ -790,6 +808,7 @@ def run(args):
                 temporary.replace(status_path)
                 last_status_ns = now
     except BaseException as exc:
+        state["bridge_execution"] = dict(navigation_executor=dict(spin_timing))
         state.update(state="FAILED", error=f"{type(exc).__name__}:{exc}"[:256])
         state["lifecycle_status"] = lifecycle.snapshot(time.monotonic_ns())
         diagnostics.record_error(time.monotonic_ns(), "BRIDGE_FAILED", message=state["error"])
