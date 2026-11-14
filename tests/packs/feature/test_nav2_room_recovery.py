@@ -88,3 +88,18 @@ def test_recovery_requires_fresh_feedback_plus_post_maneuver_translation_and_goa
     r.begin([2., 0., 0.], now, "stalled")
     assert r.choose(grid(), now-500_000_001, (0., 0., 0.), (0., 0., 0.), now) is None
     assert r.counts["attempts"] == 1
+
+
+def test_initial_zero_feedback_does_not_poison_resumed_navigation_progress_baseline():
+    r = RoomCruiseRecovery(BOUNDS, PAD)
+    now = 1_000_000_000
+    r.begin([2., 0., 0.], now, "stalled")
+    r.choose(grid(), now, (0., 0., 0.), (0., 0., 0.), now)
+    r.action_finished(True, (-.25, 0., 0.), now)
+    r.feedback(0., now+1)
+    r.feedback(-1., now+2)
+    assert r.baseline_remaining is None
+    assert r.deadline_ns == now+7_000_000_000
+    r.feedback(2., now+3)
+    assert r.verify((.05, 0., 0.), 1.8, now+4, now+4) is True
+    assert r.counts["progress_verified"] == 1

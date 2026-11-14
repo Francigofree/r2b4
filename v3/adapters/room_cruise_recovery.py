@@ -115,7 +115,11 @@ class RoomCruiseRecovery:
             self.state = "READY"
 
     def feedback(self, remaining, now):
-        if self.state == "VERIFY" and self.baseline_remaining is None and math.isfinite(remaining):
+        # NavigateToPose initially publishes its default zero before FollowPath
+        # has a path. It cannot be the baseline for a distance-drop proof.
+        # Actual goal arrival is proved separately by the action's result.
+        if (self.state == "VERIFY" and self.baseline_remaining is None
+                and math.isfinite(remaining) and remaining > 0.):
             self.baseline_remaining, self.feedback_ns = remaining, now
             self.deadline_ns = now+5_000_000_000
             self.event(now, "verification_started", distance_remaining_m=remaining)

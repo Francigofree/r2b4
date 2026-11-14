@@ -10,6 +10,8 @@ from collections import Counter, OrderedDict, deque
 import json
 import math
 from pathlib import Path
+import sys
+import threading
 import time
 
 from v3.lidar_geometry import body_clearance_m
@@ -29,6 +31,74 @@ _MAX_VISITED_CELLS = 65_536
 
 def _age(now, source):
     return now-source if type(source) is int and 0 < source <= now else None
+
+
+class Nav2StatusWriter:
+    """One immutable latest JSON snapshot; SD-card I/O cannot stall ROS polling.
+
+    This writes only the existing passive observation file. No ROS objects,
+    callbacks, command state or navigation authority crosses this thread.
+    """
+
+    def __init__(self, path):
+        self.path = Path(path)
+        self._condition = threading.Condition()
+        self._pending = None
+        self._closing = False
+        self._stats = dict(submitted=0, written=0, superseded=0, errors=0,
+            last_error=None, max_write_wall_ns=0, in_flight_started_ns=None,
+            last_success_ns=None, written_sequence=0)
+        self._thread = threading.Thread(target=self._run, name="nav2-status", daemon=True)
+        self._thread.start()
+
+    def publish(self, encoded):
+        with self._condition:
+            if self._closing:
+                raise RuntimeError("Nav2 status writer already closed")
+            self._stats["submitted"] += 1
+            self._stats["superseded"] += int(self._pending is not None)
+            self._pending = encoded, self._stats["submitted"]
+            self._condition.notify()
+
+    def snapshot(self):
+        with self._condition:
+            return dict(self._stats, pending=self._pending is not None,
+                running=self._thread.is_alive())
+
+    def _run(self):
+        temporary = self.path.with_suffix(".tmp")
+        while True:
+            with self._condition:
+                self._condition.wait_for(lambda: self._pending is not None or self._closing)
+                if self._pending is None:
+                    return
+                (encoded, sequence), self._pending = self._pending, None
+                started = time.monotonic_ns()
+                self._stats["in_flight_started_ns"] = started
+            error = None
+            try:
+                temporary.write_text(encoded)
+                temporary.replace(self.path)
+            except OSError as exc:
+                error = f"{type(exc).__name__}:{exc}"[:192]
+            with self._condition:
+                self._stats["max_write_wall_ns"] = max(
+                    self._stats["max_write_wall_ns"], time.monotonic_ns()-started)
+                self._stats["written" if error is None else "errors"] += 1
+                self._stats["last_error"] = error
+                self._stats["in_flight_started_ns"] = None
+                if error is None:
+                    self._stats.update(last_success_ns=time.monotonic_ns(), written_sequence=sequence)
+                first_error = error is not None and self._stats["errors"] == 1
+            if first_error:
+                print(f"Nav2 observation write failed: {error}", file=sys.stderr, flush=True)
+
+    def close(self):
+        with self._condition:
+            self._closing = True
+            self._condition.notify()
+        self._thread.join(timeout=1.)
+        return not self._thread.is_alive()
 
 
 class Nav2Telemetry:

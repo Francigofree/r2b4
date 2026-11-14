@@ -16,7 +16,7 @@ from v3.adapters.nav2_navigation import (
     decode_packet, encode_packet,
 )
 from v3.contracts import GLOBAL_FRAME_ID, LOCAL_FRAME_ID
-from v3.nav2_diagnostics import NAV2_SAMPLE_PERIOD_NS, Nav2Diagnostics
+from v3.nav2_diagnostics import NAV2_SAMPLE_PERIOD_NS, Nav2Diagnostics, Nav2StatusWriter
 
 
 def validate_request(packet, now_ns):
@@ -171,7 +171,23 @@ def run(args):
     sequence, last_status_ns, last_reply_ns = 0, 0, 0
     last_active_until_ns = 0
     spin_timing = dict(count=0, max_wall_ns=0, max_cpu_ns=0)
+    edge_timing = {}
     latest_source_ns = -1
+
+    def edge_call(name, function, *values, **options):
+        # Fixed call sites in this ROS edge only. Separate CPU work, middleware
+        # requests and filesystem waits when a readiness/command deadline slips.
+        wall, cpu = time.monotonic_ns(), time.thread_time_ns()
+        try:
+            return function(*values, **options)
+        finally:
+            elapsed, used = time.monotonic_ns()-wall, time.thread_time_ns()-cpu
+            row = edge_timing.setdefault(name, dict(count=0, max_wall_ns=0, max_cpu_ns=0))
+            row["count"] += 1
+            row["max_cpu_ns"] = max(row["max_cpu_ns"], used)
+            if elapsed > row["max_wall_ns"]:
+                row.update(max_wall_ns=elapsed, max_call_started_ns=wall,
+                    max_call_cpu_ns=used)
 
     def stamp_ns(message):
         return message.header.stamp.sec*1_000_000_000+message.header.stamp.nanosec-ros_offset_ns
@@ -351,12 +367,12 @@ def run(args):
             reply("PENDING")
         last_active_until_ns = 0
         if stop_frontier:
-            frontier.stop()
+            edge_call("frontier_stop", frontier.stop)
         if not cancelling and (sending is not None or handle is not None):
             cancelling, cancel_started_ns = True, now
             state["cancellations"] += 1
             if handle is not None:
-                cancel_future = handle.cancel_goal_async()
+                cancel_future = edge_call("cancel_request", handle.cancel_goal_async)
 
     def finish_navigation(succeeded, error_code, now):
         nonlocal selected_goal, frontier_goal, terminal_status, settle_until_ns
@@ -396,7 +412,7 @@ def run(args):
         diagnostics.recovery_feedback = None
         motion_anchor = None if diagnostics.local_pose is None else diagnostics.local_pose[1]
         motion_anchor_ns = navigation_started_ns = time.monotonic_ns()
-        sending = navigator.send_goal_async(goal, feedback_callback=(
+        sending = edge_call("navigate_request", navigator.send_goal_async, goal, feedback_callback=(
             lambda message, child_id=state["child_goal_id"], mission_id=current[0]["mission_id"], action_id=action_generation:
                 navigation_feedback(message, child_id, mission_id, action_id)))
         reply("PENDING")
@@ -448,6 +464,7 @@ def run(args):
     # and removes it every call, forcing unnecessary wait-set rebuilds.
     executor = rclpy.get_global_executor()
     executor.add_node(node)
+    status_writer = Nav2StatusWriter(status_path)
     try:
         while not stopped and rclpy.ok():
             spin_wall, spin_cpu = time.monotonic_ns(), time.thread_time_ns()
@@ -458,11 +475,12 @@ def run(args):
                 max_cpu_ns=max(spin_timing["max_cpu_ns"], used), last_wall_ns=elapsed, last_cpu_ns=used)
             now = time.monotonic_ns()
             frontier.poll()
-            active = lifecycle.poll(now)
+            active = edge_call("lifecycle_poll", lifecycle.poll, now)
             state["state"] = "RUNNING" if active else "STARTING"
             robot_pose = None
             try:
-                transform = tf_buffer.lookup_transform(GLOBAL_FRAME_ID, "base_link", Time())
+                transform = edge_call("pose_lookup", tf_buffer.lookup_transform,
+                    GLOBAL_FRAME_ID, "base_link", Time())
                 tf_ns = stamp_ns(transform)
                 if not tf_history or tf_ns > tf_history[-1]:
                     tf_history.append(tf_ns)
@@ -520,7 +538,7 @@ def run(args):
                     # admission. Actual Nav2 dispatch below still requires
                     # fresh sensors/map/TF and applied mission tolerances.
                     if cruise.phase == "FRONTIER":
-                        frontier.start(session)
+                        edge_call("frontier_start", frontier.start, session)
                 limit = SpeedLimit()
                 limit.header.stamp = node.get_clock().now().to_msg()
                 limit.percentage, limit.speed_limit = False, float(packet["max_v_mps"])
@@ -569,9 +587,9 @@ def run(args):
                 else:
                     accepted_ns = now
                     last_active_until_ns = 0
-                    result_future = handle.get_result_async()
+                    result_future = edge_call("result_request", handle.get_result_async)
                     if cancelling:
-                        cancel_future = handle.cancel_goal_async()
+                        cancel_future = edge_call("cancel_request", handle.cancel_goal_async)
             if result_future is not None and result_future.done():
                 envelope = result_future.result()
                 handle, result_future, cancel_future = None, None, None
@@ -593,7 +611,7 @@ def run(args):
                     if action_kind == "PLAN_DETOUR":
                         if succeeded:
                             diagnostics.observe_path(envelope.result.path, stamp_ns(envelope.result.path))
-                        blocking = None if not succeeded else check_detour_path(envelope.result.path, now)
+                        blocking = None if not succeeded else edge_call("detour_path_check", check_detour_path, envelope.result.path, now)
                         valid = succeeded and blocking is None
                         recovery.event(now, "detour_plan_checked", candidate=recovery.selected["name"],
                             ok=valid, first_blocking=blocking,
@@ -652,7 +670,7 @@ def run(args):
                             "FollowPath.mission_max_v_mps",
                             "FollowPath.mission_max_omega_rad_s"), desired)]
                     parameter_values, parameter_started_ns = desired, now
-                    parameter_future = goal_parameters.call_async(parameters)
+                    parameter_future = edge_call("parameter_request", goal_parameters.call_async, parameters)
             fresh = (map_valid and 0 <= now-map_received_ns <= 6_000_000_000
                 and 0 <= now-map_stamp_ns <= 6_000_000_000
                 and all(0 < stamp <= now and now-stamp <= SENSOR_MAX_AGE_NS for stamp in (scan_ns, odom_ns, tf_ns)))
@@ -685,7 +703,7 @@ def run(args):
                     and parameter_future is None and applied_tolerances == desired
                     and now >= settle_until_ns and recovery.state == "READY"):
                 summary = diagnostics.map_summaries.get("local_costmap", {})
-                candidate = recovery.choose(diagnostics.maps.get("local_costmap"),
+                candidate = edge_call("recovery_choice", recovery.choose, diagnostics.maps.get("local_costmap"),
                     summary.get("measurement_monotonic_ns", 0),
                     None if diagnostics.local_pose is None else diagnostics.local_pose[1], robot_pose, now)
                 if candidate is not None:
@@ -701,16 +719,16 @@ def run(args):
                         goal = BackUp.Goal()
                         goal.target.x, goal.speed = .25, .19
                         goal.time_allowance.sec = 5
-                        sending = backup.send_goal_async(goal)
+                        sending = edge_call("backup_request", backup.send_goal_async, goal)
                     elif action_kind == "SPIN" and spin.server_is_ready():
                         goal = Spin.Goal()
                         goal.target_yaw = candidate["w"]*candidate["duration"]
                         goal.time_allowance.sec = 5
-                        sending = spin.send_goal_async(goal)
+                        sending = edge_call("spin_request", spin.send_goal_async, goal)
                     elif action_kind == "PLAN_DETOUR" and planner.server_is_ready():
                         goal = ComputePathToPose.Goal()
                         goal.goal, goal.planner_id, goal.use_start = goal_pose(candidate["goal"]), "GridBased", False
-                        sending = planner.send_goal_async(goal)
+                        sending = edge_call("plan_request", planner.send_goal_async, goal)
                     else:
                         recovery.action_finished(False, None, now)
                     reply("PENDING")
@@ -728,12 +746,12 @@ def run(args):
                 if selected_goal is None:
                     if packet["mode"] == "EXPLORE":
                         if cruise.phase == "COVERAGE":
-                            selected_goal = cruise.select(robot_pose, now)
+                            selected_goal = edge_call("coverage_choice", cruise.select, robot_pose, now)
                         else:
                             session = tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation"))
-                            if frontier.start(session):
+                            if edge_call("frontier_start", frontier.start, session):
                                 frontier_goal = frontier.proposal
-                                selected_goal = cruise.frontier_destination(
+                                selected_goal = edge_call("frontier_choice", cruise.frontier_destination,
                                     None if frontier_goal is None else frontier_goal.goal, robot_pose, now)
                                 if frontier_goal is not None and selected_goal is None:
                                     frontier.finish(frontier_goal, "ABORTED", 900)
@@ -794,21 +812,22 @@ def run(args):
                     frontier_pid=None if frontier.process is None else frontier.process.pid,
                     frontier_goals=frontier.accepted, frontier_rejected=frontier.rejected)
                 state["frontier_startup"] = frontier.startup_timing
-                state["bridge_execution"] = dict(navigation_executor=dict(spin_timing))
+                state["bridge_execution"] = dict(navigation_executor=dict(spin_timing),
+                    edge_calls=edge_timing, status_writer=status_writer.snapshot())
                 state.update(**cruise.snapshot())
                 state["rc_recovery"] = recovery.snapshot()
                 state["action_kind"] = action_kind
                 state["goal_checker_tolerances"] = applied_tolerances
-                state["nav2_observation"] = diagnostics.snapshot(now,
+                state["nav2_observation"] = edge_call("observation", diagnostics.snapshot, now,
                     scan_ns=scan_ns, odom_ns=odom_ns, tf_ns=tf_ns,
                     active=handle is not None and not cancelling,
                     robot_pose=robot_pose, state=state)
-                temporary = status_path.with_suffix(".tmp")
-                temporary.write_text(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
-                temporary.replace(status_path)
+                encoded = edge_call("status_encode", json.dumps, state, allow_nan=False, sort_keys=True)+"\n"
+                status_writer.publish(encoded)
                 last_status_ns = now
     except BaseException as exc:
-        state["bridge_execution"] = dict(navigation_executor=dict(spin_timing))
+        state["bridge_execution"] = dict(navigation_executor=dict(spin_timing),
+            edge_calls=edge_timing, status_writer=status_writer.snapshot())
         state.update(state="FAILED", error=f"{type(exc).__name__}:{exc}"[:256])
         state["lifecycle_status"] = lifecycle.snapshot(time.monotonic_ns())
         diagnostics.record_error(time.monotonic_ns(), "BRIDGE_FAILED", message=state["error"])
@@ -828,9 +847,9 @@ def run(args):
         state["nav2_observation"] = diagnostics.snapshot(final_observed_ns,
             scan_ns=scan_ns, odom_ns=odom_ns, tf_ns=tf_ns, active=False,
             robot_pose=None, state=state)
-        temporary = status_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
-        temporary.replace(status_path)
+        status_writer.publish(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
+        if not status_writer.close():
+            node.get_logger().error("Nav2 observation writer did not drain within 1s")
         executor.remove_node(node)
         node.destroy_node()
         rclpy.shutdown()
