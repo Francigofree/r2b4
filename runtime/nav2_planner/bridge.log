@@ -705,3 +705,37 @@ RuntimeError: NAV2_LIFECYCLE_STATUS_STALE
 [WARN] [1794694801.799886958] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
 [WARN] [1794696356.453161295] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
 [WARN] [1794696356.453212240] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794696751.684995196] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794696751.685067974] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794696864.958099497] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794696864.958148886] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794697026.823063401] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794697026.823130068] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 872, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 868, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 478, in run
+    active = edge_call("lifecycle_poll", lifecycle.poll, now)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 182, in edge_call
+    return function(*values, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/adapters/nav2_lifecycle.py", line 69, in poll
+    raise RuntimeError("NAV2_LIFECYCLE_STATUS_STALE")
+RuntimeError: NAV2_LIFECYCLE_STATUS_STALE
+[WARN] [1794697184.574100207] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794697184.574159522] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794697353.369150060] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794697353.369196764] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794697486.474180520] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794697486.474227632] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1794698284.609349059] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794698284.609391596] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+/home/alba/project_r2b4/runtime/deps/nav2-planner/lib/python3.12/site-packages/rclpy/action/server.py:421: RuntimeWarning: failed to send response (timeout): client will not receive response, at /home/runner/conda-bld/bld/rattler-build_ros2-rmw-fastrtps-shared-cpp_1791448957/work/ros2-rmw-fastrtps-shared-cpp/src/work/src/rmw_response.cpp:153, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/service.c:400
+  self._handle.send_cancel_response(request_header, cancel_response)
