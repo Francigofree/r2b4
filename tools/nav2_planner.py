@@ -15,7 +15,8 @@ import subprocess
 import sys
 import time
 
-from tools.slam_toolbox import _read_json, _write_json, _process_start, _ros_environment, _terminate_with_parent
+from tools.slam_toolbox import (_read_json, _write_json, _process_start, _ros_environment,
+                               _terminate_with_parent, _apply_ros_affinity)
 from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
 
 
@@ -130,7 +131,7 @@ def _write_geometry(paths, control):
     limits = control.operational_constraints
     minimum = limits.wheel_limits.target_minimum_mps
     constraints = control.mission.default_constraints
-    # RPP proposes steady targets from measured odometry. Its own startup ramp
+    # MPPI proposes steady targets from measured odometry. Its own startup ramp
     # must cross the wheel deadband in one controller step; the physical ramp
     # remains exclusively limited by V3 L9, using the unchanged platform limit.
     proposal_acceleration = max(limits.max_angular_acceleration_rad_s2,
@@ -139,11 +140,14 @@ def _write_geometry(paths, control):
              f"      xy_goal_tolerance: {constraints.goal_tolerance_m / 2}\n"
              f"      yaw_goal_tolerance: {constraints.yaw_tolerance_rad / 2}\n"
              "    FollowPath:\n"
-             f"      desired_linear_vel: {min(.30, limits.max_v_mps)}\n"
-             f"      regulated_linear_scaling_min_speed: {minimum}\n"
-             f"      min_approach_linear_velocity: {minimum}\n"
-             f"      rotate_to_heading_angular_vel: {max(limits.wheel_limits.target_center_spin_rad_s, min(1.2, limits.max_omega_rad_s))}\n"
-             f"      max_angular_accel: {proposal_acceleration}\n"
+             f"      vx_max: {min(.30, limits.max_v_mps)}\n"
+             f"      vx_min: {-min(.20, limits.max_v_mps)}\n"
+             f"      wz_max: {limits.max_omega_rad_s}\n"
+             f"      ax_max: {max(limits.max_acceleration_mps2, minimum * 20.0 * 1.1)}\n"
+             f"      ax_min: {-max(limits.max_acceleration_mps2, minimum * 20.0 * 1.1)}\n"
+             f"      az_max: {proposal_acceleration}\n"
+             "      VelocityDeadbandCritic:\n"
+             f"        deadband_velocities: [{minimum}, 0.0, 0.0]\n"
              f"      track_width_m: {limits.wheel_limits.track_width_m}\n"
              f"      wheel_minimum_mps: {limits.wheel_limits.minimum_mps}\n"
              f"      wheel_maximum_mps: {limits.wheel_limits.maximum_mps}\n"
@@ -285,12 +289,13 @@ def start(root, *, ros_domain_id=74):
         dependencies = [paths["prefix"] / "bin" / "python", paths["params"],
                         root / "conf" / "nav2_fastdds.xml",
                         paths["prefix"] / "lib" / "nav2_planner" / "planner_server",
+                        paths["prefix"] / "lib" / "libnav2_smac_planner.so",
                         paths["prefix"] / "lib" / "nav2_lifecycle_manager" / "lifecycle_manager"]
         if full:
             dependencies += [paths["bt"], paths["prefix"] / "lib" / "nav2_controller" / "controller_server",
                              paths["prefix"] / "lib" / "nav2_behaviors" / "behavior_server",
                              paths["prefix"] / "lib" / "nav2_bt_navigator" / "bt_navigator",
-                             paths["prefix"] / "lib" / "libnav2_regulated_pure_pursuit_controller.so",
+                             paths["prefix"] / "lib" / "libmppi_controller.so",
                              paths["overlay"] / "lib" / "libr2b4_nav2_wheel_adapter.so",
                              paths["frontier"] / "lib/explore_lite/explore", paths["frontier_params"]]
         for dependency in dependencies:
@@ -411,16 +416,7 @@ def _supervise(root, ros_domain_id):
     children, logs = [], []
     try:
         os.nice(10)
-        allowed = os.sched_getaffinity(0)
-        control = _read_json(root / "conf" / "vezerles.json").get("runtime_affinity", {}).get("control_cpus", [3])
-        cpus = (allowed & {1, 2}) - set(control)
-        if not cpus:
-            cpus = allowed - set(control)
-        if not cpus:
-            raise RuntimeError("No CPU available outside the configured control CPU")
-        cpus = {min(cpus)}
-        os.sched_setaffinity(0, cpus)
-        state["cpus"] = sorted(cpus)
+        state["cpus"] = _apply_ros_affinity(root, "planner")
         resolved = _resolved_config(root)
         control = resolved.runtime.composition.live_control.control
         full = control.navigation.full_nav2_enabled

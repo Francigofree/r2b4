@@ -147,8 +147,7 @@ def _worker(args, root, output):
         return value
 
     stamp = node.get_clock().now().to_msg()
-    static_publisher.sendTransform([transform(MAP_FRAME, ODOM_FRAME, stamp),
-                                   transform(BASE_FRAME, LASER_FRAME, stamp)])
+    static_publisher.sendTransform(transform(BASE_FRAME, LASER_FRAME, stamp))
 
     def publish_map():
         message = OccupancyGrid()
@@ -172,7 +171,8 @@ def _worker(args, root, output):
 
     def publish_sensors(v, omega, *, scan):
         stamp = node.get_clock().now().to_msg()
-        tf_publisher.sendTransform(transform(ODOM_FRAME, BASE_FRAME, stamp, *pose))
+        tf_publisher.sendTransform([transform(MAP_FRAME, ODOM_FRAME, stamp),
+                                   transform(ODOM_FRAME, BASE_FRAME, stamp, *pose)])
         message = Odometry()
         message.header.frame_id, message.child_frame_id, message.header.stamp = ODOM_FRAME, BASE_FRAME, stamp
         message.pose.pose.position.x, message.pose.pose.position.y = pose[:2]
@@ -198,7 +198,8 @@ def _worker(args, root, output):
             laser.ranges = ranges
             scan_publisher.publish(laser)
 
-    commands = _commands(paths, full=True, radius=radius)
+    commands = _commands(paths, full=True, radius=radius,
+                         robot_geometry=simulation_config["robot_geometry"])
     children, handles = [], []
     report = dict(schema="R2B4_NAV2_MOTORLESS_PROBE_V1", status="FAILED", motor_authority=False,
         ros_domain_id=args.ros_domain_id, output=str(output), radius_m=radius,
@@ -481,8 +482,10 @@ def _worker(args, root, output):
         try:
             report["bridge"] = json.loads(bridge_status.read_text())
             applied = report["bridge"].get("goal_checker_tolerances")
+            expected = [.18, math.pi] if args.frontier_only else [
+                constraints.goal_tolerance_m / 2, constraints.yaw_tolerance_rad / 2]
             report["goal_checker_tolerances_applied"] = (isinstance(applied, list)
-                and applied[:2] == [constraints.goal_tolerance_m / 2, constraints.yaw_tolerance_rad / 2])
+                and applied[:2] == expected)
             if report["status"] == "PASS" and not report["goal_checker_tolerances_applied"]:
                 report.update(status="FAILED", error="requested goal checker tolerances were not applied")
         except (OSError, ValueError):
@@ -535,17 +538,21 @@ def main(argv=None):
               else args.output.resolve())
     if args.output is not None:
         output.mkdir(parents=True, exist_ok=False)
-    from tools.nav2_planner import _paths, _resolved_control, _write_geometry, _navigation_environment
+    from tools.nav2_planner import _paths, _resolved_config, _write_geometry, _navigation_environment
     paths = _paths(root)
     paths.update(work=output, socket=output / "bridge.sock", status=output / "bridge_status.json",
                  geometry=output / "geometry.yaml")
-    control = _resolved_control(root)
+    resolved = _resolved_config(root)
+    control = resolved.runtime.composition.live_control.control
     radius = _write_geometry(paths, control)
     mission = asdict(control.mission.default_constraints)
     mission["max_v_mps"] = min(.25, mission["max_v_mps"], control.operational_constraints.max_v_mps)
     mission["max_omega_rad_s"] = min(1.4, mission["max_omega_rad_s"], control.operational_constraints.max_omega_rad_s)
     (output / "simulation_config.json").write_text(json.dumps(dict(
-        operational=asdict(control.operational_constraints), mission=mission), sort_keys=True) + "\n")
+        operational=asdict(control.operational_constraints), mission=mission,
+        robot_geometry={"body_bounds_m": resolved.lidar.safety_body_bounds_m,
+                        "lidar_xy_m": [resolved.lidar.matcher.lidar_x_offset_m,
+                                       resolved.lidar.matcher.lidar_y_offset_m]}), sort_keys=True) + "\n")
     prefix = root / "runtime/deps/nav2-planner"
     environment = _navigation_environment(paths, root)
     environment.update(ROS_DOMAIN_ID=str(args.ros_domain_id), ROS_LOG_DIR=str(output / "ros_logs"))

@@ -50,6 +50,18 @@ def test_controller_errors_are_bounded_and_transform_headroom_is_not_measurement
     assert row["controller_errors"][-1]["measurement_monotonic_ns"] == 1_000_000_025
 
 
+def test_mppi_raw_proposal_retains_source_time_separate_from_projected_command():
+    telemetry = helper()
+    telemetry.observe_raw_command(command(.25, .6), 1_000_000_000, 1_010_000_000)
+    telemetry.observe_command(command(.25, .4), 1_000_000_000, 1_020_000_000)
+    row = observation(telemetry, 1_100_000_000)
+    assert row["mppi_raw_command"] == {"measurement_monotonic_ns": 1_000_000_000,
+        "v_mps": .25, "omega_rad_s": .6}
+    assert row["mppi_raw_command_count"] == 1
+    telemetry.observe_raw_command(command(math.nan), 1_050_000_000, 1_060_000_000)
+    assert observation(telemetry, 1_200_000_000)["mppi_raw_command"] == row["mppi_raw_command"]
+
+
 def test_map_path_and_scan_alignment_are_bounded_and_use_measurement_time():
     telemetry = helper()
     now = 2_000_000_000

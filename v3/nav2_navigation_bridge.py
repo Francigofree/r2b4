@@ -72,7 +72,7 @@ def controller_goal_parameters(packet):
     # Requiring centimetre/yaw convergence here causes avoidable stop/spin cycles.
     return (.18 if cruising else packet["goal_tolerance_m"]*.5,
         math.pi if cruising else packet["yaw_tolerance_rad"]*.5,
-        min(1.2, packet["max_omega_rad_s"]), packet["max_v_mps"], packet["max_omega_rad_s"])
+        packet["max_v_mps"], packet["max_omega_rad_s"])
 
 
 def fallback_status(now_ns, active_until_ns, *, terminal_status, fresh,
@@ -305,6 +305,8 @@ def run(args):
     node.create_subscription(LaserScan, "/r2b4/slam/scan", scan_callback, qos_profile_sensor_data)
     node.create_subscription(Odometry, "/r2b4/odom", odom_callback, qos_profile_sensor_data)
     node.create_subscription(TwistStamped, "/r2b4/nav2/cmd_vel", velocity_callback, 1)
+    node.create_subscription(TwistStamped, "/r2b4/nav2/raw_cmd_vel",
+        lambda message: diagnostics.observe_raw_command(message, stamp_ns(message), time.monotonic_ns()), 1)
     node.create_subscription(RosPath, "/plan",
         lambda message: diagnostics.observe_path(message, stamp_ns(message)), 1)
     node.create_subscription(BehaviorTreeLog, "/behavior_tree_log",
@@ -483,7 +485,7 @@ def run(args):
                     parameters.parameters = [Parameter(name=name,
                         value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE, double_value=value))
                         for name, value in zip(("goal_checker.xy_goal_tolerance", "goal_checker.yaw_goal_tolerance",
-                            "FollowPath.rotate_to_heading_angular_vel", "FollowPath.mission_max_v_mps",
+                            "FollowPath.mission_max_v_mps",
                             "FollowPath.mission_max_omega_rad_s"), desired)]
                     parameter_values, parameter_started_ns = desired, now
                     parameter_future = goal_parameters.call_async(parameters)

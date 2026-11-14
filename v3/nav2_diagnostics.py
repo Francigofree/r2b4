@@ -71,6 +71,8 @@ class Nav2Telemetry:
         self.local_pose = None
         self.controller_error_counts = {}
         self.controller_errors = deque(maxlen=16)
+        self.raw_command = None
+        self.raw_command_count = 0
 
     def observe_ros_error(self, message, received):
         if message.level < 40 or message.name not in ("controller_server", "RPPPathHandler", "tf_help"):
@@ -225,6 +227,13 @@ class Nav2Telemetry:
         self.command_stops += int(self._command_moving is True and not moving)
         self._command_moving = moving
 
+    def observe_raw_command(self, message, measured, received):
+        v, omega = message.twist.linear.x, message.twist.angular.z
+        if 0 < measured <= received and math.isfinite(v) and math.isfinite(omega):
+            self.raw_command_count += 1
+            self.raw_command = {"measurement_monotonic_ns": measured,
+                "v_mps": float(v), "omega_rad_s": float(omega)}
+
     def record_error(self, now, kind, code=0, message="", goal_id=None):
         self.error_count += 1
         self.errors.append({"measurement_monotonic_ns": now, "kind": str(kind)[:64],
@@ -373,6 +382,7 @@ class Nav2Telemetry:
                 "fresh": all(age is not None and age <= SENSOR_MAX_AGE_NS for age in sensor_ages.values())},
             "sensor_measurement_ns": {"scan": scan_ns, "odometry": odom_ns, "tf": tf_ns},
             "controller": self._rate(now), "odometry": self.odometry,
+            "mppi_raw_command": self.raw_command, "mppi_raw_command_count": self.raw_command_count,
             "measured_stop_count": self.measured_stops, "wall_clearance": self._walls(),
             "coverage": self._coverage(robot_pose, tf_ns, now),
             "navigation_error_count": self.error_count, "navigation_errors": list(self.errors),

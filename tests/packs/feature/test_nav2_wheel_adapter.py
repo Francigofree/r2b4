@@ -18,82 +18,67 @@ from v3.layers.l9_operational_constraints import OperationalConstraintLayer
 from v3.wheel_motion import WheelMotionLimits
 
 
-def test_native_controller_speed_limit_caps_configured_nominal_and_restores_it(tmp_path):
-    """Exercise the production override with the installed RPP parameter owner."""
+def test_native_mppi_projection_recheck_rejects_collision_unknown_and_map_exit(tmp_path):
     prefix = ROOT / "runtime" / "deps" / "nav2-planner"
-    if not (prefix / "lib/libnav2_regulated_pure_pursuit_controller.so").is_file():
-        pytest.skip("Native RPP integration requires the isolated ROS prefix")
+    if not (prefix / "lib/libmppi_controller.so").is_file():
+        pytest.skip("Native MPPI integration requires the isolated ROS prefix")
     from tools.nav2_planner import _navigation_environment, _paths
     env = _navigation_environment(_paths(ROOT), ROOT)
-    env.update(ROS_DOMAIN_ID="176", ROS_LOG_DIR=str(tmp_path / "ros_logs"))
-    (tmp_path / "speed_limit.cpp").write_text(r'''
+    (tmp_path / "collision.cpp").write_text(r'''
 #include "controller.cpp"
-#include <iomanip>
 #include <iostream>
-#include <string>
-
-class Probe : public r2b4_nav2::WheelAwareRegulatedPurePursuitController {
- public:
-  void speedParameters(const rclcpp_lifecycle::LifecycleNode::SharedPtr &node) {
-    plugin_name_ = "FollowPath";
-    logger_ = node->get_logger();
-    param_handler_ = std::make_unique<nav2_regulated_pure_pursuit_controller::ParameterHandler>(
-        node, plugin_name_, logger_, 3.0);
-    params_ = param_handler_->getParams();
-  }
-  double desired() { return params_->desired_linear_vel; }
-};
-
-int main(int argc, char **argv) {
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("speed_limit_probe");
-  node->declare_parameter("FollowPath.desired_linear_vel", 0.3);
-  Probe controller;
-  controller.speedParameters(node);
-  std::cout << std::setprecision(17);
-  std::string value;
-  int percentage;
-  while (std::cin >> value >> percentage) {
-    controller.setSpeedLimit(std::stod(value), percentage != 0);
-    std::cout << controller.desired() << "\n";
-  }
-  rclcpp::shutdown();
+int main() {
+  nav2_costmap_2d::Costmap2D map(100, 100, .05, -2.5, -2.5, 0);
+  nav2_costmap_2d::Footprint footprint(4);
+  footprint[0].x=-.1; footprint[0].y=-.1;
+  footprint[1].x=.1; footprint[1].y=-.1;
+  footprint[2].x=.1; footprint[2].y=.1;
+  footprint[3].x=-.1; footprint[3].y=.1;
+  auto check = [&](double x, double v, double omega) {
+    std::cout << r2b4_nav2::commandCollides(&map, footprint, x, 0., 0., v, omega) << "\n";
+  };
+  check(0., .3, 0.); // free
+  map.setCost(57, 50, nav2_costmap_2d::LETHAL_OBSTACLE);
+  check(0., .3, 0.); // obstacle ahead
+  check(0., -.3, 0.); // reverse remains free
+  map.setCost(57, 50, nav2_costmap_2d::NO_INFORMATION);
+  check(0., .3, 0.); // unknown is not free
+  map.setCost(57, 50, 0);
+  check(2.3, .3, 0.); // exits map
+  map.setCost(54, 54, nav2_costmap_2d::LETHAL_OBSTACLE);
+  check(0., .3, 1.4); // exact curved arc hits
+  check(0., .3, -1.4); // opposite arc remains free
+  map.setCost(50, 50, nav2_costmap_2d::LETHAL_OBSTACLE);
+  check(0., 0., 0.); // t=0 checked even for a stop
 }
 ''')
     (tmp_path / "CMakeLists.txt").write_text('''
 cmake_minimum_required(VERSION 3.16)
-project(speed_limit_probe LANGUAGES C CXX)
+project(collision_probe LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 find_package(ament_cmake REQUIRED)
-find_package(nav2_regulated_pure_pursuit_controller REQUIRED)
+find_package(nav2_mppi_controller REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(pluginlib REQUIRED)
-add_executable(speed_limit speed_limit.cpp)
-target_include_directories(speed_limit PRIVATE "''' + str(ROOT / "deploy/nav2_wheel_adapter") + '''")
-target_link_directories(speed_limit PRIVATE "''' + str(prefix / "lib") + '''")
-ament_target_dependencies(speed_limit nav2_regulated_pure_pursuit_controller
-  nav2_core nav2_costmap_2d nav2_util pluginlib)
-target_link_libraries(speed_limit "''' + str(prefix / "lib/libnav2_regulated_pure_pursuit_controller.so") + '''")
+add_executable(collision collision.cpp)
+target_include_directories(collision PRIVATE "''' + str(ROOT / "deploy/nav2_wheel_adapter") + '''")
+target_link_directories(collision PRIVATE "''' + str(prefix / "lib") + '''")
+ament_target_dependencies(collision nav2_mppi_controller nav2_core nav2_costmap_2d nav2_util pluginlib)
+target_link_libraries(collision "''' + str(prefix / "lib/libmppi_controller.so") + '''")
 ''')
     cmake = str(prefix / "bin/cmake")
     build = tmp_path / "build"
     for command in ([cmake, "-S", str(tmp_path), "-B", str(build),
                      "-DCMAKE_C_COMPILER=/usr/bin/gcc", "-DCMAKE_CXX_COMPILER=/usr/bin/g++"],
                     [cmake, "--build", str(build), "--parallel", "1"]):
-        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stderr[-4000:]
-    # Repeated large mission heartbeats, a lower cap, upstream restore sentinel,
-    # percentages above 100 and invalid limits all use the actual native method.
-    limits = [(0.45, 0), (0.45, 0), (0.2, 0), (0., 0), (50., 1),
-              (150., 1), (0., 1), (-1., 0), (math.nan, 0), (math.inf, 1), (0., 0)]
-    result = subprocess.run([str(build / "speed_limit")], env=env,
-        input="".join(f"{limit} {percentage}\n" for limit, percentage in limits),
+    result = subprocess.run([str(build / "collision")], env=env,
         capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
-    assert [float(line) for line in result.stdout.splitlines()] == pytest.approx(
-        [.3, .3, .2, .3, .15, .3, .3, 0., 0., 0., .3])
+    assert result.stdout.splitlines() == ["0", "1", "0", "1", "1", "1", "0", "1"]
 
 
 @pytest.fixture(scope="module")
@@ -222,9 +207,10 @@ def test_nav2_geometry_crosses_deadband_but_physical_l9_ramp_and_goal_contract_s
     geometry = generated.read_text()
     source = (ROOT / "conf" / "nav2_planner.yaml").read_text()
     period = 1. / _scalar(source, "controller_frequency")
-    proposal_acceleration = _scalar(geometry, "max_angular_accel")
+    proposal_acceleration = _scalar(geometry, "az_max")
     assert proposal_acceleration * period >= physical.wheel_limits.target_center_spin_rad_s
-    assert _scalar(geometry, "rotate_to_heading_angular_vel") >= physical.wheel_limits.target_center_spin_rad_s
+    assert _scalar(geometry, "ax_max") * period >= physical.wheel_limits.target_minimum_mps
+    assert _scalar(geometry, "wz_max") >= physical.wheel_limits.target_center_spin_rad_s
     assert 0. < _scalar(geometry, "xy_goal_tolerance") <= control.mission.default_constraints.goal_tolerance_m
     assert 0. < _scalar(geometry, "yaw_goal_tolerance") <= control.mission.default_constraints.yaw_tolerance_rad
     for key, expected in {

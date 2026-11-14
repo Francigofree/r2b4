@@ -108,6 +108,16 @@ def _ros_environment(root: Path, prefix: Path) -> dict[str, str]:
     return env
 
 
+def _apply_ros_affinity(root: Path, role: str) -> list[int]:
+    """ROS children follow the active policy, including scheduler-managed mode."""
+    from v3.runtime_performance import load_runtime_affinity_config, apply_current_affinity
+    policy = load_runtime_affinity_config(root / "conf" / "vezerles.json")
+    if policy.enabled:
+        apply_current_affinity(getattr(policy, role + "_cpus"), role=role,
+                               strict=policy.strict)
+    return sorted(os.sched_getaffinity(0))
+
+
 def status(root: Path) -> dict:
     paths = _paths(root)
     state = _read_json(paths["state"])
@@ -210,22 +220,7 @@ def _supervise(root: Path) -> int:
     logs = []
     try:
         os.nice(10)
-        allowed = os.sched_getaffinity(0)
-        control = _read_json(root / "conf" / "vezerles.json").get("runtime_affinity", {}).get("control_cpus", [3])
-        cpus = (allowed & {1, 2}) - set(control)
-        if not cpus:
-            cpus = allowed - set(control)
-        if not cpus:
-            raise RuntimeError("No CPU available outside the configured control CPU")
-        # The sidecar has one compute thread and a few I/O threads. Bound its
-        # total schedulable CPU capacity as well as its priority.
-        # Keep SLAM on the LiDAR compute CPU; Nav2 uses the planner CPU. Both
-        # stay outside the control island without contending on one core.
-        preferred = set(_read_json(root / "conf" / "vezerles.json")
-                        .get("runtime_affinity", {}).get("lidar_matcher_cpus", [2]))
-        cpus = {min(cpus & preferred) if cpus & preferred else max(cpus)}
-        os.sched_setaffinity(0, cpus)
-        state["cpus"] = sorted(cpus)
+        state["cpus"] = _apply_ros_affinity(root, "lidar_matcher")
         env = _ros_environment(root, paths["prefix"])
         from v3.config import ConfigResolver
         resolved = ConfigResolver.for_project(root).resolve()

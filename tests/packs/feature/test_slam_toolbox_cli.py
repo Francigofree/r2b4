@@ -54,3 +54,22 @@ def test_launcher_slam_route_uses_host_cli_without_robot_commands(monkeypatch, t
     monkeypatch.setattr(slam_toolbox, "main", lambda args, *, project_root: calls.append((args, project_root)) or 0)
     assert launcher_cli.main(["slam", "status"]) == 0
     assert calls == [(["status"], Path(tmp_path))]
+
+
+def test_ros_supervisors_follow_disabled_and_enabled_affinity_policy(monkeypatch, tmp_path):
+    from v3 import runtime_performance
+    from tools import nav2_planner
+    cpus, calls = {0, 1, 2, 3}, []
+    monkeypatch.setattr(slam_toolbox.os, "sched_getaffinity", lambda _: cpus)
+    policy = SimpleNamespace(enabled=False, strict=True, lidar_matcher_cpus=(1, 2), planner_cpus=(1, 2))
+    monkeypatch.setattr(runtime_performance, "load_runtime_affinity_config", lambda _: policy)
+    monkeypatch.setattr(runtime_performance, "apply_current_affinity",
+        lambda requested, **kwargs: (calls.append((requested, kwargs)), cpus.intersection_update(requested)))
+    for helper in (slam_toolbox._apply_ros_affinity, nav2_planner._apply_ros_affinity):
+        for role in ("lidar_matcher", "planner"):
+            assert helper(tmp_path, role) == [0, 1, 2, 3]
+    assert calls == []
+    policy.enabled = True
+    assert slam_toolbox._apply_ros_affinity(tmp_path, "lidar_matcher") == [1, 2]
+    assert nav2_planner._apply_ros_affinity(tmp_path, "planner") == [1, 2]
+    assert all(options["strict"] is True for _, options in calls)

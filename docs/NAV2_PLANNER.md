@@ -7,6 +7,32 @@ a mission és a motor-authority a canonical V3 láncban marad. Az aktív
 egymást. A Room Cruise frontier-felderítés után a már ismert szobában is
 folytathatja a térképalapú célválasztást.
 
+Az aktív globális planner a Jazzy `nav2_smac_planner::SmacPlanner2D`, a lokális
+controller a Jazzy MPPI-t használó `r2b4_nav2::WheelAwareMPPIController`.
+A [Smac](https://api.nav2.org/nav2-jazzy/html/md_nav2_smac_planner_README.html)
+2D keresése megtartja az ismert szabad térre korlátozást, 150 ms-os keresési
+időkerettel; a BT 2 Hz-en tervez újra. Az
+[MPPI](https://api.nav2.org/nav2-jazzy/html/md_nav2_mppi_controller_README.html)
+20 Hz-en, 400 mintával, egy iterációval és 32 × 50 ms-os horizonttal dolgozik.
+Nincs trajectory-visualization. A V3 control továbbra is 50 Hz-es.
+
+A native adapter megtartja a resolved fizikai kerékhatárokra vetítést, majd a
+megváltozott parancs pontos körívét egy másodpercre, fél costmap-cellánál és
+0,05 radiánnál nem nagyobb lépésekkel újraellenőrzi. Ismeretlen vagy térképen
+kívüli geometria nem fogadható el. Az optimizer indulási gyorsulási kerete
+átlépheti a kerékholtsávot; a tényleges fizikai gyorsulást változatlanul L9
+korlátozza. A két modell eltérését élő evidence-ben ellenőrizni kell.
+Az 5 Hz-es `v3.nav2_observation.mppi_raw_command` az eredeti ROS source-idővel
+rögzíti a vetítés előtti javaslatot; a meglévő controller-, odometria-, recovery-,
+coverage- és lifecycle-adatokkal együtt vizsgálható. Ez mintavett evidence,
+nem teljes ROS bag vagy exact-replay input.
+
+A ROS supervisorok követik az aktív `runtime_affinity` policyt. Kikapcsolt
+policy mellett nincs saját CPU-szűkítés: a jelenlegi gépen SLAM és Nav2 minden
+szála számára a 0–3 CPU-maszk elérhető. Bekapcsolva a konfigurált matcher/planner
+szerepmaszk érvényes. A nice 10 prioritás és a native könyvtárak threadlimitje
+megmarad; a CPU-hozzáférés nem jelent korlátlan munkaszál-létrehozást.
+
 ## Egyetlen ROS lifecycle owner
 
 A `tools/nav2_planner.py` meglévő process-supervisora továbbra is indítja,
