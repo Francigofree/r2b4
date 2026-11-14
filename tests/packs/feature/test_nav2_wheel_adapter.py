@@ -96,7 +96,7 @@ def native_projector(tmp_path_factory):
 #include <iostream>
 #include <string>
 
-int main() {
+int main(int argc, char **) {
   std::array<double, 8> row{};
   std::string value;
   std::cout << std::setprecision(17);
@@ -107,7 +107,7 @@ int main() {
       row[i] = std::stod(value);
     }
     const r2b4_nav2::WheelLimits limits{row[0], row[1], row[2], row[3], row[4], row[5]};
-    const auto result = limits.project(row[6], row[7]);
+    const auto result = argc > 1 ? limits.projectMppi(row[6], row[7]) : limits.project(row[6], row[7]);
     std::cout << result.first << " " << result.second << "\n";
   }
 }
@@ -117,9 +117,9 @@ int main() {
         capture_output=True, text=True, timeout=30)
     assert build.returncode == 0, build.stderr
 
-    def project(rows):
+    def project(rows, *, mppi=False):
         request = "".join(" ".join(repr(value) for value in row) + "\n" for row in rows)
-        result = subprocess.run([str(binary)], input=request, capture_output=True,
+        result = subprocess.run([str(binary)] + (["mppi"] if mppi else []), input=request, capture_output=True,
             text=True, timeout=10)
         assert result.returncode == 0, result.stderr
         outputs = [tuple(float(value) for value in line.split()) for line in result.stdout.splitlines()]
@@ -236,3 +236,26 @@ def test_nav2_geometry_crosses_deadband_but_physical_l9_ramp_and_goal_contract_s
         allowed = limiter.evaluate(motion, estimate)
     assert 0. < allowed.allowed_omega_rad_s <= physical.max_angular_acceleration_rad_s2 * .02
     assert allowed.allowed_omega_rad_s < proposal_acceleration * .02
+
+
+def test_mppi_stop_branches_retain_drivable_arcs_spin_and_reverse_without_amplification(native_projector):
+    limits = WheelMotionLimits(track_width_m=.3557, minimum_mps=.15, maximum_mps=.582)
+    caps = (.45, 1.4, 32.)
+    cases = [(.1087, -.8206), (-.1087, .8206), (0., .9), (.001, 1.),
+             (.2, .2), (-.2, 0.), (.1, 0.), (0., .5)]
+    rng = random.Random(0x5243)
+    cases += [(rng.uniform(-.45, .45), rng.uniform(-1.4, 1.4)) for _ in range(1000)]
+    actual = native_projector([(limits.track_width_m, .15, .582, *caps, v, w)
+                              for v, w in cases], mppi=True)
+    assert actual[0] == pytest.approx((.1087, -2*.1087/.3557))
+    assert actual[1] == pytest.approx((-.1087, 2*.1087/.3557))
+    assert actual[2] == pytest.approx((0., .9))
+    assert actual[3][0] == 0. and actual[3][1] > .9
+    assert actual[4:8] == pytest.approx([(.2, .2), (-.2, 0.), (0., 0.), (0., 0.)])
+    for (v, w), result in zip(cases, actual):
+        _assert_envelope(limits, v, w, caps, result)
+        for source, projected in zip(limits.wheels(v, w), limits.wheels(*result)):
+            assert abs(projected) <= abs(source)+2e-10
+        # The ROS adaptation enters V3's unchanged physical envelope unchanged.
+        assert limits.constrain(*result, max_v_mps=caps[0], max_omega_rad_s=caps[1],
+            max_curvature_rad_per_m=caps[2]) == pytest.approx(result, abs=2e-10)

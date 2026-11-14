@@ -17,7 +17,7 @@ def grid(width=60, height=60, *, resolution=.1, yaw=0., value=0):
 
 
 def coverage():
-    selector = RoomCruiseGoals()
+    selector = RoomCruiseGoals((-.10, .26, -.18, .18), .10)
     selector.begin(("mission", "goal", 1))
     selector.update_costmap(grid(), 1_000_000_000)
     return selector
@@ -75,7 +75,8 @@ def test_candidate_work_and_history_are_bounded_even_for_a_long_thin_map():
     selector.enter_coverage()
     selector.update_costmap(grid(width=250000, height=1), 1_000_000_000)
     goal = selector.select((0., 0., 0.), 1_000_000_000)
-    assert goal is not None and len(selector._candidates) <= 1024
+    # A one-cell-wide strip cannot contain the complete robot.
+    assert goal is None and len(selector._candidates) <= 1024
     for index in range(2200):
         selector.observe_pose((index*.5, 0., 0.), 1_000_000_000+index*200_000_000)
         selector.finish((index*.5, 0.), False, index)

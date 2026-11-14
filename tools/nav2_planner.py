@@ -146,8 +146,6 @@ def _write_geometry(paths, control):
              f"      ax_max: {max(limits.max_acceleration_mps2, minimum * 20.0 * 1.1)}\n"
              f"      ax_min: {-max(limits.max_acceleration_mps2, minimum * 20.0 * 1.1)}\n"
              f"      az_max: {proposal_acceleration}\n"
-             "      VelocityDeadbandCritic:\n"
-             f"        deadband_velocities: [{minimum}, 0.0, 0.0]\n"
              f"      track_width_m: {limits.wheel_limits.track_width_m}\n"
              f"      wheel_minimum_mps: {limits.wheel_limits.minimum_mps}\n"
              f"      wheel_maximum_mps: {limits.wheel_limits.maximum_mps}\n"
@@ -425,6 +423,8 @@ def _supervise(root, ros_domain_id):
         env = _navigation_environment(paths, root)
         env.update(ROS_DOMAIN_ID=str(ros_domain_id), ROS_LOG_DIR=str(paths["work"] / "ros_logs"))
         robot_geometry = {"body_bounds_m": resolved.lidar.safety_body_bounds_m,
+                          "padding_m": max(control.navigation.footprint_safety_margin_m,
+                                           control.lidar_safety.minimum_clearance_m),
                           "lidar_xy_m": [resolved.lidar.matcher.lidar_x_offset_m,
                                          resolved.lidar.matcher.lidar_y_offset_m]}
         for name, command in _commands(paths, full=full, radius=radius, robot_geometry=robot_geometry):

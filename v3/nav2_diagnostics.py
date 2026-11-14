@@ -73,6 +73,21 @@ class Nav2Telemetry:
         self.controller_errors = deque(maxlen=16)
         self.raw_command = None
         self.raw_command_count = 0
+        self.motion_evidence = None
+
+    def observe_motion_evidence(self, payload, received):
+        if len(payload) > 32768:
+            return
+        try:
+            row = json.loads(payload)
+            if (row.get("schema") != "r2b4.motion_evidence.v1"
+                    or not isinstance(row.get("events"), list) or len(row["events"]) > 16):
+                return
+            for event in row["events"]:
+                event["measurement_monotonic_ns"] = event["measurement_ros_ns"]-self.ros_offset_ns
+            self.motion_evidence = dict(row, observer_received_monotonic_ns=received)
+        except (ValueError, TypeError, KeyError):
+            return
 
     def observe_ros_error(self, message, received):
         if message.level < 40 or message.name not in ("controller_server", "RPPPathHandler", "tf_help"):
@@ -383,6 +398,10 @@ class Nav2Telemetry:
             "sensor_measurement_ns": {"scan": scan_ns, "odometry": odom_ns, "tf": tf_ns},
             "controller": self._rate(now), "odometry": self.odometry,
             "mppi_raw_command": self.raw_command, "mppi_raw_command_count": self.raw_command_count,
+            "motion_evidence": self.motion_evidence,
+            "rc_recovery": state.get("rc_recovery"),
+            "goal_geometry": {"rejections": state.get("goal_geometry_rejections"),
+                "last_rejection": state.get("goal_geometry_last_rejection")},
             "measured_stop_count": self.measured_stops, "wall_clearance": self._walls(),
             "coverage": self._coverage(robot_pose, tf_ns, now),
             "navigation_error_count": self.error_count, "navigation_errors": list(self.errors),

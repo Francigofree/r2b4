@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from collections import deque
 import math
+from v3.adapters.nav2_footprint import footprint_check
 
 
 class RoomCruiseGoals:
     """Frontier discovery followed by persistent, bounded known-room coverage."""
 
-    def __init__(self):
+    def __init__(self, body_bounds_m, padding_m):
+        self.body_bounds_m, self.padding_m = tuple(body_bounds_m), padding_m
         self.session = None
         self.phase = "IDLE"
         self.grid = None
@@ -26,6 +28,8 @@ class RoomCruiseGoals:
         self._last_observed_ns = 0
         self._next_selection_ns = 0
         self.goals = self.reached = self.failures = 0
+        self.geometry_rejections = 0
+        self.last_rejection = None
 
     def begin(self, session):
         if self.session != session:
@@ -94,7 +98,7 @@ class RoomCruiseGoals:
                 xs = {left, int(cx), right-1}
                 ys = {top, int(cy), bottom-1}
                 options = [(grid.data[y*width+x], (x-cx)**2+(y-cy)**2, x, y)
-                    for x in xs for y in ys if 0 <= grid.data[y*width+x] <= 60]
+                    for x in xs for y in ys if 0 <= grid.data[y*width+x] < 100]
                 if not options:
                     continue
                 _, _, x, y = min(options)
@@ -134,12 +138,34 @@ class RoomCruiseGoals:
             scored.append((score, -distance, gx, gy, angle))
         if not scored:
             return None
-        _, _, gx, gy, yaw = max(scored)
-        self._recent.append((gx, gy))
-        self.goals += 1
-        return [gx, gy, yaw]
+        for _, _, gx, gy, yaw in sorted(scored, reverse=True)[:32]:
+            goal = [gx, gy, yaw]
+            if self.valid_goal(goal, now_ns):
+                self._recent.append((gx, gy))
+                self.goals += 1
+                return goal
+        return None
+
+    def valid_goal(self, goal, now_ns):
+        """Identical full-body gate for frontier and known-room destinations."""
+        if self.grid is None or not 0 <= now_ns-self.grid_ns <= 3_000_000_000:
+            return False
+        blocking = (dict(reason="recently_failed_goal", pose=list(goal), cell=None, cost=None)
+            if any(until > now_ns and math.hypot(goal[0]-fx, goal[1]-fy) < .65
+                   for fx, fy, until in self._failed) else
+            footprint_check(self.grid, *goal, self.body_bounds_m, self.padding_m))
+        if blocking is None:
+            return True
+        self.geometry_rejections += 1
+        self.last_rejection = dict(component="rc_goal_selector", reason="goal_footprint_blocked",
+            measurement_monotonic_ns=now_ns, map_measurement_ns=self.grid_ns,
+            map_revision=self.grid_revision, frame_id=self.grid.header.frame_id if hasattr(self.grid, "header") else None,
+            original_goal=list(goal), modified_goal=None, first_blocking=blocking,
+            body_bounds_m=list(self.body_bounds_m), padding_m=self.padding_m)
+        return False
 
     def snapshot(self):
         return dict(cruise_phase=self.phase, coverage_candidates=len(self._candidates),
             coverage_goals=self.goals, coverage_reached=self.reached,
-            coverage_failed=self.failures, coverage_visited_cells=len(self._visits))
+            coverage_failed=self.failures, coverage_visited_cells=len(self._visits),
+            goal_geometry_rejections=self.geometry_rejections, goal_geometry_last_rejection=self.last_rejection)

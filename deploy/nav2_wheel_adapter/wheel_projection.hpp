@@ -12,7 +12,7 @@ namespace r2b4_nav2 {
 struct WheelLimits {
   double track, minimum, maximum, max_v, max_omega, max_curvature;
 
-  std::pair<double, double> project(double v, double omega) const {
+  std::pair<double, double> project(double v, double omega, int stop_mask = -1) const {
     if (!std::isfinite(v) || !std::isfinite(omega)) return {0., 0.};
     const double half = track * .5, turn = omega * half;
     const double left = v - turn, right = v + turn;
@@ -34,13 +34,17 @@ struct WheelLimits {
     };
     bound(1., 0., v, max_v);
     bound(0., 1., turn, max_omega * half);
+    int wheel_index = 0;
     for (auto ab : {std::pair<double, double>{1., -1.}, {1., 1.}}) {
       const double a = ab.first, b = ab.second, w = a*v+b*turn;
-      if (std::abs(w) <= 1e-12) {
+      const bool stopped = stop_mask >= 0 && (stop_mask & (1 << wheel_index));
+      ++wheel_index;
+      if (std::abs(w) <= 1e-12 || stopped) {
         planes.push_back({a, b, 0.}); planes.push_back({-a, -b, 0.});
       } else {
         const double sign = std::copysign(1., w);
-        planes.push_back({sign*a, sign*b, maximum});
+        planes.push_back({sign*a, sign*b,
+            stop_mask < 0 ? maximum : std::min(maximum, std::abs(w))});
         planes.push_back({-sign*a, -sign*b, -minimum});
       }
     }
@@ -66,7 +70,7 @@ struct WheelLimits {
     std::pair<double, double> best{0., 0.};
     double score = std::numeric_limits<double>::infinity();
     for (auto c : candidates) {
-      if (std::abs(v) > 1e-12 && std::abs(c.first) <= 1e-12) continue;
+      if (stop_mask < 0 && std::abs(v) > 1e-12 && std::abs(c.first) <= 1e-12) continue;
       bool feasible = true;
       for (auto p : planes)
         if (p.a*c.first+p.b*c.second > p.c+1e-12) { feasible=false; break; }
@@ -79,6 +83,28 @@ struct WheelLimits {
     if (!found) return {0., 0.};
     return {std::abs(best.first) <= 1e-12 ? 0. : best.first,
             std::abs(best.second) <= 1e-12 ? 0. : best.second/half};
+  }
+
+  // MPPI averages can cross the non-convex wheel deadband. A source wheel may
+  // stop as well as remain in its original direction. The canonical V3 helper
+  // above keeps its established semantics for all existing callers.
+  std::pair<double, double> projectMppi(double v, double omega) const {
+    if (!std::isfinite(v) || !std::isfinite(omega) || track <= 0.) return {0., 0.};
+    const double half=track*.5, turn=omega*half;
+    std::pair<double,double> best{0.,0.};
+    double score=v*v+turn*turn;
+    auto offer=[&](std::pair<double,double> candidate) {
+      const double value=std::pow(candidate.first-v,2)+std::pow((candidate.second-omega)*half,2);
+      if (value+1e-14<score) {score=value; best=candidate;}
+    };
+    for (int branch=0;branch<4;++branch) offer(project(v,omega,branch));
+    const double left=v-turn,right=v+turn;
+    if (left*right<0.) {
+      const double magnitude=std::min({std::abs(turn),std::abs(left),std::abs(right),
+                                     max_omega*half,maximum});
+      if (magnitude>=minimum && max_v>=0.) offer({0.,std::copysign(magnitude/half,omega)});
+    }
+    return best;
   }
 };
 }  // namespace r2b4_nav2

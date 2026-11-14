@@ -1,26 +1,12 @@
-<!-- Recovery proposals use the same stamped ROS -> V3 L6 -> L12 path. -->
+<!-- RC recovery is selected from the fresh local costmap by the existing ROS
+     bridge. Native actions retain the stamped ROS -> V3 L6 -> L12 path. -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <RecoveryNode name="ReplanAfterControllerOrPlannerFailure" number_of_retries="6">
-      <PipelineSequence name="NavigateWithReplanning">
-        <RateController hz="2.0">
-          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
-        </RateController>
-        <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker" error_code_id="{follow_path_error_code}"/>
-      </PipelineSequence>
-      <!-- Keep real obstacles. Each failed attempt changes the recovery action;
-           the retry count and action execution times are finite. -->
-      <RoundRobin name="RoomCruiseRecovery">
-        <Wait wait_duration="1.0"/>
-        <Spin spin_dist="0.7854" time_allowance="5.0" error_code_id="{spin_error_code}"/>
-        <!-- Do not let FollowPath drive straight back into the same corner
-             between the retreat and the escape turn. Both actions retain
-             Nav2 collision checks and the unchanged V3 final safety path. -->
-        <Sequence name="BackUpThenTurn">
-          <BackUp backup_dist="0.30" backup_speed="0.19" time_allowance="5.0" error_code_id="{backup_error_code}"/>
-          <Spin spin_dist="0.7854" time_allowance="5.0" error_code_id="{spin_error_code}"/>
-        </Sequence>
-      </RoundRobin>
-    </RecoveryNode>
+    <PipelineSequence name="NavigateWithReplanning">
+      <RateController hz="2.0">
+        <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
+      </RateController>
+      <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker" error_code_id="{follow_path_error_code}"/>
+    </PipelineSequence>
   </BehaviorTree>
 </root>

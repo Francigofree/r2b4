@@ -568,6 +568,8 @@ def main(argv=None):
     (output / "simulation_config.json").write_text(json.dumps(dict(
         operational=asdict(control.operational_constraints), mission=mission,
         robot_geometry={"body_bounds_m": resolved.lidar.safety_body_bounds_m,
+                        "padding_m": max(control.navigation.footprint_safety_margin_m,
+                                         control.lidar_safety.minimum_clearance_m),
                         "lidar_xy_m": [resolved.lidar.matcher.lidar_x_offset_m,
                                        resolved.lidar.matcher.lidar_y_offset_m]}), sort_keys=True) + "\n")
     prefix = root / "runtime/deps/nav2-planner"

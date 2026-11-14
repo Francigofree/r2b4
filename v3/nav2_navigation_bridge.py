@@ -99,7 +99,8 @@ def run(args):
     from nav_msgs.msg import OccupancyGrid, Odometry, Path as RosPath
     from nav2_msgs.msg import BehaviorTreeLog
     from sensor_msgs.msg import LaserScan
-    from nav2_msgs.action import NavigateToPose
+    from nav2_msgs.action import NavigateToPose, BackUp, Spin, ComputePathToPose
+    from std_msgs.msg import String
     from nav2_msgs.msg import SpeedLimit
     from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
     from rcl_interfaces.srv import SetParametersAtomically
@@ -108,6 +109,8 @@ def run(args):
     from rclpy.time import Time
     from v3.adapters.ros2_frontier import Ros2FrontierExplorer
     from v3.adapters.room_cruise import RoomCruiseGoals
+    from v3.adapters.room_cruise_recovery import RoomCruiseRecovery
+    from v3.adapters.nav2_footprint import footprint_check
 
     path, status_path = Path(args.socket), Path(args.status_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -135,14 +138,20 @@ def run(args):
     node = Node("r2b4_nav2_navigation_bridge")
     frontier = Ros2FrontierExplorer(node, args.frontier_executable, args.frontier_params,
         status_path.parent / "frontier.log", ros_offset_ns)
-    cruise = RoomCruiseGoals()
+    geometry = args.robot_geometry
+    cruise = RoomCruiseGoals(geometry["body_bounds_m"], geometry["padding_m"])
+    recovery = RoomCruiseRecovery(geometry["body_bounds_m"], geometry["padding_m"])
     navigator = ActionClient(node, NavigateToPose, "/navigate_to_pose")
+    backup = ActionClient(node, BackUp, "/backup")
+    spin = ActionClient(node, Spin, "/spin")
+    planner = ActionClient(node, ComputePathToPose, "/compute_path_to_pose")
     speed_publisher = node.create_publisher(SpeedLimit, "/speed_limit", 1)
     goal_parameters = node.create_client(SetParametersAtomically, "/controller_server/set_parameters_atomically")
     parameter_future, parameter_values, applied_tolerances, parameter_started_ns = None, None, None, 0
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, node)
-    diagnostics = Nav2Diagnostics(node, generation, ros_offset_ns, **args.robot_geometry)
+    diagnostics = Nav2Diagnostics(node, generation, ros_offset_ns,
+        body_bounds_m=geometry["body_bounds_m"], lidar_xy_m=geometry["lidar_xy_m"])
     lifecycle = Nav2LifecycleMonitor(node, generation)
     active = False
     current = None
@@ -152,6 +161,10 @@ def run(args):
     terminal_status = None
     selected_goal = None
     frontier_goal = None
+    action_kind, recovery_cancel = "NAVIGATE", False
+    action_generation = 0
+    motion_anchor, motion_anchor_ns = None, 0
+    navigation_started_ns = 0
     map_valid, map_received_ns, map_stamp_ns = False, 0, 0
     scan_ns, odom_ns, tf_ns = 0, 0, 0
     scan_history, odom_history, tf_history = deque(maxlen=32), deque(maxlen=32), deque(maxlen=32)
@@ -272,7 +285,8 @@ def run(args):
 
     def velocity_callback(message):
         diagnostics.observe_command(message, stamp_ns(message), time.monotonic_ns())
-        if current is None or handle is None or cancelling or not active or terminal_status is not None:
+        if (current is None or handle is None or cancelling or not active
+                or terminal_status is not None or action_kind == "PLAN_DETOUR"):
             return
         if current[0]["mode"] == "EXPLORE" and cruise.phase == "FRONTIER" and (frontier_goal is None
                 or frontier_goal is not frontier.proposal or frontier_goal.completion.done()):
@@ -307,13 +321,17 @@ def run(args):
     node.create_subscription(TwistStamped, "/r2b4/nav2/cmd_vel", velocity_callback, 1)
     node.create_subscription(TwistStamped, "/r2b4/nav2/raw_cmd_vel",
         lambda message: diagnostics.observe_raw_command(message, stamp_ns(message), time.monotonic_ns()), 1)
+    node.create_subscription(String, "/r2b4/nav2/motion_evidence",
+        lambda message: diagnostics.observe_motion_evidence(message.data, time.monotonic_ns()), 4)
     node.create_subscription(RosPath, "/plan",
         lambda message: diagnostics.observe_path(message, stamp_ns(message)), 1)
     node.create_subscription(BehaviorTreeLog, "/behavior_tree_log",
         lambda message: diagnostics.observe_recovery(message, time.monotonic_ns()), 4)
 
-    def navigation_feedback(message, child_id, mission_id):
+    def navigation_feedback(message, child_id, mission_id, action_id):
         # ActionClient dispatch already correlates feedback to its goal UUID.
+        if action_id != action_generation or current is None:
+            return
         feedback = message.feedback
         diagnostics.recovery_feedback = {
             "received_monotonic_ns": time.monotonic_ns(),
@@ -321,6 +339,8 @@ def run(args):
             "goal_uuid": bytes(message.goal_id.uuid).hex(),
             "number_of_recoveries": int(feedback.number_of_recoveries),
             "distance_remaining_m": float(feedback.distance_remaining)}
+        if action_kind == "NAVIGATE":
+            recovery.feedback(float(feedback.distance_remaining), time.monotonic_ns())
 
     def begin_cancel(now, *, stop_frontier=True):
         nonlocal cancelling, cancel_started_ns, cancel_future, last_active_until_ns
@@ -336,6 +356,92 @@ def run(args):
             state["cancellations"] += 1
             if handle is not None:
                 cancel_future = handle.cancel_goal_async()
+
+    def finish_navigation(succeeded, error_code, now):
+        nonlocal selected_goal, frontier_goal, terminal_status, settle_until_ns
+        terminal_status = "SUCCEEDED" if succeeded else "FAILED"
+        if current[0]["mode"] == "EXPLORE":
+            if cruise.phase == "COVERAGE":
+                cruise.finish(selected_goal, succeeded, now)
+            frontier.finish(frontier_goal, "SUCCEEDED" if succeeded else "ABORTED", error_code)
+            selected_goal, frontier_goal, terminal_status = None, None, None
+            settle_until_ns = now if succeeded else now+150_000_000
+        reply("PENDING" if current[0]["mode"] == "EXPLORE" else terminal_status)
+        recovery.reset()
+
+    def goal_pose(values):
+        pose = PoseStamped()
+        pose.header.frame_id = GLOBAL_FRAME_ID
+        pose.header.stamp = node.get_clock().now().to_msg()
+        pose.pose.position.x, pose.pose.position.y = map(float, values[:2])
+        yaw = values[2]
+        if yaw is None and robot_pose is not None:
+            yaw = math.atan2(values[1]-robot_pose[1], values[0]-robot_pose[0])
+        yaw = yaw or 0.
+        pose.pose.orientation.z, pose.pose.orientation.w = math.sin(yaw/2), math.cos(yaw/2)
+        return pose
+
+    def dispatch_navigation(values, kind="NAVIGATE"):
+        nonlocal sending, action_kind, action_generation, navigation_started_ns, motion_anchor_ns, motion_anchor
+        dispatch_ns = time.monotonic_ns()
+        if (current is None or dispatch_ns-current[0]["source_ns"] > HEARTBEAT_MAX_AGE_NS
+                or any(not 0 < stamp <= dispatch_ns or dispatch_ns-stamp > SENSOR_MAX_AGE_NS
+                       for stamp in (scan_ns, odom_ns, tf_ns))):
+            return False
+        action_kind = kind
+        action_generation += 1
+        goal = NavigateToPose.Goal()
+        goal.pose, goal.behavior_tree = goal_pose(values), args.behavior_tree
+        diagnostics.recovery_feedback = None
+        motion_anchor = None if diagnostics.local_pose is None else diagnostics.local_pose[1]
+        motion_anchor_ns = navigation_started_ns = time.monotonic_ns()
+        sending = navigator.send_goal_async(goal, feedback_callback=(
+            lambda message, child_id=state["child_goal_id"], mission_id=current[0]["mission_id"], action_id=action_generation:
+                navigation_feedback(message, child_id, mission_id, action_id)))
+        reply("PENDING")
+        return True
+
+    def check_detour_path(path, now):
+        grid = diagnostics.maps.get("local_costmap")
+        summary = diagnostics.map_summaries.get("local_costmap", {})
+        if (grid is None or robot_pose is None or diagnostics.local_pose is None
+                or any(not 0 < stamp <= now or now-stamp > SENSOR_MAX_AGE_NS for stamp in (odom_ns, tf_ns))
+                or path.header.frame_id != GLOBAL_FRAME_ID
+                or not 0 <= now-summary.get("measurement_monotonic_ns", 0) <= 500_000_000
+                or len(path.poses) < 2 or len(path.poses) > 256):
+            return dict(reason="detour_path_or_local_map_unavailable")
+        local = diagnostics.local_pose[1]
+        rotation = local[2]-robot_pose[2]
+        c, s = math.cos(rotation), math.sin(rotation)
+        previous, samples = None, 0
+        for stamped in path.poses:
+            if stamped.header.frame_id not in ("", GLOBAL_FRAME_ID):
+                return dict(reason="detour_path_frame")
+            p, q = stamped.pose.position, stamped.pose.orientation
+            dx, dy = p.x-robot_pose[0], p.y-robot_pose[1]
+            pose = (local[0]+c*dx-s*dy, local[1]+s*dx+c*dy,
+                math.atan2(2*q.w*q.z, 1-2*q.z*q.z)+rotation)
+            if previous is None:
+                previous = local
+            angle = math.atan2(math.sin(pose[2]-previous[2]), math.cos(pose[2]-previous[2]))
+            # Bound every corner's displacement between checked poses.
+            radius = max(math.hypot(x, y) for x in (geometry["body_bounds_m"][0]-geometry["padding_m"], geometry["body_bounds_m"][1]+geometry["padding_m"])
+                for y in (geometry["body_bounds_m"][2]-geometry["padding_m"], geometry["body_bounds_m"][3]+geometry["padding_m"]))
+            steps = max(1, math.ceil((math.hypot(pose[0]-previous[0], pose[1]-previous[1])+radius*abs(angle))/(grid.info.resolution*.5)))
+            samples += steps
+            if samples > 512:
+                return dict(reason="detour_path_sample_budget")
+            for index in range(steps+1):
+                t = index/steps
+                interpolated = (previous[0]+t*(pose[0]-previous[0]),
+                    previous[1]+t*(pose[1]-previous[1]), previous[2]+t*angle)
+                blocking = footprint_check(grid, *interpolated, geometry["body_bounds_m"],
+                    geometry["padding_m"]+grid.info.resolution*.25)
+                if blocking is not None:
+                    return dict(blocking, path_sample=samples-steps+index,
+                        map_measurement_ns=summary["measurement_monotonic_ns"])
+            previous = pose
+        return None
 
     # Keep this ROS edge registered across turns. rclpy.spin_once(node) adds
     # and removes it every call, forcing unnecessary wait-set rebuilds.
@@ -383,6 +489,7 @@ def run(args):
                         reply("CANCELLED")
                         begin_cancel(now)
                         cruise.stop()
+                        recovery.reset()
                         current, selected_goal, terminal_status, frontier_goal = None, None, None, None
                     continue
                 if packet["source_ns"] <= latest_source_ns:
@@ -396,6 +503,8 @@ def run(args):
                 if not same:
                     begin_cancel(now)
                     cruise.stop()
+                    recovery.reset()
+                    recovery_cancel = False
                     selected_goal, terminal_status, frontier_goal = None, None, None
                 current = packet, address
                 if packet["mode"] == "EXPLORE":
@@ -414,12 +523,16 @@ def run(args):
                 reply("STALE")
                 begin_cancel(now)
                 cruise.stop()
+                recovery.reset()
+                recovery_cancel = False
                 current, selected_goal, terminal_status, frontier_goal = None, None, None, None
             if (current is not None and current[0]["mode"] == "EXPLORE"
                     and cruise.phase == "FRONTIER" and frontier.complete):
                 # A completed map is normal: frontier discovery gives way to
                 # persistent known-room coverage, without a V3 NO_PATH fault.
                 cruise.enter_coverage()
+                recovery.reset()
+                recovery_cancel = False
                 begin_cancel(now)
                 selected_goal, frontier_goal, terminal_status = None, None, None
             if (current is not None and current[0]["mode"] == "EXPLORE"
@@ -428,23 +541,25 @@ def run(args):
                 # Upstream preemption/cancel revokes the old child's velocity
                 # immediately. Wait for real Nav2 cancellation before dispatch.
                 begin_cancel(now, stop_frontier=False)
+                recovery.reset()
+                recovery_cancel = False
                 selected_goal, frontier_goal = None, None
             if sending is not None and sending.done():
                 handle = sending.result()
                 sending = None
                 if handle is None or not handle.accepted:
-                    if not cancelling:
-                        diagnostics.record_error(now, "GOAL_REJECTED", 900,
-                            goal_id=state["child_goal_id"])
-                    handle, terminal_status = None, None if cancelling else "NO_PATH"
+                    handle = None
                     if cancelling:
                         cancelling, settle_until_ns = False, now+150_000_000
-                    elif current is not None and current[0]["mode"] == "EXPLORE":
-                        if cruise.phase == "COVERAGE":
-                            cruise.finish(selected_goal, False, now)
-                        frontier.finish(frontier_goal, "ABORTED", 900)
-                        selected_goal, frontier_goal, terminal_status = None, None, None
-                        settle_until_ns = now+150_000_000
+                        recovery_cancel = False
+                    elif current is not None:
+                        diagnostics.record_error(now, "GOAL_REJECTED", 900, goal_id=state["child_goal_id"])
+                        if action_kind != "NAVIGATE":
+                            recovery.action_finished(False, None, now)
+                        elif current[0]["mode"] == "EXPLORE":
+                            recovery.begin(selected_goal, now, "navigation_goal_rejected")
+                        else:
+                            terminal_status = "NO_PATH"
                 else:
                     accepted_ns = now
                     last_active_until_ns = 0
@@ -454,23 +569,51 @@ def run(args):
             if result_future is not None and result_future.done():
                 envelope = result_future.result()
                 handle, result_future, cancel_future = None, None, None
+                succeeded = envelope.status == 4 and getattr(envelope.result, "error_code", 0) == 0
                 if cancelling:
                     cancelling, settle_until_ns = False, now+150_000_000
+                    # Wait for terminal action state, not merely cancel ACK.
+                    if recovery_cancel and current is not None:
+                        recovery_cancel = False
+                        if succeeded and action_kind == "NAVIGATE":
+                            recovery.resolve(now, "original_goal_reached_during_cancel")
+                            finish_navigation(True, 0, now)
+                        elif action_kind != "NAVIGATE" and recovery.state == "EXECUTING":
+                            recovery.action_finished(False, None, now)
+                    else:
+                        recovery_cancel = False
                 elif current is not None:
-                    terminal_status = "SUCCEEDED" if envelope.status == 4 and envelope.result.error_code == 0 else "FAILED"
-                    if terminal_status == "FAILED":
+                    local_pose = None if diagnostics.local_pose is None else diagnostics.local_pose[1]
+                    if action_kind == "PLAN_DETOUR":
+                        if succeeded:
+                            diagnostics.observe_path(envelope.result.path, stamp_ns(envelope.result.path))
+                        blocking = None if not succeeded else check_detour_path(envelope.result.path, now)
+                        valid = succeeded and blocking is None
+                        recovery.event(now, "detour_plan_checked", candidate=recovery.selected["name"],
+                            ok=valid, first_blocking=blocking,
+                            path=diagnostics.path,
+                            reason="plan_safe" if valid else "smac_plan_failed" if not succeeded else "footprint_blocked")
+                        if valid:
+                            if not dispatch_navigation(recovery.selected["goal"], "DETOUR"):
+                                recovery.action_finished(False, local_pose, time.monotonic_ns())
+                        else:
+                            recovery.action_finished(False, local_pose, now)
+                    elif action_kind != "NAVIGATE":
+                        recovery.action_finished(succeeded, local_pose, now)
+                        settle_until_ns = now+150_000_000
+                    elif succeeded:
+                        recovery.resolve(now, "original_goal_reached")
+                        finish_navigation(True, 0, now)
+                    elif current[0]["mode"] == "EXPLORE":
                         diagnostics.record_error(now, "NAVIGATION_FAILED", envelope.result.error_code,
                             getattr(envelope.result, "error_msg", ""), state["child_goal_id"])
-                    reply("PENDING" if current[0]["mode"] == "EXPLORE" else terminal_status)
-                    if current[0]["mode"] == "EXPLORE":
-                        if cruise.phase == "COVERAGE":
-                            cruise.finish(selected_goal, terminal_status == "SUCCEEDED", now)
-                        frontier.finish(frontier_goal, "SUCCEEDED" if terminal_status == "SUCCEEDED"
-                            else "ABORTED", envelope.result.error_code or (900 if terminal_status != "SUCCEEDED" else 0))
-                        # Successful child completion already proves the old
-                        # action is terminal; no artificial inter-goal pause.
-                        settle_until_ns = now if terminal_status == "SUCCEEDED" else now+150_000_000
-                        selected_goal, terminal_status, frontier_goal = None, None, None
+                        if recovery.state == "VERIFY":
+                            recovery.counts["verification_failed"] += 1
+                            recovery.event(now, "verification_navigation_failed")
+                        recovery.begin(selected_goal, now, "navigation_failed")
+                        settle_until_ns = now+150_000_000
+                    else:
+                        finish_navigation(False, envelope.result.error_code, now)
             if cancelling and now-cancel_started_ns > 2_000_000_000:
                 raise RuntimeError("NAV2_CANCELLATION_TIMEOUT")
             if parameter_future is not None:
@@ -496,10 +639,74 @@ def run(args):
             fresh = (map_valid and 0 <= now-map_received_ns <= 6_000_000_000
                 and 0 <= now-map_stamp_ns <= 6_000_000_000
                 and all(0 < stamp <= now and now-stamp <= SENSOR_MAX_AGE_NS for stamp in (scan_ns, odom_ns, tf_ns)))
+            if (current is not None and handle is not None and not cancelling
+                    and action_kind != "NAVIGATE" and now-accepted_ns > 8_000_000_000):
+                recovery.event(now, "native_action_deadline", action_kind=action_kind)
+                recovery_cancel = True
+                begin_cancel(now, stop_frontier=False)
+            if (current is not None and current[0]["mode"] == "EXPLORE" and fresh and active
+                    and handle is not None and not cancelling and action_kind == "NAVIGATE"
+                    and selected_goal is not None and diagnostics.local_pose is not None):
+                local_pose = diagnostics.local_pose[1]
+                feedback = diagnostics.recovery_feedback or {}
+                verified = recovery.verify(local_pose, feedback.get("distance_remaining_m"),
+                    feedback.get("received_monotonic_ns", 0), now)
+                if verified is False:
+                    recovery_cancel = True
+                    begin_cancel(now, stop_frontier=False)
+                elif recovery.state in ("IDLE", "RESOLVED"):
+                    if motion_anchor is None or math.hypot(local_pose[0]-motion_anchor[0], local_pose[1]-motion_anchor[1]) >= .10:
+                        motion_anchor, motion_anchor_ns = local_pose, now
+                    elif (now-motion_anchor_ns >= 4_500_000_000
+                            and now-navigation_started_ns >= 4_500_000_000 and robot_pose is not None
+                            and math.hypot(robot_pose[0]-selected_goal[0], robot_pose[1]-selected_goal[1]) > .35):
+                        recovery.begin(selected_goal, now, "no_translation_for_4_5s")
+                        recovery_cancel = True
+                        begin_cancel(now, stop_frontier=False)
+            if (current is not None and current[0]["mode"] == "EXPLORE" and fresh and active
+                    and not cancelling and sending is None and handle is None
+                    and parameter_future is None and applied_tolerances == desired
+                    and now >= settle_until_ns and recovery.state == "READY"):
+                summary = diagnostics.map_summaries.get("local_costmap", {})
+                candidate = recovery.choose(diagnostics.maps.get("local_costmap"),
+                    summary.get("measurement_monotonic_ns", 0),
+                    None if diagnostics.local_pose is None else diagnostics.local_pose[1], robot_pose, now)
+                if candidate is not None:
+                    dispatch_ns = time.monotonic_ns()
+                    if (dispatch_ns-current[0]["source_ns"] > HEARTBEAT_MAX_AGE_NS
+                            or any(dispatch_ns-stamp > SENSOR_MAX_AGE_NS for stamp in (scan_ns, odom_ns, tf_ns))):
+                        recovery.tried.discard(candidate["name"])
+                        recovery.state = "READY"
+                        continue
+                    action_kind = candidate["kind"]
+                    action_generation += 1
+                    if action_kind == "BACKUP" and backup.server_is_ready():
+                        goal = BackUp.Goal()
+                        goal.target.x, goal.speed = .25, .19
+                        goal.time_allowance.sec = 5
+                        sending = backup.send_goal_async(goal)
+                    elif action_kind == "SPIN" and spin.server_is_ready():
+                        goal = Spin.Goal()
+                        goal.target_yaw = candidate["w"]*candidate["duration"]
+                        goal.time_allowance.sec = 5
+                        sending = spin.send_goal_async(goal)
+                    elif action_kind == "PLAN_DETOUR" and planner.server_is_ready():
+                        goal = ComputePathToPose.Goal()
+                        goal.goal, goal.planner_id, goal.use_start = goal_pose(candidate["goal"]), "GridBased", False
+                        sending = planner.send_goal_async(goal)
+                    else:
+                        recovery.action_finished(False, None, now)
+                    reply("PENDING")
+            if (current is not None and recovery.state == "EXHAUSTED"
+                    and not cancelling and handle is None and sending is None):
+                finish_navigation(False, 900, now)
             if (current is not None and active and not cancelling and sending is None and handle is None
                     and terminal_status is None and parameter_future is None
                     and applied_tolerances == desired
-                    and now >= settle_until_ns and navigator.server_is_ready() and fresh):
+                    and now >= settle_until_ns and navigator.server_is_ready() and fresh
+                    and (current[0]["mode"] != "EXPLORE" or cruise.grid is not None
+                        and 0 <= now-cruise.grid_ns <= 3_000_000_000)
+                    and recovery.state in ("IDLE", "RESOLVED", "VERIFY")):
                 packet = current[0]
                 if selected_goal is None:
                     if packet["mode"] == "EXPLORE":
@@ -510,6 +717,10 @@ def run(args):
                             if frontier.start(session):
                                 frontier_goal = frontier.proposal
                                 selected_goal = None if frontier_goal is None else list(frontier_goal.goal)
+                                if selected_goal is not None and not cruise.valid_goal(selected_goal, now):
+                                    frontier.finish(frontier_goal, "ABORTED", 900)
+                                    cruise.finish(selected_goal, False, now)
+                                    selected_goal, frontier_goal = None, None
                     else:
                         selected_goal = packet["goal"]
                     if selected_goal is not None:
@@ -521,22 +732,7 @@ def run(args):
                     if (dispatch_ns-packet["source_ns"] > HEARTBEAT_MAX_AGE_NS
                             or any(dispatch_ns-stamp > SENSOR_MAX_AGE_NS for stamp in (scan_ns, odom_ns, tf_ns))):
                         continue
-                    goal = NavigateToPose.Goal()
-                    goal.pose = PoseStamped()
-                    goal.pose.header.frame_id = GLOBAL_FRAME_ID
-                    goal.pose.header.stamp = node.get_clock().now().to_msg()
-                    goal.pose.pose.position.x, goal.pose.pose.position.y = map(float, selected_goal[:2])
-                    yaw = selected_goal[2]
-                    if yaw is None and robot_pose is not None:
-                        yaw = math.atan2(selected_goal[1]-robot_pose[1], selected_goal[0]-robot_pose[0])
-                    yaw = yaw or 0.
-                    goal.pose.pose.orientation.z, goal.pose.pose.orientation.w = math.sin(yaw/2), math.cos(yaw/2)
-                    goal.behavior_tree = args.behavior_tree
-                    diagnostics.recovery_feedback = None
-                    sending = navigator.send_goal_async(goal, feedback_callback=(
-                        lambda message, child_id=state["child_goal_id"], mission_id=packet["mission_id"]:
-                            navigation_feedback(message, child_id, mission_id)))
-                    reply("PENDING")
+                    dispatch_navigation(selected_goal)
                 elif now-last_reply_ns >= 100_000_000:
                     reply("PENDING")
             if current is not None and now-last_reply_ns >= 100_000_000:
@@ -582,6 +778,8 @@ def run(args):
                     frontier_goals=frontier.accepted, frontier_rejected=frontier.rejected)
                 state["frontier_startup"] = frontier.startup_timing
                 state.update(**cruise.snapshot())
+                state["rc_recovery"] = recovery.snapshot()
+                state["action_kind"] = action_kind
                 state["goal_checker_tolerances"] = applied_tolerances
                 state["nav2_observation"] = diagnostics.snapshot(now,
                     scan_ns=scan_ns, odom_ns=odom_ns, tf_ns=tf_ns,
