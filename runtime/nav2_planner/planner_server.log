@@ -5460,3 +5460,61 @@ terminate called without an active exception
 [INFO] [1794687399.624589855] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
 [INFO] [1794687399.636132336] [global_costmap.global_costmap]: Destroying
 [INFO] [1794687399.665135774] [planner_server]: Destroying
+[WARN] [1794688273.875119999] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794688273.875169277] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794688273.987126433] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794688273.990769388] [planner_server]: Creating
+[INFO] [1794688274.042020815] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794688274.043215225] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794688274.122799086] [planner_server]: Configuring
+[INFO] [1794688274.122881642] [global_costmap.global_costmap]: Configuring
+[INFO] [1794688274.169489703] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794688274.180242382] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794688274.186122381] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794688274.197153654] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794688274.197226376] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794688274.197522136] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794688274.203223634] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794688274.203304672] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794688274.204478897] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794688274.298245521] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794688274.298324373] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794688274.299914396] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794688274.304227650] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794688274.304305724] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794688274.426653338] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 126 X 122 at 0.050000 m/pix
+[INFO] [1794688274.890059331] [planner_server]: Activating
+[INFO] [1794688274.890143961] [global_costmap.global_costmap]: Activating
+[INFO] [1794688274.890161146] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794688274.890253110] [global_costmap.global_costmap]: start
+[INFO] [1794688275.141360915] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794688275.142999605] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794688280.490408750] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 126 X 122 at 0.050000 m/pix
+[INFO] [1794688282.490493632] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 135 X 125 at 0.050000 m/pix
+[INFO] [1794688284.490405360] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 135 X 126 at 0.050000 m/pix
+[INFO] [1794688286.490429140] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 135 X 131 at 0.050000 m/pix
+[INFO] [1794688288.690414765] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 135 X 132 at 0.050000 m/pix
+[INFO] [1794688290.690646542] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 135 X 153 at 0.050000 m/pix
+[INFO] [1794688294.491526817] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 137 X 153 at 0.050000 m/pix
+[INFO] [1794688298.490480104] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 138 X 153 at 0.050000 m/pix
+[INFO] [1794688300.490402212] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 153 at 0.050000 m/pix
+[INFO] [1794688306.490380879] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 178 at 0.050000 m/pix
+[INFO] [1794688347.673007708] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794688347.673068097] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794688347.673144635] [planner_server]: Deactivating
+[INFO] [1794688347.673178098] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794688347.691564469] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794688347.691655599] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794688347.701808048] [planner_server]: Cleaning up
+[INFO] [1794688347.766461258] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794688347.790905043] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794688347.791721806] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794688347.817509856] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794688347.821711762] [global_costmap.global_costmap]: Destroying
+[INFO] [1794688347.830047908] [planner_server]: Destroying
