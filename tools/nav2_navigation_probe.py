@@ -294,7 +294,7 @@ def _worker(args, root, output):
                         explore_children[child] = selected
                         if args.frontier_only:
                             if (child <= 0 or packet["map_revision"] <= 0
-                                    or not FRONTIER_X - .15 <= selected[0] <= FRONTIER_X + .15):
+                                    or not FRONTIER_X - .75 <= selected[0] < FRONTIER_X):
                                 raise RuntimeError("selected goal lacks actual frontier/map/child lineage")
                             report["frontier_goal_lineage"] = True
                             report["first_frontier_guidance"] = report.get("first_frontier_guidance", packet)

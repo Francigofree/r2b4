@@ -30,6 +30,8 @@ class RoomCruiseGoals:
         self.goals = self.reached = self.failures = 0
         self.geometry_rejections = 0
         self.last_rejection = None
+        self.rejection_events = deque(maxlen=32)
+        self.frontier_adjustment = None
 
     def begin(self, session):
         if self.session != session:
@@ -158,14 +160,42 @@ class RoomCruiseGoals:
             return True
         self.geometry_rejections += 1
         self.last_rejection = dict(component="rc_goal_selector", reason="goal_footprint_blocked",
+            sequence=self.geometry_rejections,
             measurement_monotonic_ns=now_ns, map_measurement_ns=self.grid_ns,
             map_revision=self.grid_revision, frame_id=self.grid.header.frame_id if hasattr(self.grid, "header") else None,
             original_goal=list(goal), modified_goal=None, first_blocking=blocking,
             body_bounds_m=list(self.body_bounds_m), padding_m=self.padding_m)
+        self.rejection_events.append(self.last_rejection)
         return False
+
+    def frontier_destination(self, proposal, pose, now_ns):
+        """Inset a frontier centroid into observed space for the whole body.
+
+        Frontier centroids sit on the free/unknown boundary. Rejecting every
+        such center would prevent discovery; the scanner can observe beyond a
+        safe intermediate approach point without placing the body in unknown.
+        """
+        if proposal is None or pose is None:
+            return None
+        distance = math.hypot(proposal[0]-pose[0], proposal[1]-pose[1])
+        if distance < .35:
+            return None
+        yaw = math.atan2(proposal[1]-pose[1], proposal[0]-pose[0])
+        for inset in (0., .15, .30, .45, .60):
+            if distance-inset < .35:
+                break
+            goal = [proposal[0]-inset*math.cos(yaw), proposal[1]-inset*math.sin(yaw), yaw]
+            if self.valid_goal(goal, now_ns):
+                self.frontier_adjustment = dict(measurement_monotonic_ns=now_ns,
+                    original_goal=list(proposal), selected_goal=goal, inset_m=inset,
+                    reason="full_body_known_space", map_revision=self.grid_revision)
+                return goal
+        return None
 
     def snapshot(self):
         return dict(cruise_phase=self.phase, coverage_candidates=len(self._candidates),
             coverage_goals=self.goals, coverage_reached=self.reached,
             coverage_failed=self.failures, coverage_visited_cells=len(self._visits),
-            goal_geometry_rejections=self.geometry_rejections, goal_geometry_last_rejection=self.last_rejection)
+            goal_geometry_rejections=self.geometry_rejections, goal_geometry_last_rejection=self.last_rejection,
+            goal_geometry_rejection_events=list(self.rejection_events),
+            frontier_goal_adjustment=self.frontier_adjustment)

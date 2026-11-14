@@ -716,10 +716,10 @@ def run(args):
                             session = tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation"))
                             if frontier.start(session):
                                 frontier_goal = frontier.proposal
-                                selected_goal = None if frontier_goal is None else list(frontier_goal.goal)
-                                if selected_goal is not None and not cruise.valid_goal(selected_goal, now):
+                                selected_goal = cruise.frontier_destination(
+                                    None if frontier_goal is None else frontier_goal.goal, robot_pose, now)
+                                if frontier_goal is not None and selected_goal is None:
                                     frontier.finish(frontier_goal, "ABORTED", 900)
-                                    cruise.finish(selected_goal, False, now)
                                     selected_goal, frontier_goal = None, None
                     else:
                         selected_goal = packet["goal"]

@@ -96,3 +96,18 @@ def test_cruise_skips_final_yaw_alignment_without_widening_navigate_tolerance():
         max_v_mps=.25, max_omega_rad_s=1.4)
     assert controller_goal_parameters(packet)[:2] == pytest.approx((.05, .1))
     assert controller_goal_parameters({**packet, "mode": "EXPLORE"})[:2] == pytest.approx((.18, math.pi))
+
+
+def test_frontier_is_inset_into_known_space_for_the_entire_body():
+    selector = coverage()
+    g = grid(resolution=.05)
+    # Unknown begins at x=2m; a point-only centroid at 1.975 cannot fit the body.
+    for iy in range(g.info.height):
+        for ix in range(40, g.info.width):
+            g.data[iy*g.info.width+ix] = -1
+    now = 1_000_000_000
+    selector.update_costmap(g, now)
+    goal = selector.frontier_destination([1.975, 1.5, 0.], (1., 1.5, 0.), now)
+    assert goal is not None and goal[0]+.36 < 2.
+    assert selector.valid_goal(goal, now)
+    assert selector.frontier_adjustment['inset_m'] > 0

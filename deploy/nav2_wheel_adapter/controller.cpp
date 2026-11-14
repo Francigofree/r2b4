@@ -119,6 +119,7 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
   geometry_msgs::msg::TwistStamped computeVelocityCommands(
       const geometry_msgs::msg::PoseStamped &pose,const geometry_msgs::msg::Twist &speed,
       nav2_core::GoalChecker *goal_checker) override {
+    measured_v_=speed.linear.x; measured_w_=speed.angular.z;
     geometry_msgs::msg::TwistStamped command;
     try { command=MPPIController::computeVelocityCommands(pose,speed,goal_checker); }
     catch (const std::exception &) {record(pose,0.,0.,0.,0.,"mppi_exception",{},false); throw;}
@@ -156,7 +157,7 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
  private:
   struct Event {
     uint64_t sequence=0; int64_t stamp=0,pose_stamp=0;
-    double x=0.,y=0.,yaw=0.,v=0.,w=0.,pv=0.,pw=0.;
+    double x=0.,y=0.,yaw=0.,v=0.,w=0.,pv=0.,pw=0.,measured_v=0.,measured_w=0.;
     const char *reason=""; CollisionEvidence collision; bool raw_available=true;
   };
   void record(const geometry_msgs::msg::PoseStamped &pose,double v,double w,double pv,double pw,
@@ -168,6 +169,7 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
     const auto &q=pose.pose.orientation;
     e.yaw=std::atan2(2.*(q.w*q.z+q.x*q.y),1.-2.*(q.y*q.y+q.z*q.z));
     e.v=v; e.w=w; e.pv=pv; e.pw=pw; e.reason=reason; e.collision=collision; e.raw_available=raw_available;
+    e.measured_v=measured_v_; e.measured_w=measured_w_;
     if (size_==events_.size()) {
       if (events_[head_].sequence>last_published_sequence_) ++overflow_;
       head_=(head_+1)%events_.size(); --size_;
@@ -187,10 +189,14 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
        <<",\"overflow_count\":"<<overflow_<<",\"events\":[";
     for (size_t i=0;i<size_;++i) {
       const auto &e=events_[(head_+i)%events_.size()]; const auto &c=e.collision;
+      const bool forwarded=std::string(e.reason)=="wheel_projection" ||
+          std::string(e.reason)=="no_nonzero_wheel_feasible_command";
       if (i) out<<',';
       out<<"{\"sequence\":"<<e.sequence<<",\"measurement_ros_ns\":"<<e.stamp<<",\"pose_ros_ns\":"<<e.pose_stamp<<",\"reason\":\""<<e.reason
          <<"\",\"raw_available\":"<<(e.raw_available?"true":"false")<<",\"pose\":["<<e.x<<','<<e.y<<','<<e.yaw
          <<"],\"raw\":["<<e.v<<','<<e.w<<"],\"projected\":["<<e.pv<<','<<e.pw
+         <<"],\"forwarded\":["<<(forwarded?e.pv:0.)<<','<<(forwarded?e.pw:0.)
+         <<"],\"measured_velocity\":["<<e.measured_v<<','<<e.measured_w
          <<"],\"raw_wheels\":["<<e.v-e.w*limits_.track*.5<<','<<e.v+e.w*limits_.track*.5
          <<"],\"projected_wheels\":["<<e.pv-e.pw*limits_.track*.5<<','<<e.pv+e.pw*limits_.track*.5
          <<"],\"trajectory\":{\"model\":\"constant_twist_arc\",\"duration_s\":1.0,\"steps\":"<<c.steps
@@ -209,6 +215,7 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
   }
   WheelLimits limits_{};
   double mission_max_v_{},mission_max_omega_{};
+  double measured_v_=0.,measured_w_=0.;
   std::mutex evidence_mutex_;
   std::array<Event,16> events_{};
   size_t head_=0,size_=0;
