@@ -164,7 +164,8 @@ def _worker(args, root, output):
                 occupied = (not ROOM[0] < x < ROOM[2] or not ROOM[1] < y < ROOM[3]
                             or obstacle and OBSTACLE[0] <= x <= OBSTACLE[2] and OBSTACLE[1] <= y <= OBSTACLE[3])
                 frontier_boundary = FRONTIER_X if args.frontier_only else 4.5
-                unknown = (args.frontier_only or phase == "EXPLORE") and not occupied and x >= frontier_boundary
+                unknown = (not args.coverage_only and (args.frontier_only or phase == "EXPLORE")
+                           and not occupied and x >= frontier_boundary)
                 cells.append(100 if occupied else -1 if unknown else 0)
         message.data = cells
         map_publisher.publish(message)
@@ -200,6 +201,10 @@ def _worker(args, root, output):
 
     commands = _commands(paths, full=True, radius=radius,
                          robot_geometry=simulation_config["robot_geometry"])
+    if args.profile_bridge:
+        commands = [(name, command[:1] + ["-m", "cProfile", "-o",
+            str(output / "bridge_profile.pstats")] + command[1:] if name == "bridge" else command)
+            for name, command in commands]
     children, handles = [], []
     report = dict(schema="R2B4_NAV2_MOTORLESS_PROBE_V1", status="FAILED", motor_authority=False,
         ros_domain_id=args.ros_domain_id, output=str(output), radius_m=radius,
@@ -365,7 +370,7 @@ def _worker(args, root, output):
                 except (OSError, ValueError):
                     ready = False
                 if ready:
-                    if args.frontier_only:
+                    if args.frontier_only or args.coverage_only:
                         phase, phase_started, phase_id, target, mode = "EXPLORE", now, 1, None, "EXPLORE"
                     else:
                         phase, phase_started, phase_id, target = "FIXED_GOAL", now, 1, [1., 0., 0.]
@@ -391,7 +396,15 @@ def _worker(args, root, output):
             elif phase == "EXPLORE":
                 report["explore_child_goals"] = len(explore_children)
                 report["explore_succeeded_goals"] = len(explore_succeeded_ids)
-                if args.frontier_only:
+                if args.coverage_only:
+                    state = json.loads(bridge_status.read_text())
+                    report["coverage_only"] = True
+                    if (now-phase_started >= 25. and state.get("cruise_phase") == "COVERAGE"
+                            and explore_children and report["active_commands"] > 0):
+                        report["explore_parent_stable"] = True
+                        report["status"] = "PASS"
+                        break
+                elif args.frontier_only:
                     if (first_positive_ns is not None and now_ns - first_positive_ns >= 800_000_000
                             and report["frontier_goal_lineage"]):
                         report["explore_parent_stable"] = True
@@ -482,7 +495,7 @@ def _worker(args, root, output):
         try:
             report["bridge"] = json.loads(bridge_status.read_text())
             applied = report["bridge"].get("goal_checker_tolerances")
-            expected = [.18, math.pi] if args.frontier_only else [
+            expected = [.18, math.pi] if args.frontier_only or args.coverage_only else [
                 constraints.goal_tolerance_m / 2, constraints.yaw_tolerance_rad / 2]
             report["goal_checker_tolerances_applied"] = (isinstance(applied, list)
                 and applied[:2] == expected)
@@ -518,8 +531,12 @@ def main(argv=None):
     parser.add_argument("--output", type=Path)
     parser.add_argument("--ros-domain-id", type=int, default=75)
     parser.add_argument("--timeout-s", type=float, default=100.)
-    parser.add_argument("--frontier-only", action="store_true",
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--frontier-only", action="store_true",
                         help="probe actual ROS 2 exploration, cancellation and heartbeat expiry")
+    modes.add_argument("--coverage-only", action="store_true",
+                       help="probe frontier completion and 25 s of known-room coverage")
+    parser.add_argument("--profile-bridge", action="store_true", help="write offline bridge cProfile evidence")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--robot-radius", type=float, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -561,6 +578,10 @@ def main(argv=None):
                "--robot-radius", str(radius)]
     if args.frontier_only:
         command.append("--frontier-only")
+    if args.coverage_only:
+        command.append("--coverage-only")
+    if args.profile_bridge:
+        command.append("--profile-bridge")
     return subprocess.run(command, cwd=root, env=environment, check=False).returncode
 
 

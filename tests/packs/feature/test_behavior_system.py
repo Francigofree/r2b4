@@ -415,6 +415,26 @@ def test_watchdog_and_missing_execution_never_prove_requested_duration():
     assert robot.stops == 1
 
 
+@pytest.mark.parametrize("reason", ["NAV2_UNAVAILABLE", "NAV2_PENDING", "NAV2_STALE"])
+def test_room_cruise_hold_can_resume_but_cannot_prove_duration_completion(reason):
+    clock, robot, system = setup_system()
+    state = system.start("room_cruise", max_duration_s=50, completion_on_duration=True)
+    robot.observe(state)
+    active = system.step()
+    clock.now += 5_000_000_000
+    robot.observe(active, navigation="IDLE", reason=reason)
+    assert system.step().lifecycle is BehaviorLifecycle.ACTIVE
+    clock.now += 5_000_000_000
+    robot.observe(active)
+    assert system.step().lifecycle is BehaviorLifecycle.ACTIVE
+    clock.now = active.deadline_ns
+    robot.observe(active, navigation="IDLE", reason=reason)
+    failed = system.step()
+    assert failed.lifecycle is BehaviorLifecycle.FAILED
+    assert failed.reason == "REQUESTED_EXECUTION_UNPROVEN"
+    assert robot.stops == 1
+
+
 def test_program_terminal_result_is_preserved_without_parallel_mutable_world():
     _, robot, system = setup_system()
     result = {"target_track_id": "person-7", "target_entity_id": "person:123:person-7",

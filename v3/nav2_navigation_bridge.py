@@ -337,9 +337,13 @@ def run(args):
             if handle is not None:
                 cancel_future = handle.cancel_goal_async()
 
+    # Keep this ROS edge registered across turns. rclpy.spin_once(node) adds
+    # and removes it every call, forcing unnecessary wait-set rebuilds.
+    executor = rclpy.get_global_executor()
+    executor.add_node(node)
     try:
         while not stopped and rclpy.ok():
-            rclpy.spin_once(node, timeout_sec=.002)
+            executor.spin_once(timeout_sec=.002)
             now = time.monotonic_ns()
             frontier.poll()
             active = lifecycle.poll(now)
@@ -610,6 +614,7 @@ def run(args):
         temporary = status_path.with_suffix(".tmp")
         temporary.write_text(json.dumps(state, allow_nan=False, sort_keys=True)+"\n")
         temporary.replace(status_path)
+        executor.remove_node(node)
         node.destroy_node()
         rclpy.shutdown()
     return 0

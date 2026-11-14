@@ -600,6 +600,8 @@ class BehaviorSystem:
         if duration_reached:
             navigation = status.get("navigation")
             if (update.lifecycle is not BehaviorLifecycle.ACTIVE or execution_started_ns is None
+                    or state.name == "room_cruise" and (not isinstance(navigation, Mapping)
+                        or navigation.get("status") != "ACTIVE")
                     or state.name == "follow_person" and isinstance(navigation, Mapping)
                     and navigation.get("reason") == "PERSON_TARGET_NOT_AVAILABLE"):
                 return self._finish(BehaviorLifecycle.FAILED, "REQUESTED_EXECUTION_UNPROVEN",
