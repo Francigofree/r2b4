@@ -125,6 +125,8 @@ class Nav2NavigationClient:
             return False
 
     def poll(self, context: TickContext) -> Nav2NavigationInput:
+        if self._deferred is not None and self._deferred.produced_ns <= context.monotonic_ns:
+            self._guidance, self._deferred = self._deferred, None
         for _ in range(8):
             try:
                 data, address = self._channel.recvfrom(MAX_PACKET_BYTES+1)
@@ -154,7 +156,11 @@ class Nav2NavigationClient:
                 # command produced in that interval belongs to a later tick,
                 # not to the malformed-packet path. Keep one latest completion
                 # without renewing either its measurement time or expiry.
-                self._deferred, self._error = guidance, None
+                if guidance.produced_ns <= context.monotonic_ns:
+                    self._guidance, self._deferred = guidance, None
+                else:
+                    self._deferred = guidance
+                self._error = None
                 self._highwater = (guidance.worker_generation, guidance.command_sequence)
             except (ValueError, KeyError, TypeError, OverflowError):
                 self._guidance = None

@@ -40,6 +40,8 @@ class Client:
 
 def monitor():
     client = Client()
+    clock = [1_100_000_000]
+    client.clock = clock
 
     def create_client(service, name):
         assert service is Trigger
@@ -47,7 +49,8 @@ def monitor():
         return client
 
     return Nav2LifecycleMonitor(SimpleNamespace(create_client=create_client),
-                                1_000_000_000, service_type=Trigger), client
+                                1_000_000_000, service_type=Trigger,
+                                monotonic_ns=lambda: clock[0]), client
 
 
 def test_initial_inactive_waits_for_manager_then_inactive_fails_closed():
@@ -56,9 +59,11 @@ def test_initial_inactive_waits_for_manager_then_inactive_fails_closed():
     client.calls[-1].set_result(SimpleNamespace(success=False))
     assert not watch.poll(1_100_000_000)
     assert not watch.poll(1_500_000_000)
+    client.clock[0] = 1_600_000_000
     client.calls[-1].set_result(SimpleNamespace(success=True))
     assert watch.poll(1_600_000_000)
     assert watch.poll(2_000_000_000)
+    client.clock[0] = 2_100_000_000
     client.calls[-1].set_result(SimpleNamespace(success=False))
     with pytest.raises(RuntimeError, match="LIFECYCLE_INACTIVE"):
         watch.poll(2_100_000_000)
@@ -75,6 +80,7 @@ def test_unanswered_query_is_bounded_cancelled_and_old_positive_cannot_renew():
     assert watch.poll(1_500_000_000)
     old = client.calls[-1]
     # Even a completed answer is discarded after its own request deadline.
+    client.clock[0] = 2_500_000_000
     old.set_result(SimpleNamespace(success=True))
     assert watch.poll(2_500_000_000)
     assert client.removed == [old]
@@ -373,3 +379,26 @@ def test_forced_stop_waits_for_verified_group_and_cleans_its_endpoint(monkeypatc
             child.kill()
         child.wait(timeout=1)
         child.stdout.close()
+
+
+@pytest.mark.parametrize("outcome", ["active", "inactive", "error"])
+def test_on_time_completion_survives_late_poll_without_renewing_response_time(outcome):
+    watch, client = monitor()
+    watch.poll(1_000_000_000)
+    client.calls[-1].set_result(SimpleNamespace(success=True))
+    assert watch.poll(1_100_000_000)
+    watch.poll(1_500_000_000)
+    client.clock[0] = 2_400_000_000
+    if outcome == "error":
+        client.calls[-1].set_exception(ValueError("service failed"))
+    else:
+        client.calls[-1].set_result(SimpleNamespace(success=outcome == "active"))
+    if outcome != "active":
+        with pytest.raises(RuntimeError, match="QUERY_FAILED" if outcome == "error" else "INACTIVE"):
+            watch.poll(2_600_000_000)
+    else:
+        assert watch.poll(2_600_000_000)
+        assert watch.snapshot(2_600_000_000)["last_response_checked_ns"] == 2_400_000_000
+        assert not client.removed
+        with pytest.raises(RuntimeError, match="STATUS_STALE"):
+            watch.poll(3_900_000_000)
