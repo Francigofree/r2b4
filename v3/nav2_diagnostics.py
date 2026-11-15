@@ -24,6 +24,9 @@ NAV2_OBSERVATION_SCHEMA = "R2B4_NAV2_OBSERVATION_V1"
 NAV2_SAMPLE_PERIOD_NS = 200_000_000
 _RATE_WINDOW_NS = 2_000_000_000
 _MAX_STATUS_BYTES = 131_072
+# The bounded motion/recovery rings and two costmap windows can together exceed
+# 128 KiB. This reader runs only in the capture sidecar, never the control tick.
+_MAX_NAV2_STATUS_BYTES = 262_144
 _MAX_DIAGNOSTICS = 16
 _MAX_VALUES = 8
 _MAX_VISITED_CELLS = 65_536
@@ -617,8 +620,8 @@ class Nav2ObservationSampler:
                     raise ValueError("NAV2_OBSERVATION_STALE_OR_INVALID")
                 return None
             with self.path.open("rb") as stream:
-                encoded = stream.read(_MAX_STATUS_BYTES+1)
-            if len(encoded) > _MAX_STATUS_BYTES:
+                encoded = stream.read(_MAX_NAV2_STATUS_BYTES+1)
+            if len(encoded) > _MAX_NAV2_STATUS_BYTES:
                 raise ValueError("NAV2_STATUS_EXCEEDS_BOUND")
             state = json.loads(encoded)
             if not isinstance(state, dict):

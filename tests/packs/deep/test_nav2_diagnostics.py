@@ -260,6 +260,19 @@ def test_snapshot_reader_reports_stale_and_superseded_without_renewing_source(tm
     assert sampler.sample(4_000_000_000) is None
 
 
+def test_snapshot_reader_accepts_full_bounded_status_and_rejects_oversize(tmp_path):
+    sampler = Nav2ObservationSampler(tmp_path)
+    sampler.path.parent.mkdir(parents=True)
+    row = {"schema": NAV2_OBSERVATION_SCHEMA, "sample_sequence": 1,
+        "worker_generation": 10, "measurement_monotonic_ns": 1_000_000_000}
+    sampler.path.write_text(json.dumps({"nav2_observation": row, "other": "x"*140_000}))
+    assert sampler.sample(1_100_000_000)["available"]
+    row["sample_sequence"] = 2
+    sampler.path.write_text(json.dumps({"nav2_observation": row, "other": "x"*262_144}))
+    rejected = sampler.sample(1_200_000_000)
+    assert not rejected["available"] and rejected["reason"] == "NAV2_STATUS_EXCEEDS_BOUND"
+
+
 def test_five_hz_timing_window_keeps_unsampled_cycle_delay_and_distinct_pipeline_wall():
     from test_flight_recorder import closed_stop_record
     timing = RuntimeTimingAccumulator(20_000_000)

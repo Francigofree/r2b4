@@ -133,7 +133,7 @@ def run(args):
     import rclpy
     from rclpy.action import ActionClient
     from rclpy.node import Node
-    from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
+    from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
     from rclpy.signals import SignalHandlerOptions
     from geometry_msgs.msg import PoseStamped, TwistStamped
     from nav_msgs.msg import OccupancyGrid, Odometry, Path as RosPath
@@ -381,8 +381,12 @@ def run(args):
     node.create_subscription(OccupancyGrid, "/map", map_callback, qos)
     node.create_subscription(OccupancyGrid, "/global_costmap/costmap", coverage_costmap_callback, qos)
     node.create_subscription(OccupancyGrid, "/local_costmap/costmap", local_costmap_callback, qos)
-    node.create_subscription(LaserScan, "/r2b4/slam/scan", scan_callback, qos_profile_sensor_data)
-    node.create_subscription(Odometry, "/r2b4/odom", odom_callback, qos_profile_sensor_data)
+    # Freshness evidence is latest-value state. SensorData's default depth of
+    # five retains up to 100ms of old odometry after a delayed ROS turn, causing
+    # avoidable command revocation even when newer measurements are available.
+    latest_sensor_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+    node.create_subscription(LaserScan, "/r2b4/slam/scan", scan_callback, latest_sensor_qos)
+    node.create_subscription(Odometry, "/r2b4/odom", odom_callback, latest_sensor_qos)
     node.create_subscription(TwistStamped, "/r2b4/nav2/cmd_vel", velocity_callback, 1)
     node.create_subscription(TwistStamped, "/r2b4/nav2/raw_cmd_vel",
         lambda message: diagnostics.observe_raw_command(message, stamp_ns(message), time.monotonic_ns()), 1)

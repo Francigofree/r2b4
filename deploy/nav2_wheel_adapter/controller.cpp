@@ -17,39 +17,78 @@ struct CollisionEvidence {
   int steps = 0, sample = -1, cell_x = -1, cell_y = -1, cost = -1;
   double x = 0., y = 0., yaw = 0.;
   double origin_x = 0., origin_y = 0., resolution = 0.;
+  double sampling_guard = 0.;
 };
 
-// The generated footprint is a rectangle. Check every intersected cell, not an
-// inflated circle or only its border. Inflation costs are preferences; lethal,
-// unknown and map exit are hard constraints. Padding is already in footprint.
+// Check the complete configured convex polygon against complete occupied cells.
+// The generated polygon already includes the physical Euclidean body margin.
+// Inflation is a preference; lethal, unknown and map exit are hard constraints.
 CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
     const nav2_costmap_2d::Footprint &footprint, double x, double y, double yaw,
     double v, double omega) {
   CollisionEvidence e;
   e.origin_x=map->getOriginX(); e.origin_y=map->getOriginY(); e.resolution=map->getResolution();
-  double rear=0., front=0., right=0., left=0., radius=0.;
+  const double res=map->getResolution(), r=res*.5;
+  double radius=0.;
+  if (footprint.size()<3 || footprint.size()>32 || !std::isfinite(res) || res<=0. ||
+      !std::isfinite(x+y+yaw+v+omega)) {e.reason="invalid_geometry"; return e;}
+  struct Axis {double x,y,low,high;};
+  std::vector<Axis> axes;
   for (const auto &p : footprint) {
-    rear=std::min(rear,p.x); front=std::max(front,p.x);
-    right=std::min(right,p.y); left=std::max(left,p.y);
+    if (!std::isfinite(p.x+p.y)) {e.reason="invalid_geometry"; return e;}
     radius=std::max(radius,std::hypot(p.x,p.y));
   }
-  const double res=map->getResolution(), r=res*.5;
-  const double a=(front-rear)*.5, b=(left-right)*.5;
-  const double ox=(front+rear)*.5, oy=(left+right)*.5;
-  e.steps=std::max(1,static_cast<int>(std::ceil((std::abs(v)+radius*std::abs(omega))/r)));
+  const double travel=std::abs(v)+radius*std::abs(omega); // unchanged one-second horizon
+  if (travel/(res*.25)>128.) {e.reason="trajectory_bound_exceeded"; return e;}
+  e.steps=std::max(1,static_cast<int>(std::ceil(travel/(res*.25))));
   if (e.steps>128) {e.reason="trajectory_bound_exceeded"; return e;}
+  e.sampling_guard=travel/(2*e.steps);
+  for (size_t i=0;i<footprint.size();++i) {
+    const auto &p=footprint[i], &q=footprint[(i+1)%footprint.size()];
+    double nx=q.y-p.y,ny=p.x-q.x, length=std::hypot(nx,ny);
+    if (length<1e-12) {e.reason="invalid_geometry"; return e;}
+    nx/=length; ny/=length;
+    double low=1e100,high=-1e100;
+    for (const auto &vertex:footprint) {
+      const double d=nx*vertex.x+ny*vertex.y;
+      low=std::min(low,d); high=std::max(high,d);
+    }
+    // CCW convex footprint only; fail closed on an invalid configuration.
+    if (high-(nx*p.x+ny*p.y)>1e-9) {e.reason="invalid_geometry"; return e;}
+    axes.push_back({nx,ny,low-e.sampling_guard,high+e.sampling_guard});
+  }
+  nav2_costmap_2d::Footprint guarded(footprint.size());
+  for (size_t i=0;i<axes.size();++i) {
+    const auto &a=axes[(i+axes.size()-1)%axes.size()], &b=axes[i];
+    const double det=a.x*b.y-a.y*b.x;
+    if (det<1e-9) {e.reason="invalid_geometry"; return e;}
+    guarded[i].x=(a.high*b.y-a.y*b.high)/det;
+    guarded[i].y=(a.x*b.high-a.high*b.x)/det;
+  }
+  for (auto &a:axes) {
+    a.low=1e100; a.high=-1e100;
+    for (const auto &p:guarded) {
+      const double d=a.x*p.x+a.y*p.y;
+      a.low=std::min(a.low,d); a.high=std::max(a.high,d);
+    }
+  }
   for (int i=0; i<=e.steps; ++i) {
     const double t=static_cast<double>(i)/e.steps, angle=yaw+omega*t;
     const double px=x+(std::abs(omega)<1e-9 ? v*t*std::cos(yaw)
         : v/omega*(std::sin(angle)-std::sin(yaw)));
     const double py=y+(std::abs(omega)<1e-9 ? v*t*std::sin(yaw)
         : v/omega*(std::cos(yaw)-std::cos(angle)));
-    const double c=std::cos(angle), s=std::sin(angle), cx=px+c*ox-s*oy, cy=py+s*ox+c*oy;
-    const double ex=a*std::abs(c)+b*std::abs(s), ey=a*std::abs(s)+b*std::abs(c);
-    const int minx=static_cast<int>(std::floor((cx-ex-map->getOriginX()-1e-10)/res));
-    const int maxx=static_cast<int>(std::floor((cx+ex-map->getOriginX()+1e-10)/res));
-    const int miny=static_cast<int>(std::floor((cy-ey-map->getOriginY()-1e-10)/res));
-    const int maxy=static_cast<int>(std::floor((cy+ey-map->getOriginY()+1e-10)/res));
+    const double c=std::cos(angle), s=std::sin(angle);
+    double xmin=1e100,xmax=-1e100,ymin=1e100,ymax=-1e100;
+    for (const auto &p:guarded) {
+      const double wx=px+c*p.x-s*p.y, wy=py+s*p.x+c*p.y;
+      xmin=std::min(xmin,wx); xmax=std::max(xmax,wx);
+      ymin=std::min(ymin,wy); ymax=std::max(ymax,wy);
+    }
+    const int minx=static_cast<int>(std::floor((xmin-map->getOriginX()-1e-10)/res));
+    const int maxx=static_cast<int>(std::floor((xmax-map->getOriginX()+1e-10)/res));
+    const int miny=static_cast<int>(std::floor((ymin-map->getOriginY()-1e-10)/res));
+    const int maxy=static_cast<int>(std::floor((ymax-map->getOriginY()+1e-10)/res));
     e.sample=i; e.x=px; e.y=py; e.yaw=angle;
     if (minx<0 || miny<0 || maxx>=static_cast<int>(map->getSizeInCellsX()) ||
         maxy>=static_cast<int>(map->getSizeInCellsY())) {
@@ -59,10 +98,16 @@ CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
       const int cost=map->getCost(mx,my);
       if (cost<nav2_costmap_2d::LETHAL_OBSTACLE) continue;
       double wx,wy; map->mapToWorld(mx,my,wx,wy);
-      const double dx=wx-cx,dy=wy-cy, epsilon=1e-10;
-      if (std::abs(dx)>ex+r+epsilon || std::abs(dy)>ey+r+epsilon ||
-          std::abs(dx*c+dy*s)>a+r*(std::abs(c)+std::abs(s))+epsilon ||
-          std::abs(-dx*s+dy*c)>b+r*(std::abs(c)+std::abs(s))+epsilon) continue;
+      const double dx=wx-px,dy=wy-py;
+      if (wx+r<xmin-1e-10 || wx-r>xmax+1e-10 ||
+          wy+r<ymin-1e-10 || wy-r>ymax+1e-10) continue;
+      bool separated=false;
+      for (const auto &a:axes) {
+        const double nx=c*a.x-s*a.y, ny=s*a.x+c*a.y;
+        const double d=nx*dx+ny*dy, extent=r*(std::abs(nx)+std::abs(ny));
+        if (d<a.low-extent-1e-10 || d>a.high+extent+1e-10) {separated=true; break;}
+      }
+      if (separated) continue;
       e.reason=cost==nav2_costmap_2d::NO_INFORMATION?"unknown_cell":"lethal_cell";
       e.cell_x=mx; e.cell_y=my; e.cost=cost; return e;
     }
@@ -272,6 +317,7 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
          <<"],\"raw_wheels\":["<<e.v-e.w*limits_.track*.5<<','<<e.v+e.w*limits_.track*.5
          <<"],\"projected_wheels\":["<<e.pv-e.pw*limits_.track*.5<<','<<e.pv+e.pw*limits_.track*.5
          <<"],\"trajectory\":{\"model\":\"constant_twist_arc\",\"duration_s\":1.0,\"steps\":"<<c.steps
+         <<",\"sampling_guard_m\":"<<c.sampling_guard
          <<"},\"costmap_geometry\":{\"origin\":["<<c.origin_x<<','<<c.origin_y<<"],\"resolution_m\":"<<c.resolution
          <<"},\"first_blocking\":";
       if (c.sample<0) out<<"null";

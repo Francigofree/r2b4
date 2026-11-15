@@ -76,6 +76,25 @@ int main() {
   braking.setCost(50,50,nav2_costmap_2d::LETHAL_OBSTACLE);
   auto blocked=select();
   std::cout << (!blocked.collision_projected && std::string(blocked.collision.reason)=="lethal_cell") << "\n";
+  // Same conservative Euclidean polygon as the production generated footprint.
+  nav2_costmap_2d::Footprint rounded(16);
+  for (int i=0;i<16;++i) {
+    const double a=(2*i+1)*M_PI/16, radius=.1/std::cos(M_PI/16);
+    rounded[i].x=(std::cos(a)>0?.26:-.1)+radius*std::cos(a);
+    rounded[i].y=(std::sin(a)>0?.18:-.18)+radius*std::sin(a);
+  }
+  nav2_costmap_2d::Costmap2D live(60,60,.05,2.1,.9,0);
+  live.setCost(25,21,nav2_costmap_2d::LETHAL_OBSTACLE);
+  auto retained=[&](double dx,double dy,double v) {return r2b4_nav2::commandCollides(
+      &live,rounded,3.628266586+dx,2.350352139+dy,-1.422011923,v,0.);};
+  std::cout << retained(0.,0.,0.) << "\n";
+  std::cout << retained(0.,0.,-.19) << "\n";
+  std::cout << retained(-.02,-.02,0.) << "\n";
+  nav2_costmap_2d::Costmap2D equivalence(100,100,.05,-2.5,-2.5,0);
+  equivalence.setCost(50,50,nav2_costmap_2d::LETHAL_OBSTACLE);
+  double x,y,yaw,cv,cw;
+  while (std::cin>>x>>y>>yaw>>cv>>cw)
+    std::cout << r2b4_nav2::commandCollides(&equivalence,rounded,x,y,yaw,cv,cw) << "\n";
 }
 ''')
     (tmp_path / "CMakeLists.txt").write_text('''
@@ -101,11 +120,21 @@ target_link_libraries(collision "''' + str(prefix / "lib/libmppi_controller.so")
                     [cmake, "--build", str(build), "--parallel", "1"]):
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stderr[-4000:]
+    rng = random.Random(110962)
+    cases = [(rng.uniform(-.7, .7), rng.uniform(-.7, .7), rng.uniform(-math.pi, math.pi),
+        rng.uniform(-.3, .45), rng.uniform(-1.4, 1.4)) for _ in range(100)]
     result = subprocess.run([str(build / "collision")], env=env,
+        input="".join(" ".join(map(str, row))+"\n" for row in cases),
         capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
+    from test_nav2_room_recovery import grid, obstacle, BOUNDS, PAD
+    from v3.adapters.nav2_footprint import sweep_check
+    g = grid()
+    obstacle(g, .025, .025)
+    expected = [str(int(not sweep_check(g, row[:3], *row[3:], 1., BOUNDS, PAD)["ok"]))
+        for row in cases]
     assert result.stdout.splitlines() == ["0", "1", "0", "1", "1", "1", "0", "1",
-        "lethal_cell 0 50 50 254", "0", "1", "1", "1", "1"]
+        "lethal_cell 0 50 50 254", "0", "1", "1", "1", "1", "0", "0", "1"]+expected
 
 
 @pytest.fixture(scope="module")
@@ -268,6 +297,17 @@ def test_nav2_geometry_crosses_deadband_but_physical_l9_ramp_and_goal_contract_s
     generated = tmp_path / "geometry.yaml"
     _write_geometry({"geometry": generated, "bt": ROOT / "conf" / "nav2_navigate.xml"}, control)
     geometry = generated.read_text()
+    import json
+    from v3.adapters.nav2_footprint import padded_footprint
+    footprints = [json.loads(json.loads(line.split(":", 1)[1].strip()))
+        for line in geometry.splitlines() if line.strip().startswith("footprint:")]
+    nav = control.navigation
+    padding = max(nav.footprint_safety_margin_m, control.lidar_safety.minimum_clearance_m)
+    expected = padded_footprint((nav.footprint_center_x_m-nav.footprint_length_m/2,
+        nav.footprint_center_x_m+nav.footprint_length_m/2,
+        -nav.footprint_width_m/2, nav.footprint_width_m/2), padding)
+    assert footprints == [[list(p) for p in expected]]*2
+    assert geometry.count("footprint_padding: 0.0") == 2
     source = (ROOT / "conf" / "nav2_planner.yaml").read_text()
     period = 1. / _scalar(source, "controller_frequency")
     proposal_acceleration = _scalar(geometry, "az_max")

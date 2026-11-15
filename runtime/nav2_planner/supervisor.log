@@ -394,3 +394,32 @@ Traceback (most recent call last):
   File "/home/alba/project_r2b4/tools/nav2_planner.py", line 444, in _supervise
     raise RuntimeError("NAV2_CHILD_EXITED")
 RuntimeError: NAV2_CHILD_EXITED
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 493, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 486, in main
+    return _supervise(root, args.ros_domain_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 426, in _supervise
+    env = _navigation_environment(paths, root)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/nav2_planner.py", line 101, in _navigation_environment
+    env = _ros_environment(root, paths["prefix"])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/tools/slam_toolbox.py", line 97, in _ros_environment
+    result = subprocess.run(["bash", "--noprofile", "--norc", "-c", script, "slam-env",
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 1207, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 2060, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/usr/lib/python3.11/subprocess.py", line 1251, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['bash', '--noprofile', '--norc', '-c', 'set -e; if [[ -n "$3" ]]; then source "$3" >/dev/null; else for hook in "$1"/etc/conda/activate.d/*.sh; do if [[ -f "$hook" ]]; then source "$hook" >/dev/null; fi; done; fi; "$2" -c \'import json, os; print(json.dumps(dict(os.environ)))\'', 'slam-env', '/home/alba/project_r2b4/runtime/deps/nav2-planner', '/home/alba/project_r2b4/runtime/deps/nav2-planner/bin/python', '/home/alba/project_r2b4/runtime/deps/nav2-planner/setup.bash']' timed out after 10 seconds

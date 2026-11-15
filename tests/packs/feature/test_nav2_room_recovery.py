@@ -1,12 +1,62 @@
 """Full-body RC goal and recovery evidence, without ROS or motor output."""
 import math
+import random
 from types import SimpleNamespace as NS
 
-from v3.adapters.nav2_footprint import footprint_check, sweep_check
+from v3.adapters.nav2_footprint import footprint_check, padded_footprint, sweep_check
 from v3.adapters.room_cruise_recovery import RoomCruiseRecovery
 
 BOUNDS = (-.10, .26, -.18, .18)
 PAD = .10
+
+
+def test_padding_encloses_euclidean_margin_and_preserves_asymmetric_body():
+    polygon = padded_footprint(BOUNDS, PAD)
+    assert len(polygon) == 16
+    for index in range(4096):
+        a = index*2*math.pi/4096
+        nx, ny = math.cos(a), math.sin(a)
+        body = max(nx*x+ny*y for x in BOUNDS[:2] for y in BOUNDS[2:])
+        padded = max(nx*x+ny*y for x, y in polygon)
+        assert PAD-1e-12 <= padded-body <= PAD/math.cos(math.pi/16)+1e-12
+
+
+def test_live_corner_false_block_is_clear_but_inside_official_margin_is_blocked():
+    # Full retained lethal cell [3.35,3.40] x [1.95,2.00], not its center.
+    # Independent exact body/cell distance is .110962567494184 m.
+    g = grid()
+    g.info.origin.position.x, g.info.origin.position.y = 2.1, .9
+    g.data[21*100+25] = 100
+    pose = (3.628266586, 2.350352139, -1.422011923)
+    assert footprint_check(g, *pose, BOUNDS, PAD) is None
+    assert sweep_check(g, pose, -.19, 0., .25/.19, BOUNDS, PAD)["ok"]
+    # A 2cm move toward the cell must still fail at t=0.
+    hit = footprint_check(g, pose[0]-.02, pose[1]-.02, pose[2], BOUNDS, PAD)
+    assert hit["reason"] == "lethal_cell" and hit["cell"] == [25, 21]
+
+
+def test_swept_polygon_never_accepts_dense_independent_body_distance_violation():
+    from tools.navigation_simulator.scenario import World
+    g = grid()
+    obstacle(g, .025, .025)
+    world = World(dict(room=dict(x_min_m=-10., y_min_m=-10., x_max_m=10., y_max_m=10.),
+        walls=[[0., 0., .05, .05]], obstacles=[], moving_obstacles=[]), BOUNDS)
+    rng = random.Random(110962)
+    violations = 0
+    for _ in range(100):
+        x, y, yaw = rng.uniform(-.7, .7), rng.uniform(-.7, .7), rng.uniform(-math.pi, math.pi)
+        v, w = rng.uniform(-.3, .45), rng.uniform(-1.4, 1.4)
+        minimum = 10.
+        for index in range(101):
+            t = index/100
+            half = w*t/2
+            distance = v*t*(math.sin(half)/half if abs(half) > 1e-12 else 1.)
+            minimum = min(minimum, world.clearance(x+distance*math.cos(yaw+half),
+                y+distance*math.sin(yaw+half), yaw+w*t, 0.))
+        if minimum < PAD:
+            violations += 1
+            assert not sweep_check(g, (x, y, yaw), v, w, 1., BOUNDS, PAD)["ok"]
+    assert violations >= 20
 
 
 def grid(value=0):

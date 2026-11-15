@@ -120,14 +120,14 @@ def _write_geometry(paths, control):
     half_width = navigation.footprint_width_m/2
     padding = max(navigation.footprint_safety_margin_m,
                   control.lidar_safety.minimum_clearance_m)
-    footprint = [[rear, -half_width], [front, -half_width],
-                 [front, half_width], [rear, half_width]]
-    radius = math.hypot(max(abs(rear), abs(front)) + padding, half_width + padding)
+    from v3.adapters.nav2_footprint import padded_footprint
+    footprint = padded_footprint((rear, front, -half_width, half_width), padding)
+    radius = max(math.hypot(x, y) for x, y in footprint)
     text = ""
     for name in ("global_costmap", "local_costmap"):
         text += (f"{name}:\n  {name}:\n    ros__parameters:\n"
                  f"      footprint: {json.dumps(json.dumps(footprint))}\n"
-                 f"      footprint_padding: {padding}\n")
+                 "      footprint_padding: 0.0\n")
     limits = control.operational_constraints
     minimum = limits.wheel_limits.target_minimum_mps
     constraints = control.mission.default_constraints
