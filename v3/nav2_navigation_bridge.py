@@ -70,8 +70,13 @@ def controller_goal_parameters(packet):
     cruising = packet["mode"] == "EXPLORE"
     # Cruise destinations are intermediate room sectors, not final pose goals.
     # Requiring centimetre/yaw convergence here causes avoidable stop/spin cycles.
+    # A position-only mission has no terminal orientation constraint. Inventing
+    # one can leave MPPI in the wheel deadband during unnecessary alignment.
+    # Keep the positional reserve: the ROS pose and L3's scan-bound global fix
+    # can differ. L6 independently confirms the actual mission tolerance.
+    yaw_free = cruising or packet["goal"][2] is None
     return (.18 if cruising else packet["goal_tolerance_m"]*.5,
-        math.pi if cruising else packet["yaw_tolerance_rad"]*.5,
+        math.pi if yaw_free else packet["yaw_tolerance_rad"]*.5,
         packet["max_v_mps"], packet["max_omega_rad_s"])
 
 

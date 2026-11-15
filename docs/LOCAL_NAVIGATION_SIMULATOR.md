@@ -67,6 +67,13 @@ Hibás eredménynél a CLI exit code 2; PASS/MATCH/COMPLETE esetén 0.
 `--no-replay` csak a `simulate` gyors fejlesztői futásához használható.
 Az autotune és a regressziós összevetés replay MATCH nélkül nem fogad el javulást.
 
+A rövid életű canonical command-mailbox futásonként külön `/dev/shm`
+könyvtárban van, és lezáráskor törlődik. A capture és a többi evidence továbbra
+az eredménykönyvtárba kerül. Ez megőrzi az éles kliens/gateway validációját,
+miközben a capture diszkes metadata-terhelése nem állítja meg a parancsél
+virtuális óráját. A SLAM-odometria az éles exporthoz hasonlóan a folytonos
+DEGRADED állapotot is átadja, LOST/discontinuity esetén továbbra is érvénytelen.
+
 Beépített világok: `room`, `corridor`, `dead_end`, `moving_obstacle`,
 `lidar_dropout`, `explore`. Saját JSON szcenárióval 0.1–30 s-os véges próbák
 adhatók meg. A `stress` ezeket teljes indítás/leállítással ismétli, így a
@@ -232,3 +239,18 @@ fault-kombinációt, többórás stabilitást vagy a fizikai robot modellpontoss
 Nem futott teljes release, többórás RC-stressz, minden recovery/lifecycle fault,
 valódi paraméterjavulást igazoló teljes keresés vagy fizikai mozgásteszt.
 A felhasználó meglévő `conf/nav2_planner.yaml` módosítása tartalmilag megmaradt.
+
+## Navigációs javítások utáni ellenőrzés
+
+A fenti fejlesztési alapállapotot követő source-first vizsgálat az odometria
+szimulációs minősítését, a tickhatáron érkező Nav2 completiont, lifecycle
+completion-időt és recovery-határidőt javította. Az 1 m-es célteszt PASS,
+a Nav2-kiesés és a controller rövid felfüggesztése után a mozgás folytatódott;
+a teljes szimulációs capture-ek replaye MATCH. Az aktív FollowPath ACK-budget
+200 → 500 ms változása külön dokumentált, a fizikai safety változatlan.
+
+Az MPPI-súlykeresés nem igazolt jobb változatot. A részletes mérés, a sikertelen
+kísérletek és az élő MCAP bizonyítási korlátai a
+[2026-11-15-i elemzésben](analysis/20261115_navigation_simulator_stability.md)
+találhatók. Az új `max_linear_jerk_mps3` virtuális plant-metrika; nem fizikai
+komfort- vagy safety-kalibráció.

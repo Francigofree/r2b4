@@ -6,7 +6,9 @@
       <RateController hz="2.0">
         <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased" error_code_id="{compute_path_error_code}"/>
       </RateController>
-      <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker" error_code_id="{follow_path_error_code}"/>
+      <!-- Action ACK budget only: tolerate a bounded controller pause while
+           the stamped velocity/sensor TTLs independently enforce zero output. -->
+      <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker" server_timeout="500" error_code_id="{follow_path_error_code}"/>
     </PipelineSequence>
   </BehaviorTree>
 </root>

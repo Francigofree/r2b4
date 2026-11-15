@@ -51,6 +51,21 @@ def test_world_uses_offset_rectangular_body_and_obstacle_motion():
     assert world.clearance(0,1.7,0,0)>world.clearance(0,1.7,1.5707963267948966,0)
 
 
+def test_wall_union_clearance_matches_independent_single_wall_queries():
+    import math
+    import random
+    scene = builtin("room")
+    scene["walls"] = [[1., -.8, 1.2, .6], [-.8, .6, -.6, 1.5], [2., -1., 2.5, 1.]]
+    bounds = (-.1, .26, -.18, .18)
+    union = World(scene, bounds)
+    singles = [World({**scene, "walls": [box]}, bounds) for box in scene["walls"]]
+    randomizer = random.Random(73)
+    for _ in range(200):
+        pose = (randomizer.uniform(-1., 2.), randomizer.uniform(-1., 1.5),
+            randomizer.uniform(-math.pi, math.pi), 0.)
+        assert union.clearance(*pose) == pytest.approx(min(w.clearance(*pose) for w in singles), abs=1e-12)
+
+
 def test_unknown_interface_and_unsafe_ros_overrides_are_rejected():
     scene=builtin()
     with pytest.raises(ValueError):

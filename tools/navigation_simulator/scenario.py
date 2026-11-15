@@ -135,7 +135,15 @@ class World:
             a, b = row["x_m"]-x, row["y_m"]-y
             bx, by = c*a+s*b, -s*a+c*b
             distance = min(distance, math.hypot(max(rear-bx, 0., bx-front), max(right-by, 0., by-left))-row["radius_m"])
+        minx, maxx = min(px for px, py in polygon), max(px for px, py in polygon)
+        miny, maxy = min(py for px, py in polygon), max(py for px, py in polygon)
         for box in self.scenario["walls"]:
+            # AABB distance is a lower bound on rectangle distance. Far cells
+            # cannot change the current minimum; retain exact SAT/edge checks
+            # for every possible closer obstacle or collision.
+            if distance > 0. and math.hypot(max(minx-box[2], box[0]-maxx, 0.),
+                    max(miny-box[3], box[1]-maxy, 0.)) >= distance:
+                continue
             other = [(box[0],box[1]),(box[2],box[1]),(box[2],box[3]),(box[0],box[3])]
             separated = False
             for ax, ay in ((1.,0.),(0.,1.),(c,s),(-s,c)):

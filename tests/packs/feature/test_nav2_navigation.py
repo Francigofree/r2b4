@@ -10,7 +10,7 @@ from v3.adapters.nav2_navigation import (Nav2NavigationClient, Nav2NavigationCon
     decode_packet, encode_packet, request_packet)
 from v3.contracts import CommandMode, GLOBAL_FRAME_ID, LOCAL_FRAME_ID, TickContext, Waypoint
 from v3.contracts.navigation import Nav2NavigationRequest, Nav2NavigationStatus
-from v3.nav2_navigation_bridge import fallback_status, validate_request, velocity_lifetime
+from v3.nav2_navigation_bridge import controller_goal_parameters, fallback_status, validate_request, velocity_lifetime
 from v3.slam_toolbox_bridge import odometry_twist
 from v3.adapters.slam_toolbox_transport import SlamOdometryPacket
 
@@ -65,6 +65,15 @@ def test_latest_guidance_preserves_production_and_measurement_time(channel):
     assert result.guidance.source_context == value.context
     assert result.guidance.scan_measurement_ns == value.context.monotonic_ns-10_000_000
     assert result.guidance.valid_until_ns == value.context.monotonic_ns+150_000_000
+
+
+@pytest.mark.parametrize('yaw', [None, .7])
+def test_controller_uses_requested_goal_tolerances_and_only_requested_yaw(yaw):
+    value = request(goal=Waypoint(1., 0., yaw), goal_tolerance_m=.08, yaw_tolerance_rad=.1)
+    xy, angle, v, omega = controller_goal_parameters(request_packet(value))
+    assert 0 < xy <= value.goal_tolerance_m
+    assert angle == math.pi if yaw is None else 0 < angle <= value.yaw_tolerance_rad
+    assert (v, omega) == (value.max_v_mps, value.max_omega_rad_s)
 
 
 def test_completion_after_tick_closure_waits_without_revoking_fresh_guidance(channel):
