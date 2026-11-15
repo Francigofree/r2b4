@@ -198,7 +198,8 @@ class DifferentialDriveExperiment:
         self.previous_v, self.previous_acceleration = v, acceleration
         self.now_ns += self.dt_ns
 
-    def _scan(self, sample):
+    def _ray_ranges(self):
+        """Synthetic acquisition hook; navigation worlds can supply other geometry."""
         room, ranges = self.scenario["room"], []
         for index in range(self.lidar_ray_count):
             bearing = index*math.tau/self.lidar_ray_count
@@ -217,6 +218,14 @@ class DifferentialDriveExperiment:
                     if distance >= 0:
                         distances.append(distance)
             ranges.append((bearing, max(0., min(distances))))
+        return ranges
+
+    def _filter_samples(self, samples):
+        """Offline sensor-edge hook, before canonical input closure."""
+        return samples
+
+    def _scan(self, sample):
+        ranges = self._ray_ranges()
         from v3.adapters.live_lidar import LidarPointReading, _bounded_local_points
         raw = tuple(LidarPointReading((-math.degrees(bearing)) % 360., distance, 20) for bearing, distance in ranges)
         local = (tuple((bearing, distance, 20) for bearing, distance in ranges)
@@ -297,6 +306,7 @@ class DifferentialDriveExperiment:
                     self.tick//5+1, self.now_ns, tuple(DataField(key, value) for key, value in values.items())))
             samples.extend(self.scan_samples)
             samples.extend(self._additional_samples(sample))
+            samples = self._filter_samples(samples)
             health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in
                            sorted(set(self.config.critical_device_ids or ()) | {row.device_id for row in samples}))
             inputs = self.composition.close_inputs(TickInputs(context, RawDeviceBatch(context, tuple(samples), health),
