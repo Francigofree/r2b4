@@ -667,6 +667,7 @@ class McapCaptureConsumer:
             # production publisher supplied only a bounded C-packed buffer.
             payload = unpack_local_costmap(payload)
         checkpoint: object | None = None
+        checkpoint_fields_compacted = False
         data_fields_compacted = False
         if isinstance(payload, BehaviorCaptureRecord):
             row = encode_behavior_record(payload, compact_data_fields=True)
@@ -676,11 +677,12 @@ class McapCaptureConsumer:
             checkpoint = row.pop(IPC_CHECKPOINT_KEY, None)
             row.pop(IPC_TRIGGER_REASON_KEY, None)
         elif isinstance(payload, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
-            row = (encode_capture_record(payload) if self._config.sensor_debug
+            row = (encode_capture_record(payload, compact_data_fields=True) if self._config.sensor_debug
                    else encode_behavior_record(project_behavior_record(payload), compact_data_fields=True))
-            data_fields_compacted = not self._config.sensor_debug
+            data_fields_compacted = True
             if self._config.sensor_debug and isinstance(payload, ExecutionRecord) and payload.state_checkpoint_after is not None:
-                checkpoint = encode_value(payload.state_checkpoint_after)
+                checkpoint = encode_value(payload.state_checkpoint_after, compact_data_fields=True)
+                checkpoint_fields_compacted = True
         else:
             row = None
 
@@ -721,7 +723,8 @@ class McapCaptureConsumer:
                         mcap_topic=CHECKPOINT_TOPIC,
                         monotonic_ns=monotonic_ns,
                         sequence=tick_id,
-                        payload=_json_bytes(compact_checkpoint_row(checkpoint_row)),
+                        payload=_json_bytes(checkpoint_row if checkpoint_fields_compacted
+                                            else compact_checkpoint_row(checkpoint_row)),
                         tick_id=tick_id,
                         is_checkpoint=True,
                     )
@@ -1682,6 +1685,10 @@ def _referenced_lidar_revisions(tick: Mapping[str, object]) -> set[int]:
         if isinstance(values, (str, bytes)) or not isinstance(values, (list, tuple)):
             continue
         for field in values:
+            if isinstance(field, Mapping) and set(field) == {"$df"}:
+                compact = field["$df"]
+                if isinstance(compact, (list, tuple)) and len(compact) == 2:
+                    field = {"key": compact[0], "value": compact[1]}
             if (
                 isinstance(field, Mapping)
                 and field.get("key") == "source_raw_scan_id"

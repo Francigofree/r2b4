@@ -8,6 +8,7 @@
 #include <array>
 #include <optional>
 #include <chrono>
+#include <cstdint>
 #include <ctime>
 #include <iomanip>
 #include <sstream>

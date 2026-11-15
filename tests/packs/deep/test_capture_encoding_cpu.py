@@ -7,13 +7,13 @@ import pytest
 from rig import resolved_config
 from v3.capture_behavior import encode_behavior_record, project_behavior_record
 from v3.capture_compaction import compact_checkpoint_row, compact_tick_row
-from v3.capture_encoding import CaptureEncodingError, encode_value
+from v3.capture_encoding import CaptureEncodingError, encode_capture_record, encode_value
 from v3.composition.full_fake import OfflineMotorSink
 from v3.composition.native_control import NativeControlComposition
 from v3.contracts import CommandMode, CommandRequest, DataField, LifecycleState, RawDeviceBatch, TickContext
 from v3.engine import TickInputs
 from v3.execution import ExecutionRecord, WriterFailureRecord
-from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer, _json_bytes
+from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer, _json_bytes, _referenced_lidar_revisions
 from v3.nav2_diagnostics import NAV2_OBSERVATION_TOPIC
 from v3.observation import ObservationHub
 
@@ -53,6 +53,10 @@ def test_behavior_tick_and_writer_fault_store_identical_bytes(tmp_path):
     consumer = McapCaptureConsumer("fused", tmp_path / "fused.mcap",
         subscription=subscription, configuration={}, config=McapCaptureConfig(tick_sample_hz=5))
     for record in (normal, fault):
+        full = encode_capture_record(record)
+        compact_full = encode_capture_record(record, compact_data_fields=True)
+        assert _json_bytes(compact_tick_row(full)) == _json_bytes(
+            compact_tick_row(compact_full, data_fields_compacted=True))
         behavior = project_behavior_record(record)
         legacy = compact_tick_row(encode_behavior_record(behavior))
         encoded = encode_behavior_record(behavior, compact_data_fields=True)
@@ -64,6 +68,15 @@ def test_behavior_tick_and_writer_fault_store_identical_bytes(tmp_path):
         observed, = consumer._encode_observation(subscription.get_nowait())
         assert observed.payload == _json_bytes(legacy)
     hub.close()
+
+
+def test_compact_matcher_fields_keep_raw_scan_integrity_references():
+    row = {"inputs": {"raw_devices": {"samples": [{"kind": "lidar_matcher_diagnostics",
+        "sequence": 7, "values": [DataField("source_raw_scan_id", 23)]},
+        {"kind": "lidar_safety_clearance", "sequence": 19}]}}}
+    expected = _referenced_lidar_revisions(encode_value(row))
+    assert expected == {23, 19}
+    assert _referenced_lidar_revisions(encode_value(row, compact_data_fields=True)) == expected
 
 
 def test_json_nav2_observation_keeps_canonical_bytes_and_finite_validation(tmp_path):

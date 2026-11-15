@@ -62,7 +62,6 @@ def encode_value(value: object, *, compact_data_fields: bool = False) -> object:
 
 
 def _encode_value(value: object, compact_data_fields: bool) -> object:
-
     if isinstance(value, Enum):
         return value.value
     if value is None or isinstance(value, (str, int, bool)):
@@ -103,8 +102,11 @@ def _encoded_data_field(value: dict[str, object]) -> dict[str, object]:
     return value
 
 
-def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
+def encode_capture_record(record: CaptureRecord, *, compact_data_fields: bool = False) -> dict[str, object]:
     """Encode one immutable completed production record."""
+
+    def encode(value: object) -> object:
+        return _encode_value(value, compact_data_fields)
 
     if isinstance(record, ExecutionRecord):
         context = record.inputs.context
@@ -112,11 +114,12 @@ def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
             "record_type": "closed_input_tick",
             "tick_id": context.tick_id,
             "monotonic_ns": context.monotonic_ns,
-            "inputs": encode_value(record.inputs),
-            "expected": _encode_completed_result(record.result, record.inputs),
+            "inputs": encode(record.inputs),
+            "expected": _encode_completed_result(record.result, record.inputs,
+                compact_data_fields=compact_data_fields),
         }
         if record.evidence:
-            row["tick_evidence"] = encode_value(record.evidence)
+            row["tick_evidence"] = encode(record.evidence)
         return row
     if isinstance(record, EdgeFaultRecord):
         return {
@@ -124,14 +127,15 @@ def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
             "tick_id": record.context.tick_id,
             "monotonic_ns": record.context.monotonic_ns,
             "edge_fault": {
-                "context": encode_value(record.context),
+                "context": encode(record.context),
                 "lifecycle": record.lifecycle.value,
                 "reason": record.reason,
                 "fault_layer": record.fault_layer,
-                "critical_health": encode_value(record.critical_health),
-                "raw_devices": encode_value(record.raw_devices),
+                "critical_health": encode(record.critical_health),
+                "raw_devices": encode(record.raw_devices),
             },
-            "expected": _encode_completed_result(record.result),
+            "expected": _encode_completed_result(record.result,
+                compact_data_fields=compact_data_fields),
         }
     if isinstance(record, WriterFailureRecord):
         row = {
@@ -145,20 +149,20 @@ def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
                 "layers": {},
                 "writer_failure": {
                     "reason": record.reason,
-                    "attempted_actuation": encode_value(record.attempted_actuation),
+                    "attempted_actuation": encode(record.attempted_actuation),
                 },
             },
         }
         if record.inputs is not None:
-            row["inputs"] = encode_value(record.inputs)
+            row["inputs"] = encode(record.inputs)
         else:
             row["edge_fault"] = {
-                "context": encode_value(record.context),
+                "context": encode(record.context),
                 "lifecycle": record.lifecycle.value,
                 "reason": record.reason,
                 "fault_layer": "L12",
                 "critical_health": [],
-                "raw_devices": encode_value(record.raw_devices),
+                "raw_devices": encode(record.raw_devices),
             }
         return row
     raise TypeError("capture record must be a supported immutable capture record")
@@ -167,6 +171,7 @@ def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
 def _encode_completed_result(
     result: object,
     inputs: object | None = None,
+    *, compact_data_fields: bool = False,
 ) -> dict[str, object]:
     from .contracts import AcquisitionFrame, AdmittedFrame
     from .engine import TickInputs, TickResult
@@ -193,18 +198,20 @@ def _encode_completed_result(
             and isinstance(inputs, TickInputs)
             and isinstance(output, AdmittedFrame)
         ):
-            compact = _compact_admitted_frame(output, inputs)
+            compact = _compact_admitted_frame(output, inputs,
+                compact_data_fields=compact_data_fields)
             if compact is not None:
                 encoded_layers[layer.layer] = compact
                 continue
-        encoded_layers[layer.layer] = encode_value(output)
+        encoded_layers[layer.layer] = _encode_value(output, compact_data_fields)
     return {
         "fault_layer": result.trace.fault_layer,
         "layers": encoded_layers,
     }
 
 
-def _compact_admitted_frame(output: object, inputs: object) -> dict[str, object] | None:
+def _compact_admitted_frame(output: object, inputs: object, *,
+                            compact_data_fields: bool = False) -> dict[str, object] | None:
     from .contracts import AdmittedFrame
     from .engine import TickInputs
 
@@ -239,8 +246,8 @@ def _compact_admitted_frame(output: object, inputs: object) -> dict[str, object]
     return {
         _INPUT_REFERENCE_KEY: "ADMITTED_FRAME",
         "accepted_sample_indices": accepted_indices,
-        "rejected": encode_value(output.rejected),
-        "degraded_sources": encode_value(output.degraded_sources),
+        "rejected": _encode_value(output.rejected, compact_data_fields),
+        "degraded_sources": _encode_value(output.degraded_sources, compact_data_fields),
     }
 
 
