@@ -196,6 +196,8 @@ def run(args):
     request_history = deque(maxlen=24)
     # All action state remains ROS-local. V3 mission identity is echoed only.
     sending, handle, result_future, cancel_future = None, None, None, None
+    continuing_goal = None
+    navigation_remaining = None
     cancelling, cancel_started_ns, accepted_ns, settle_until_ns = False, 0, 0, 0
     terminal_status = None
     selected_goal = None
@@ -209,6 +211,7 @@ def run(args):
     scan_history, odom_history, tf_history = deque(maxlen=32), deque(maxlen=32), deque(maxlen=32)
     sequence, last_status_ns, last_reply_ns = 0, 0, 0
     last_active_until_ns = 0
+    last_velocity_produced_ns = 0
     spin_timing = dict(count=0, max_wall_ns=0, max_cpu_ns=0)
     edge_timing = {}
     latest_source_ns = -1
@@ -345,6 +348,7 @@ def run(args):
                 odom_history.append(measured)
 
     def velocity_callback(message, info):
+        nonlocal last_velocity_produced_ns
         callback = time.monotonic_ns()
         diagnostics.observe_callback("command", stamp_ns(message), callback, info, wall_ns=time.time_ns())
         diagnostics.observe_command(message, stamp_ns(message), time.monotonic_ns())
@@ -355,6 +359,17 @@ def run(args):
                 or frontier_goal is not frontier.proposal or frontier_goal.completion.done()):
             return
         now, produced = time.monotonic_ns(), stamp_ns(message)
+        # Controller and behavior publishers may be interleaved by DDS. An
+        # older command, including zero, cannot revoke a newer accepted one.
+        if produced <= last_velocity_produced_ns:
+            return
+        if produced < accepted_ns:
+            # A queued command from before the current action acceptance is
+            # not its result. Silence cannot renew the last command; an
+            # explicit zero still revokes it immediately.
+            if message.twist.linear.x == message.twist.angular.z == 0.:
+                reply("PENDING")
+            return
         # ROS queues can deliver a newer sensor callback before an older cmd.
         # Use already-observed measurements that existed at command production.
         evidence = [next((stamp for stamp in reversed(history) if stamp <= produced), 0)
@@ -372,6 +387,7 @@ def run(args):
                 or abs(omega) > current[0]["max_omega_rad_s"]+1e-6):
             reply("STALE")
             return
+        last_velocity_produced_ns = produced
         reply("ACTIVE", produced_ns=produced, valid_until_ns=deadline, v=v, omega=omega,
               evidence=evidence[:2], binding=binding)
         state["commands"] += 1
@@ -398,6 +414,7 @@ def run(args):
         lambda message: diagnostics.observe_recovery(message, time.monotonic_ns()), 4)
 
     def navigation_feedback(message, child_id, mission_id, action_id):
+        nonlocal navigation_remaining
         # ActionClient dispatch already correlates feedback to its goal UUID.
         if action_id != action_generation or current is None:
             return
@@ -409,6 +426,7 @@ def run(args):
             "number_of_recoveries": int(feedback.number_of_recoveries),
             "distance_remaining_m": float(feedback.distance_remaining)}
         if action_kind == "NAVIGATE":
+            navigation_remaining = (time.monotonic_ns(), float(feedback.distance_remaining))
             recovery.feedback(float(feedback.distance_remaining), time.monotonic_ns())
 
     def begin_cancel(now, *, stop_frontier=True):
@@ -450,24 +468,32 @@ def run(args):
         pose.pose.orientation.z, pose.pose.orientation.w = math.sin(yaw/2), math.cos(yaw/2)
         return pose
 
-    def dispatch_navigation(values, kind="NAVIGATE"):
+    def dispatch_navigation(values, kind="NAVIGATE", *, continuing=False):
         nonlocal sending, action_kind, action_generation, navigation_started_ns, motion_anchor_ns, motion_anchor
+        nonlocal continuing_goal, navigation_remaining
         dispatch_ns = time.monotonic_ns()
         if (current is None or dispatch_ns-current[0]["source_ns"] > HEARTBEAT_MAX_AGE_NS
                 or any(not 0 < stamp <= dispatch_ns or dispatch_ns-stamp > SENSOR_MAX_AGE_NS
                        for stamp in (scan_ns, odom_ns, tf_ns))):
             return False
-        action_kind = kind
-        action_generation += 1
+        next_generation = action_generation+1
+        if continuing:
+            continuing_goal = (values, next_generation, dispatch_ns)
+        else:
+            action_kind = kind
+            action_generation = next_generation
         goal = NavigateToPose.Goal()
         goal.pose, goal.behavior_tree = goal_pose(values), args.behavior_tree
-        diagnostics.recovery_feedback = None
-        motion_anchor = None if diagnostics.local_pose is None else diagnostics.local_pose[1]
-        motion_anchor_ns = navigation_started_ns = time.monotonic_ns()
+        if not continuing:
+            navigation_remaining = None
+            diagnostics.recovery_feedback = None
+            motion_anchor = None if diagnostics.local_pose is None else diagnostics.local_pose[1]
+            motion_anchor_ns = navigation_started_ns = time.monotonic_ns()
         sending = edge_call("navigate_request", navigator.send_goal_async, goal, feedback_callback=(
-            lambda message, child_id=state["child_goal_id"], mission_id=current[0]["mission_id"], action_id=action_generation:
+            lambda message, child_id=state["child_goal_id"]+int(continuing), mission_id=current[0]["mission_id"], action_id=next_generation:
                 navigation_feedback(message, child_id, mission_id, action_id)))
-        reply("PENDING")
+        if not continuing:
+            reply("PENDING")
         return True
 
     def check_detour_path(path, now):
@@ -620,14 +646,22 @@ def run(args):
                 recovery_cancel = False
                 selected_goal, frontier_goal = None, None
             if sending is not None and sending.done():
-                handle = sending.result()
+                accepted_handle = sending.result()
+                continuation = continuing_goal
+                continuing_goal = None
                 sending = None
-                if handle is None or not handle.accepted:
-                    handle = None
-                    if cancelling:
+                if accepted_handle is None or not accepted_handle.accepted:
+                    if continuation is not None:
+                        # Rejection does not cancel the still-owned old action.
+                        # Its actual result below still owns success/failure.
+                        diagnostics.record_error(now, "CONTINUATION_REJECTED", 900,
+                            goal_id=state["child_goal_id"])
+                    elif cancelling:
+                        handle = None
                         cancelling, settle_until_ns = False, now+150_000_000
                         recovery_cancel = False
                     elif current is not None:
+                        handle = None
                         diagnostics.record_error(now, "GOAL_REJECTED", 900, goal_id=state["child_goal_id"])
                         if action_kind != "NAVIGATE":
                             recovery.action_finished(False, None, now)
@@ -636,12 +670,26 @@ def run(args):
                         else:
                             terminal_status = "NO_PATH"
                 else:
+                    handle = accepted_handle
+                    if continuation is not None:
+                        selected_goal, action_generation, _ = continuation
+                        state["child_goal_id"] += 1
+                        cruise.handoffs += 1
+                        navigation_remaining = None
+                        diagnostics.recovery_feedback = None
+                        motion_anchor = None if diagnostics.local_pose is None else diagnostics.local_pose[1]
+                        motion_anchor_ns = navigation_started_ns = now
                     accepted_ns = now
-                    last_active_until_ns = 0
+                    if continuation is None:
+                        last_active_until_ns = 0
+                    # The superseded action's result future is retired here.
+                    # A late ABORTED/SUCCEEDED cannot finish this new child.
                     result_future = edge_call("result_request", handle.get_result_async)
                     if cancelling:
                         cancel_future = edge_call("cancel_request", handle.cancel_goal_async)
-            if result_future is not None and result_future.done():
+            if continuing_goal is not None and now-continuing_goal[2] > 2_000_000_000:
+                raise RuntimeError("NAV2_CONTINUATION_ACCEPTANCE_TIMEOUT")
+            if result_future is not None and result_future.done() and continuing_goal is None:
                 envelope = result_future.result()
                 handle, result_future, cancel_future = None, None, None
                 succeeded = envelope.status == 4 and getattr(envelope.result, "error_code", 0) == 0
@@ -760,6 +808,16 @@ def run(args):
                         recovery.begin(selected_goal, now, "no_translation_for_4_5s")
                         recovery_cancel = True
                         begin_cancel(now, stop_frontier=False)
+            if (current is not None and current[0]["mode"] == "EXPLORE" and fresh and active
+                    and cruise.phase == "COVERAGE" and recovery.state in ("IDLE", "RESOLVED")
+                    and handle is not None and not cancelling and sending is None
+                    and action_kind == "NAVIGATE" and result_future is not None and not result_future.done()):
+                replacement = edge_call("coverage_continuation", cruise.continuation,
+                    robot_pose, selected_goal, navigation_remaining, now)
+                if replacement is not None:
+                    # Native NavigateToPose preemption updates the running BT;
+                    # no CANCEL, artificial zero or renewed velocity is sent.
+                    dispatch_navigation(replacement, continuing=True)
             if (current is not None and current[0]["mode"] == "EXPLORE" and fresh and active
                     and not cancelling and sending is None and handle is None
                     and parameter_future is None and applied_tolerances == desired

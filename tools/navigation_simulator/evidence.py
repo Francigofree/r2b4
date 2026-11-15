@@ -34,6 +34,9 @@ def source_snapshot(root):
     paths = set(_source_first_paths(root))
     paths.update(str(path.relative_to(root)) for path in (root / "tools/navigation_simulator").glob("*.py"))
     paths.update(("tools/nav2_navigation_probe.py", "tools/nav2_planner.py", "tools/slam_toolbox.py",
+                  "v3/nav2_navigation_bridge.py", "v3/slam_toolbox_bridge.py",
+                  "v3/adapters/room_cruise.py", "v3/adapters/room_cruise_recovery.py",
+                  "v3/adapters/ros2_frontier.py",
                   "r2b4_orchestration/motion_simulation.py", "tools/tuners/r2b4_navigation_autotuner.py",
                   "tools/tuners/r2b4_motion_tuner.py", "conf/nav2_planner.yaml", "conf/slam_toolbox.yaml",
                   "conf/nav2_navigate.xml", "conf/frontier_exploration.yaml", "conf/nav2_fastdds.xml"))

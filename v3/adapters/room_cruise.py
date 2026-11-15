@@ -28,7 +28,7 @@ class RoomCruiseGoals:
         self._last_observed_ns = 0
         self._next_selection_ns = 0
         self._selection_candidates = deque()
-        self.goals = self.reached = self.failures = 0
+        self.goals = self.reached = self.failures = self.handoffs = 0
         self.geometry_rejections = 0
         self.last_rejection = None
         self.rejection_events = deque(maxlen=32)
@@ -43,7 +43,7 @@ class RoomCruiseGoals:
             self._failed.clear()
             self._next_selection_ns = 0
             self._selection_candidates.clear()
-            self.goals = self.reached = self.failures = 0
+            self.goals = self.reached = self.failures = self.handoffs = 0
 
     def stop(self):
         self.session, self.phase = None, "IDLE"
@@ -115,7 +115,7 @@ class RoomCruiseGoals:
         self._candidates = tuple(candidates[:1024])
         self._sample_revision = self.grid_revision
 
-    def select(self, pose, now_ns):
+    def select(self, pose, now_ns, *, continuing_from=None):
         if (self.phase != "COVERAGE" or pose is None or self.grid is None
                 or not 0 <= now_ns-self.grid_ns <= 3_000_000_000
                 or now_ns < self._next_selection_ns):
@@ -132,7 +132,9 @@ class RoomCruiseGoals:
         # against the current fresh grid and current approach heading.
         for _ in range(min(32, len(self._selection_candidates))):
             gx, gy = self._selection_candidates.popleft()
-            if math.hypot(gx-x, gy-y) < .65:
+            if math.hypot(gx-x, gy-y) < (.65 if continuing_from is None else 1.4):
+                continue
+            if continuing_from is not None and math.hypot(gx-continuing_from[0], gy-continuing_from[1]) < 1.:
                 continue
             goal = [gx, gy, math.atan2(gy-y, gx-x)]
             if self.valid_goal(goal, now_ns):
@@ -143,6 +145,20 @@ class RoomCruiseGoals:
         if self._selection_candidates:
             self._next_selection_ns = now_ns+50_000_000
         return None
+
+    def continuation(self, pose, goal, remaining, now_ns):
+        """Replace an intermediate sector before terminal approach braking.
+
+        Both fresh Nav2 path feedback and Euclidean proximity are required:
+        a destination across a wall is not an arrival. This only proposes a
+        destination; Nav2 still owns preemption, reachability and collision.
+        """
+        if (self.phase != "COVERAGE" or pose is None or goal is None or remaining is None
+                or not 0 <= now_ns-remaining[0] <= 250_000_000
+                or not math.isfinite(remaining[1]) or not 0. < remaining[1] <= 1.
+                or math.hypot(goal[0]-pose[0], goal[1]-pose[1]) > 1.):
+            return None
+        return self.select(pose, now_ns, continuing_from=goal)
 
     def _rank_candidates(self, pose, now_ns):
         self._sample()
@@ -217,7 +233,8 @@ class RoomCruiseGoals:
     def snapshot(self):
         return dict(cruise_phase=self.phase, coverage_candidates=len(self._candidates),
             coverage_goals=self.goals, coverage_reached=self.reached,
-            coverage_failed=self.failures, coverage_visited_cells=len(self._visits),
+            coverage_failed=self.failures, coverage_handoffs=self.handoffs,
+            coverage_visited_cells=len(self._visits),
             goal_geometry_rejections=self.geometry_rejections, goal_geometry_last_rejection=self.last_rejection,
             goal_geometry_rejection_events=list(self.rejection_events),
             frontier_goal_adjustment=self.frontier_adjustment)

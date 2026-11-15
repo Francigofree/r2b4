@@ -431,7 +431,12 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     session = ProcessMcapCaptureSession("local-navigation",directory/"capture.mcap",configuration={"production_control":config},
         metadata={"source":"simulation","scenario":scenario,"physical_hardware":False,"source_sha256":snapshot["sha256"]},
         config=McapCaptureConfig(mode="append_only",tick_sample_hz=50),capacity=256,project_root=directory)
-    timeline = (directory/"timeline.ndjson").open("w")
+    # The finite experiment has at most 120 s of active 50 Hz samples plus
+    # startup and STOP settling. Keep its small truth timeline in memory;
+    # filesystem writeback must not stall the virtual sensor/control clock.
+    timeline_rows = []
+    timeline_capacity = math.ceil((scenario["duration_s"] + startup_s
+        + 6*scenario["plant"]["response_tau_s"] + 2.) * 50)
     plant = None
     active = False
     active_start = None
@@ -516,8 +521,9 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             row["localization_quality"] = encode_value(estimate.localization_quality)
             if active:
                 max_pose_error = max(max_pose_error,math.hypot(pose.x_m-plant.x,pose.y_m-plant.y))
-        encoded = observation_call("timeline_encode", json.dumps, row, allow_nan=False)+"\n"
-        observation_call("timeline_write", timeline.write, encoded)
+        if len(timeline_rows) >= timeline_capacity:
+            raise RuntimeError("SIMULATION_TIMELINE_CAPACITY_EXCEEDED")
+        timeline_rows.append(row)
         signature = (row["navigation_reason"],row["navigation_status"],row["safety"],row["safety_reason"],row["goal"])
         if signature != trace_previous:
             if len(transitions)<256:
@@ -644,13 +650,16 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             backend.close()
             sender.close()
             stack.close()
-            timeline.close()
             command_directory.cleanup()
         if capture_started:
             try:
                 capture = session.finalize(SimpleNamespace(status=0 if error is None and plant is not None and not plant.fault_layer and not plant.collision_count else 1),error=error)
             except BaseException as exc:
                 error=error or exc
+        # All virtual actuation and ROS children have stopped before disk I/O.
+        with (directory/"timeline.ndjson").open("w") as timeline:
+            for row in timeline_rows:
+                timeline.write(json.dumps(row, allow_nan=False)+"\n")
     expected = scenario["expect"]
     truth_error = math.hypot(plant.x-scenario["goal"]["x_m"],plant.y-scenario["goal"]["y_m"]) if plant else None
     yaw_error=abs(math.atan2(math.sin(plant.yaw-scenario["goal"]["yaw_rad"]),math.cos(plant.yaw-scenario["goal"]["yaw_rad"]))) if plant and "yaw_rad" in scenario["goal"] else None

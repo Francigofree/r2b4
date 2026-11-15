@@ -10,6 +10,24 @@ from tools.navigation_simulator.experiments import compare,read_suite
 from tools.tuners.r2b4_motion_tuner import resolve_config,PROJECT_ROOT,run_experiment
 
 
+def test_source_snapshot_tracks_ros_edge_goal_policy_and_bridge(tmp_path, monkeypatch):
+    import v3.replay
+    from tools.navigation_simulator.evidence import source_snapshot
+    monkeypatch.setattr(v3.replay, "_source_first_paths", lambda root: ())
+    for name in ("v3/nav2_navigation_bridge.py", "v3/adapters/room_cruise.py"):
+        path = tmp_path/name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("original edge\n")
+    original = source_snapshot(tmp_path)
+    for name in ("v3/nav2_navigation_bridge.py", "v3/adapters/room_cruise.py"):
+        path = tmp_path/name
+        path.write_text("changed edge\n")
+        changed = source_snapshot(tmp_path)
+        assert changed["sha256"] != original["sha256"]
+        assert changed["files"][name] != original["files"][name]
+        path.write_text("original edge\n")
+
+
 @pytest.mark.parametrize("translation,heading,continuous,discontinuity", [
     ("GOOD", "GOOD", True, False), ("DEGRADED", "GOOD", True, False),
     ("LOST", "GOOD", True, False), ("GOOD", "LOST", True, False),

@@ -59,6 +59,42 @@ def test_known_room_goals_cover_different_sectors_and_exclude_failed_destination
     assert math.hypot(replacement[0]-goals[-1][0], replacement[1]-goals[-1][1]) >= .65
 
 
+def test_coverage_continuation_requires_fresh_short_native_path_and_safe_new_sector():
+    selector = coverage()
+    selector.enter_coverage()
+    now = 1_000_000_000
+    pose, old = (3., 3., 0.), (3.8, 3., 0.)
+    goal = selector.continuation(pose, old, (now, .8), now)
+    assert goal is not None and selector.valid_goal(goal, now)
+    assert math.hypot(goal[0]-pose[0], goal[1]-pose[1]) >= 1.4
+    assert math.hypot(goal[0]-old[0], goal[1]-old[1]) >= 1.
+    # A proposal is not a physically reached destination or accepted action.
+    assert selector.reached == selector.handoffs == 0
+    assert selector.continuation(pose, old, (now, .8), now+1) is None
+
+
+@pytest.mark.parametrize("remaining", [None, (1_000_000_001, .8),
+    (749_999_999, .8), (1_000_000_000, 2.), (1_000_000_000, 0.),
+    (1_000_000_000, float("nan"))])
+def test_nearby_destination_does_not_preempt_a_long_stale_or_unknown_path(remaining):
+    selector = coverage()
+    selector.enter_coverage()
+    assert selector.continuation((3., 3., 0.), (3.8, 3., 0.), remaining, 1_000_000_000) is None
+    assert selector.goals == 0
+
+
+def test_continuation_never_uses_unknown_stale_geometry_or_frontier_phase():
+    selector = coverage()
+    now = 1_000_000_000
+    args = ((3., 3., 0.), (3.8, 3., 0.), (now, .8), now)
+    assert selector.continuation(*args) is None
+    selector.enter_coverage()
+    selector.update_costmap(grid(value=-1), now)
+    assert selector.continuation(*args) is None
+    selector.update_costmap(grid(), now)
+    assert selector.continuation(*args[:2], (now+4_000_000_000, .8), now+4_000_000_000) is None
+
+
 def test_unknown_stale_and_unavailable_costmaps_never_propose_a_destination():
     selector = coverage()
     selector.enter_coverage()
