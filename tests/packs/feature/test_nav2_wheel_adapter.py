@@ -63,6 +63,19 @@ int main() {
   const auto projected=limits.projectMppi(v, omega);
   std::cout << r2b4_nav2::commandCollides(&changed_arc, footprint, 0., 0., 0., v, omega) << "\n";
   std::cout << r2b4_nav2::commandCollides(&changed_arc, footprint, 0., 0., 0., projected.first, projected.second) << "\n";
+  nav2_costmap_2d::Costmap2D braking(100, 100, .05, -2.5, -2.5, 0);
+  auto select = [&]() {return r2b4_nav2::collisionFreeCommand(&braking,footprint,
+      0.,0.,0.,limits,.3,0.,limits.projectMppi(.3,0.));};
+  auto clear=select();
+  std::cout << (clear.command==std::make_pair(.3,0.) && !clear.collision_projected) << "\n";
+  braking.setCost(57,50,nav2_costmap_2d::LETHAL_OBSTACLE);
+  auto slower=select();
+  std::cout << (slower.collision_projected && slower.command.first>=limits.minimum &&
+      slower.command.first<.3 && slower.command.second==0. &&
+      !r2b4_nav2::commandCollides(&braking,footprint,0.,0.,0.,slower.command.first,0.)) << "\n";
+  braking.setCost(50,50,nav2_costmap_2d::LETHAL_OBSTACLE);
+  auto blocked=select();
+  std::cout << (!blocked.collision_projected && std::string(blocked.collision.reason)=="lethal_cell") << "\n";
 }
 ''')
     (tmp_path / "CMakeLists.txt").write_text('''
@@ -92,7 +105,7 @@ target_link_libraries(collision "''' + str(prefix / "lib/libmppi_controller.so")
         capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == ["0", "1", "0", "1", "1", "1", "0", "1",
-        "lethal_cell 0 50 50 254", "0", "1"]
+        "lethal_cell 0 50 50 254", "0", "1", "1", "1", "1"]
 
 
 @pytest.fixture(scope="module")

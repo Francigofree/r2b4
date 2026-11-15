@@ -91,9 +91,40 @@ def test_costmap_origin_rotation_is_preserved():
     assert goal[0] < 0 < goal[1]
 
 
+def test_rejected_high_ranked_goals_do_not_starve_free_room_across_map_updates():
+    selector = coverage()
+    selector.enter_coverage()
+    # Novel destinations outside the known map outrank a safe visited sector.
+    selector._candidates = tuple((6.1+i*.001, 3.) for i in range(40)) + ((1.5, 3.),)
+    selector._sample_revision = selector.grid_revision
+    selector.observe_pose((1.5, 3., 0.), 1_000_000_000)
+    pose = (3., 3., 0.)
+    assert selector.select(pose, 1_000_000_000) is None
+    assert selector.geometry_rejections == 32
+    selector.update_costmap(selector.grid, 1_050_000_000)
+    goal = selector.select(pose, 1_050_000_000)
+    assert goal[:2] == [1.5, 3.]
+    assert selector.valid_goal(goal, 1_050_000_000)
+
+
+def test_pending_goal_search_rechecks_new_geometry_and_remains_bounded():
+    selector = coverage()
+    selector.enter_coverage()
+    selector._candidates = tuple((6.1+i*.001, 3.) for i in range(40)) + ((1.5, 3.),)
+    selector._sample_revision = selector.grid_revision
+    selector.observe_pose((1.5, 3., 0.), 1_000_000_000)
+    assert selector.select((3., 3., 0.), 1_000_000_000) is None
+    selector.update_costmap(grid(value=100), 1_050_000_000)
+    assert selector.select((3., 3., 0.), 1_050_000_000) is None
+    assert selector.geometry_rejections == 41
+    assert selector._next_selection_ns == 2_050_000_000
+    selector.begin(("new-mission", "goal", 2))
+    assert not selector._selection_candidates
+
+
 def test_cruise_skips_final_yaw_alignment_without_widening_navigate_tolerance():
     packet = dict(mode="NAVIGATE", goal_tolerance_m=.1, yaw_tolerance_rad=.2,
-        max_v_mps=.25, max_omega_rad_s=1.4)
+        max_v_mps=.25, max_omega_rad_s=1.4, goal=[1., 0., .3])
     assert controller_goal_parameters(packet)[:2] == pytest.approx((.05, .1))
     assert controller_goal_parameters({**packet, "mode": "EXPLORE"})[:2] == pytest.approx((.18, math.pi))
 

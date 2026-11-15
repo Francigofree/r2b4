@@ -75,6 +75,44 @@ bool commandCollides(nav2_costmap_2d::Costmap2D *map,
   return std::string(commandEvidence(map,footprint,x,y,yaw,v,omega).reason)!="clear";
 }
 
+struct CommandProjection {
+  std::pair<double,double> command;
+  CollisionEvidence collision;
+  bool collision_projected = false;
+};
+
+CommandProjection collisionFreeCommand(nav2_costmap_2d::Costmap2D *map,
+    const nav2_costmap_2d::Footprint &footprint, double x, double y, double yaw,
+    const WheelLimits &limits, double v, double omega, std::pair<double,double> initial) {
+  CommandProjection result{initial, {}};
+  auto check = [&](std::pair<double,double> command) {
+    return commandEvidence(map,footprint,x,y,yaw,command.first,command.second);
+  };
+  result.collision=check(result.command);
+  if (std::string(result.collision.reason)=="clear") return result;
+  // A one-second constant command can collide even when MPPI's time-varying
+  // rollout is free. Try bounded, slower realizable commands and the existing
+  // wheel families before aborting the entire navigation action. Every option
+  // retains the same full horizon, padded footprint and hard costmap checks.
+  std::vector<std::pair<double,double>> candidates;
+  candidates.push_back(limits.project(v,omega));
+  for (int branch=0;branch<4;++branch) candidates.push_back(limits.project(v,omega,branch));
+  for (double scale : {.75,.5,.25}) candidates.push_back(limits.projectMppi(v*scale,omega*scale));
+  auto distance = [&](std::pair<double,double> c) {
+    return std::pow(c.first-v,2)+std::pow((c.second-omega)*limits.track*.5,2);
+  };
+  std::sort(candidates.begin(),candidates.end(),[&](auto a,auto b) {
+    return distance(a)==distance(b)?a<b:distance(a)<distance(b);
+  });
+  candidates.erase(std::unique(candidates.begin(),candidates.end()),candidates.end());
+  for (auto candidate : candidates) {
+    if (candidate==result.command || (candidate.first==0. && candidate.second==0.)) continue;
+    auto collision=check(candidate);
+    if (std::string(collision.reason)=="clear") return {candidate,collision,true};
+  }
+  return result;
+}
+
 class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
   struct Timing {
     uint64_t count=0, wall_max_ns=0, wall_max_cpu_ns=0, cpu_max_ns=0, wall_sum_ns=0, cpu_sum_ns=0;
@@ -162,25 +200,28 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
       throw nav2_core::NoValidControl("Invalid mission envelope");
     }
     limits.max_v=std::min(limits.max_v,max_v); limits.max_omega=std::min(limits.max_omega,max_w);
-    std::pair<double,double> feasible;
-    { Phase phase{*this,3}; feasible=limits.projectMppi(raw_v,raw_w); }
-    command.twist.linear.x=feasible.first; command.twist.angular.z=feasible.second;
+    std::pair<double,double> initial;
+    { Phase phase{*this,3}; initial=limits.projectMppi(raw_v,raw_w); }
     auto *map=costmap_ros_->getCostmap();
     const auto &q=pose.pose.orientation;
     const double yaw=std::atan2(2.*(q.w*q.z+q.x*q.y),1.-2.*(q.y*q.y+q.z*q.z));
-    CollisionEvidence collision;
+    CommandProjection projected;
     {
       Phase phase{*this,4};
       std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*map->getMutex());
-      collision=commandEvidence(map,costmap_ros_->getRobotFootprint(),pose.pose.position.x,
-          pose.pose.position.y,yaw,feasible.first,feasible.second);
+      projected=collisionFreeCommand(map,costmap_ros_->getRobotFootprint(),pose.pose.position.x,
+          pose.pose.position.y,yaw,limits,raw_v,raw_w,initial);
     }
+    const auto feasible=projected.command;
+    const auto collision=projected.collision;
+    command.twist.linear.x=feasible.first; command.twist.angular.z=feasible.second;
     if (std::string(collision.reason)!="clear") {
       record(pose,raw_v,raw_w,feasible.first,feasible.second,collision.reason,collision);
       throw nav2_core::NoValidControl(std::string("R2B4 projected trajectory: ")+collision.reason);
     }
     const bool changed=std::abs(raw_v-feasible.first)>1e-8 || std::abs(raw_w-feasible.second)>1e-8;
     if (changed) record(pose,raw_v,raw_w,feasible.first,feasible.second,
+        projected.collision_projected?"collision_velocity_projection":
         feasible.first==0. && feasible.second==0.?"no_nonzero_wheel_feasible_command":"wheel_projection",collision);
     return command;
   }
@@ -205,7 +246,7 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
       head_=(head_+1)%events_.size(); --size_;
     }
     events_[(head_+size_)%events_.size()]=e; ++size_;
-    if (std::string(reason)=="wheel_projection") ++projected_;
+    if (std::string(reason)=="wheel_projection" || std::string(reason)=="collision_velocity_projection") ++projected_;
     else if (std::string(reason)=="no_nonzero_wheel_feasible_command") ++zeroed_;
     else ++rejected_;
   }
@@ -220,6 +261,7 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
     for (size_t i=0;i<size_;++i) {
       const auto &e=events_[(head_+i)%events_.size()]; const auto &c=e.collision;
       const bool forwarded=std::string(e.reason)=="wheel_projection" ||
+          std::string(e.reason)=="collision_velocity_projection" ||
           std::string(e.reason)=="no_nonzero_wheel_feasible_command";
       if (i) out<<',';
       out<<"{\"sequence\":"<<e.sequence<<",\"measurement_ros_ns\":"<<e.stamp<<",\"pose_ros_ns\":"<<e.pose_stamp<<",\"reason\":\""<<e.reason

@@ -79,6 +79,15 @@ def test_unknown_interface_and_unsafe_ros_overrides_are_rejected():
     assert parameter_overlay({"weight":2.},{"weight":3.})=={"weight":3.}
 
 
+def test_navigation_endurance_duration_does_not_expand_skill_experiment_budget():
+    from r2b4_orchestration.motion_simulation import motion_scenario
+    assert validate({**builtin("explore"), "duration_s": 120.})["duration_s"] == 120.
+    with pytest.raises(ValueError):
+        validate({**builtin("explore"), "duration_s": 120.01})
+    with pytest.raises(ValueError):
+        motion_scenario({"duration_s": 31.})
+
+
 def test_real_v3_sensor_edge_preserves_delayed_lineage_without_truth_fix(tmp_path):
     from v3.adapters.slam_toolbox_transport import SlamLocalizationReceiver
     from v3.composition.native_control import NativeControlComposition
@@ -111,6 +120,34 @@ def test_real_v3_sensor_edge_preserves_delayed_lineage_without_truth_fix(tmp_pat
         assert sink.last.left_output==sink.last.right_output==0
         # The bounded sink retains one command rather than a growing history.
         assert sink.write_count==len(records)
+        # Moving hidden truth while freezing the measured rays must not invent
+        # a relative displacement. The production scan matcher owns the result.
+        plant.faults.clear()
+        rays = plant._ray_ranges()
+        plant._ray_ranges = lambda: rays
+        plant.x += .3
+        for _ in range(5):
+            plant.step()
+        latest = {row.kind: row for row in records[-1].inputs.raw_devices.samples}
+        relative = latest["lidar_relative_motion"]
+        fields = {field.key: field.value for field in relative.values}
+        assert abs(fields["dx_m"]) < 1e-6 and abs(fields["dy_m"]) < 1e-6
+        assert fields["start_ns"] < relative.captured_monotonic_ns
+        assert relative.captured_monotonic_ns > measured
+        plant.left = plant.right = .149
+        plant.left_distance = plant.right_distance = .01
+        plant.step()
+        latest = {row.kind: row for row in records[-1].inputs.raw_devices.samples}
+        wheel = {field.key: field.value for field in latest["wheel_velocity"].values}
+        edge = wheel["left_last_accepted_edge_timestamp_ns"]
+        assert edge <= plant.now_ns and wheel["left_last_accepted_edge_direction"] == 1
+        assert wheel["left_confirmed_direction"] == 1
+        plant.left = plant.right = 0.
+        for _ in range(10):
+            plant.step()
+        latest = {row.kind: row for row in records[-1].inputs.raw_devices.samples}
+        wheel = {field.key: field.value for field in latest["wheel_velocity"].values}
+        assert wheel["left_last_accepted_edge_timestamp_ns"] == edge
     finally:
         composition.close()
     # Persist a real sampled capture and prove that native replay refuses it.

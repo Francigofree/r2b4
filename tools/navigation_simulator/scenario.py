@@ -21,7 +21,7 @@ def validate(value):
         raise ValueError("expected " + SCHEMA)
     if value.get("behavior", "navigate") not in {"navigate", "roomcruise"}:
         raise ValueError("behavior must be navigate or roomcruise")
-    plant = motion_scenario({k: v for k, v in value.items() if k not in extra})
+    plant = motion_scenario({k: v for k, v in value.items() if k not in extra}, maximum_duration_s=120.)
     if plant["v3_overrides"]:
         raise ValueError("use an explicit config overlay, not scenario v3_overrides")
     result = {**plant, "schema": SCHEMA, "behavior": value.get("behavior", "navigate")}

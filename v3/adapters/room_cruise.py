@@ -27,6 +27,7 @@ class RoomCruiseGoals:
         self._failed = deque(maxlen=64)
         self._last_observed_ns = 0
         self._next_selection_ns = 0
+        self._selection_candidates = deque()
         self.goals = self.reached = self.failures = 0
         self.geometry_rejections = 0
         self.last_rejection = None
@@ -41,10 +42,12 @@ class RoomCruiseGoals:
             self._recent.clear()
             self._failed.clear()
             self._next_selection_ns = 0
+            self._selection_candidates.clear()
             self.goals = self.reached = self.failures = 0
 
     def stop(self):
         self.session, self.phase = None, "IDLE"
+        self._selection_candidates.clear()
 
     def enter_coverage(self):
         self.phase = "COVERAGE"
@@ -121,6 +124,27 @@ class RoomCruiseGoals:
         # continuously running goal scorer.
         self._next_selection_ns = now_ns+1_000_000_000
         self.robot_pose = tuple(pose)
+        x, y, heading = pose
+        if not self._selection_candidates:
+            self._rank_candidates(pose, now_ns)
+        # A rejected top-32 must not hide the rest of the room forever. Keep a
+        # bounded ranked sweep across map publications, but check every goal
+        # against the current fresh grid and current approach heading.
+        for _ in range(min(32, len(self._selection_candidates))):
+            gx, gy = self._selection_candidates.popleft()
+            if math.hypot(gx-x, gy-y) < .65:
+                continue
+            goal = [gx, gy, math.atan2(gy-y, gx-x)]
+            if self.valid_goal(goal, now_ns):
+                self._selection_candidates.clear()
+                self._recent.append((gx, gy))
+                self.goals += 1
+                return goal
+        if self._selection_candidates:
+            self._next_selection_ns = now_ns+50_000_000
+        return None
+
+    def _rank_candidates(self, pose, now_ns):
         self._sample()
         x, y, heading = pose
         scored = []
@@ -141,15 +165,7 @@ class RoomCruiseGoals:
             score = (4.*novelty-3.*repeat+.7*math.cos(angle-heading)
                 +.5*min(distance, 2.)-.2*max(0., distance-3.))
             scored.append((score, -distance, gx, gy, angle))
-        if not scored:
-            return None
-        for _, _, gx, gy, yaw in sorted(scored, reverse=True)[:32]:
-            goal = [gx, gy, yaw]
-            if self.valid_goal(goal, now_ns):
-                self._recent.append((gx, gy))
-                self.goals += 1
-                return goal
-        return None
+        self._selection_candidates.extend((gx, gy) for _, _, gx, gy, _ in sorted(scored, reverse=True))
 
     def valid_goal(self, goal, now_ns):
         """Identical full-body gate for frontier and known-room destinations."""

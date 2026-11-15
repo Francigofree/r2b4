@@ -28,7 +28,7 @@ def _number(value, name, low=-float("inf"), high=float("inf")):
     return float(value)
 
 
-def motion_scenario(value):
+def motion_scenario(value, *, maximum_duration_s=30.):
     fields = {"kind", "environment_id", "seed", "duration_s", "goal", "position_tolerance_m",
               "yaw_tolerance_rad", "plant", "room", "obstacles", "v3_overrides"}
     if not isinstance(value, Mapping) or set(value) - fields:
@@ -79,7 +79,7 @@ def motion_scenario(value):
             raise ValueError("unsupported simulation tuning field: " + owner)
         tuning[owner] = {key: _number(number, owner + "." + key, 0., 20.) for key, number in rows.items()}
     return {"kind": "differential_drive", "environment_id": identity, "seed": seed,
-            "duration_s": _number(value.get("duration_s", 12.), "duration_s", .1, 30.), "goal": goal,
+            "duration_s": _number(value.get("duration_s", 12.), "duration_s", .1, maximum_duration_s), "goal": goal,
             "position_tolerance_m": _number(value.get("position_tolerance_m", .08), "position_tolerance_m", .005, .5),
             "yaw_tolerance_rad": _number(value.get("yaw_tolerance_rad", .12), "yaw_tolerance_rad", .005, .5),
             "plant": plant, "room": room, "obstacles": circles, "v3_overrides": tuning}

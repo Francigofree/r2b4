@@ -231,7 +231,11 @@ def parameter_overlay(document, patch, path=""):
 
 class Plant(DifferentialDriveExperiment):
     def __init__(self, *args, world, resolved, sender, receiver, **kwargs):
+        from v3.lidar_relative_odometry import RelativeLidarOdometry
         self.world, self.resolved, self.sender, self.receiver = world, resolved, sender, receiver
+        self.relative_odometry = RelativeLidarOdometry(resolved.lidar.matcher)
+        self.encoder_edges = {side: dict(pulse=0, timestamp=None, direction=0,
+            confirmed=0, pending_direction=0, pending_count=0) for side in ("left", "right")}
         self.faults, self.delayed = set(), deque(maxlen=24)
         self.delay_s = 0.
         self.latest_lidar = ()
@@ -271,6 +275,10 @@ class Plant(DifferentialDriveExperiment):
             sectors[name].append(body_clearance_m(x,y,self.world.body_bounds))
         output = []
         for row in samples:
+            if row.kind in {"lidar_relative_motion", "lidar_pose"}:
+                # The modest base plant supplies truth-derived localization.
+                # This experiment uses measured rays and the production matcher.
+                continue
             if row.kind=="lidar_health":
                 row=sample("lidar_health",age_ns=0,point_count=sum(point.quality>0 for point in raw.raw_scan))
             elif row.kind == "lidar_local_points":
@@ -284,19 +292,25 @@ class Plant(DifferentialDriveExperiment):
                     for name, distances in sectors.items() for key, value in
                     (("clearance_m", min(distances) if distances else 0.), ("observation_count",len(distances)))})
             output.append(row)
+        motion = self.relative_odometry.process([
+            dict(angle_rad=math.radians(point.angle_deg), dist=point.distance_m*1000.)
+            for point in raw.raw_scan if point.quality > 0], self.now_ns)
+        if motion is not None:
+            output.append(sample("lidar_relative_motion", **motion))
         self.delayed.append((self.now_ns+round(self.delay_s*1e9), tuple(output), raw))
         return tuple(output), raw
 
     def _filter_samples(self, samples):
         from v3.adapters.process_lidar_port import _slam_matcher_result
         from v3.contracts import DataField, DeviceSample
-        # Truth-derived scan odometry belongs to the old modest plant. This
-        # path admits only actual SLAM Toolbox localization corrections.
+        # Relative motion was computed from rays, not copied from plant truth.
+        # Global corrections still come exclusively from SLAM Toolbox.
         rows = [row for row in samples if not row.kind.startswith("lidar_")]
+        rows = [self._encoder_evidence(row) if row.kind == "wheel_velocity" else row for row in rows]
         while self.delayed and self.delayed[0][0] <= self.now_ns:
             _, latest, raw = self.delayed.popleft()
             if "lidar_drop" not in self.faults:
-                self.latest_lidar = tuple(row for row in latest if row.kind not in {"lidar_relative_motion", "lidar_pose"})
+                self.latest_lidar = tuple(row for row in latest if row.kind != "lidar_pose")
                 self._publish_scan = raw
         rows.extend(self.latest_lidar)
         rows = [row for row in rows if not ("imu_drop" in self.faults and row.device_id == "IMU")
@@ -318,6 +332,40 @@ class Plant(DifferentialDriveExperiment):
             rows.append(DeviceSample("RPLIDAR_C1","lidar_pose",pose.source_sequence,pose.measurement_ns,
                                      tuple(DataField(k,v) for k,v in values.items())))
         return [replace(row,device_id=self.local_perception_config.device_id) if row.device_id=="RPLIDAR_C1" else row for row in rows]
+
+    def _encoder_evidence(self, row):
+        """Virtual encoder edges advance only after actual wheel travel.
+
+        A scalar speed just below the reliable fit floor still has signed pulse
+        liveness on hardware. Publishing snapshots cannot renew that evidence.
+        This remains an ideal sensor model, not a GPIO/velocity-fit emulator.
+        """
+        from v3.contracts import DataField
+        config = self.resolved.runtime.sensor_inputs.inputs
+        values = dict(rejection_code="NONE")
+        for side in ("left", "right"):
+            step = getattr(config.encoder_backend, f"{side}_step_distance_m")
+            distance, speed = getattr(self, side+"_distance"), getattr(self, side)
+            pulse = math.trunc(distance/step)
+            state = self.encoder_edges[side]
+            delta = pulse-state["pulse"]
+            if delta:
+                direction = 1 if delta > 0 else -1
+                state["pulse"] = pulse
+                if state["pending_direction"] != direction:
+                    state["pending_direction"], state["pending_count"] = direction, 0
+                state["pending_count"] += abs(delta)
+                if state["pending_count"] >= getattr(config.encoder_counter, side).direction_change_confirm_edges:
+                    state["confirmed"] = direction
+                    state["direction"] = direction
+                    age_ns = round((distance-pulse*step)/speed*1e9) if speed else 0
+                    state["timestamp"] = self.now_ns-min(self.dt_ns, max(0, age_ns))
+            values.update({f"{side}_last_accepted_edge_timestamp_ns": state["timestamp"],
+                f"{side}_last_accepted_edge_direction": state["direction"],
+                f"{side}_confirmed_direction": state["confirmed"],
+                f"{side}_estimation_timebase": "SIMULATED_PULSE_HISTORY",
+                f"{side}_measurement_trust": 1.})
+        return replace(row, values=row.values+tuple(DataField(k,v) for k,v in values.items()))
 
 
 class FaultNavigation:
