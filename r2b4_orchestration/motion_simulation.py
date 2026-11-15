@@ -118,7 +118,7 @@ class DifferentialDriveExperiment:
     def __init__(self, scenario, config, composition, writer, directory, start_ns, observe, event,
                  *, lidar_config=None, lidar_pose_r_scale=1., tick_period_ns=20_000_000,
                  maximum_linear_speed_mps=.5, maximum_angular_speed_rad_s=1.2,
-                 lidar_ray_count=48, local_perception_config=None):
+                 lidar_ray_count=48, local_perception_config=None, command_directory=None):
         from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig
         self.scenario, self.config, self.composition, self.writer = scenario, config, composition, writer
         if type(tick_period_ns) is not int or tick_period_ns <= 0:
@@ -129,7 +129,7 @@ class DifferentialDriveExperiment:
         self.local_perception_config = local_perception_config
         self.now_ns, self.start_ns, self.tick = start_ns, start_ns, 0
         self.observe, self.event = observe, event
-        policy = ResidentCommandMailboxConfig(directory / "command.json", maximum_linear_speed_mps=maximum_linear_speed_mps,
+        policy = ResidentCommandMailboxConfig((command_directory or directory) / "command.json", maximum_linear_speed_mps=maximum_linear_speed_mps,
                                               maximum_angular_speed_rad_s=maximum_angular_speed_rad_s)
         self.client = ResidentCommandClient(policy, monotonic_ns=lambda: self.now_ns)
         self.gateway = AtomicResidentCommandGateway(policy, monotonic_ns=lambda: self.now_ns)

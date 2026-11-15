@@ -84,6 +84,7 @@ class Nav2NavigationClient:
         self._request = None
         self._last_sent_ns = -HEARTBEAT_MAX_AGE_NS
         self._guidance = None
+        self._deferred = None
         self._error = None
         self._closed = False
         self._highwater = (-1, -1)
@@ -99,6 +100,7 @@ class Nav2NavigationClient:
                 request.goal_tolerance_m, request.yaw_tolerance_rad))
         if changed:
             self._guidance = None
+            self._deferred = None
         if self._closed:
             return
         if request is None:
@@ -118,6 +120,7 @@ class Nav2NavigationClient:
             return True
         except (OSError, ValueError) as exc:
             self._guidance = None
+            self._deferred = None
             self._error = f"NAV2_TRANSPORT:{type(exc).__name__}"
             return False
 
@@ -129,6 +132,7 @@ class Nav2NavigationClient:
                 break
             except OSError as exc:
                 self._guidance = None
+                self._deferred = None
                 self._error = f"NAV2_TRANSPORT:{type(exc).__name__}"
                 break
             try:
@@ -140,17 +144,24 @@ class Nav2NavigationClient:
                         request.mission_id, request.goal_id, request.odom_generation):
                     continue
                 if (guidance.source_context.tick_id >= context.tick_id
-                        or guidance.source_context.monotonic_ns > context.monotonic_ns
-                        or guidance.produced_ns > context.monotonic_ns
+                        or guidance.source_context.tick_id > request.context.tick_id
+                        or guidance.source_context.monotonic_ns > request.context.monotonic_ns
                         or guidance.transform_revision > request.transform_revision):
                     raise ValueError("Nav2 future lineage")
                 if (guidance.worker_generation, guidance.command_sequence) <= self._highwater:
                     continue
-                self._guidance, self._error = guidance, None
+                # recvfrom happens after the tick clock was closed. A valid
+                # command produced in that interval belongs to a later tick,
+                # not to the malformed-packet path. Keep one latest completion
+                # without renewing either its measurement time or expiry.
+                self._deferred, self._error = guidance, None
                 self._highwater = (guidance.worker_generation, guidance.command_sequence)
             except (ValueError, KeyError, TypeError, OverflowError):
                 self._guidance = None
+                self._deferred = None
                 self._error = "NAV2_INVALID_PACKET"
+        if self._deferred is not None and self._deferred.produced_ns <= context.monotonic_ns:
+            self._guidance, self._deferred = self._deferred, None
         return Nav2NavigationInput(context, self._guidance, self._error)
 
     def close(self):

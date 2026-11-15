@@ -67,6 +67,30 @@ def test_latest_guidance_preserves_production_and_measurement_time(channel):
     assert result.guidance.valid_until_ns == value.context.monotonic_ns+150_000_000
 
 
+def test_completion_after_tick_closure_waits_without_revoking_fresh_guidance(channel):
+    client, server = channel
+    value = request()
+    address = send_reply(client, server, value)
+    before = client.poll(TickContext(11, value.context.monotonic_ns+20_000_000))
+    newer = reply_for(value, sequence=2, produced_ns=value.context.monotonic_ns+41_000_000)
+    server.sendto(encode_packet(newer), address)
+    closed = client.poll(TickContext(12, value.context.monotonic_ns+40_000_000))
+    assert closed.error is None and closed.guidance == before.guidance
+    next_tick = client.poll(TickContext(13, value.context.monotonic_ns+60_000_000))
+    assert next_tick.guidance.command_sequence == 2
+    assert next_tick.guidance.produced_ns == newer['produced_ns']
+    assert next_tick.guidance.valid_until_ns == newer['valid_until_ns']
+
+
+def test_deferred_completion_cannot_survive_mission_change(channel):
+    client, server = channel
+    value = request()
+    send_reply(client, server, value, produced_ns=value.context.monotonic_ns+41_000_000)
+    assert client.poll(TickContext(11, value.context.monotonic_ns+20_000_000)).guidance is None
+    client.submit(replace(value, mission_id='replacement'))
+    assert client.poll(TickContext(12, value.context.monotonic_ns+60_000_000)).guidance is None
+
+
 def test_periodic_pending_cannot_replace_unexpired_active_and_restart_v3_ramp(channel):
     client, server = channel
     value = request()

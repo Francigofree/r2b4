@@ -17,6 +17,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from types import SimpleNamespace
 
@@ -303,7 +304,9 @@ class Plant(DifferentialDriveExperiment):
         odom = estimate.get("local_pose", {})
         for payload in self.sender.receive():
             self.receiver.accept(payload, now_ns=self.now_ns, current_generation=quality.get("generation"),
-                odometry_ns=self.status.get("monotonic_ns",0), odometry_valid=quality.get("local_translation") == "GOOD")
+                odometry_ns=self.status.get("monotonic_ns",0),
+                odometry_valid=(quality.get("local_translation") in {"GOOD", "DEGRADED"}
+                    and quality.get("local_pose_continuous") is True and not quality.get("pose_discontinuity")))
         pose = self.receiver.last_pose
         matched=_slam_matcher_result(self.receiver,self.now_ns)
         if pose is not None and matched is not None:
@@ -389,6 +392,10 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     capture_started = False
     termination = "DURATION_REACHED"
     applied_faults = set()
+    # Keep the canonical mailbox and validation, but isolate ephemeral command
+    # metadata from capture writes on the Pi's storage. ROS uses real monotonic
+    # stamps; a blocking filesystem operation must not strand the virtual clock.
+    command_directory = tempfile.TemporaryDirectory(prefix="r2b4-nav-command-", dir="/dev/shm")
 
     def observe(record, raw):
         nonlocal stationary,longest_stationary,min_clearance,samples,max_pose_error,trace_previous,first_failure
@@ -396,8 +403,11 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
         estimate = layers.get("L3")
         if estimate is not None and "tf_drop" not in plant.faults:
             pose, quality = estimate.local_pose, estimate.localization_quality
+            continuous = quality.local_pose_continuous and not quality.pose_discontinuity
             sender.publish_odometry(SlamOdometryPacket(session_id,os.getpid(),plant.tick,plant.now_ns,
-                quality.generation,pose.x_m,pose.y_m,pose.yaw_rad,quality.local_translation.value=="GOOD",quality.heading.value=="GOOD"),now_ns=plant.now_ns)
+                quality.generation,pose.x_m,pose.y_m,pose.yaw_rad,
+                continuous and quality.local_translation.value != "LOST",
+                continuous and quality.heading.value != "LOST"),now_ns=plant.now_ns)
         exported = getattr(plant,"_publish_scan",None)
         if exported is not None:
             cfg = resolved.lidar
@@ -458,6 +468,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
         world = World(scenario,resolved.lidar.safety_body_bounds_m)
         ingress = resolved.edges.command_ingress
         plant = Plant(scenario,config,composition,sink,directory,time.monotonic_ns(),observe,lambda *args:None,
+            command_directory=Path(command_directory.name),
             world=world,resolved=resolved,sender=sender,receiver=receiver,
             tick_period_ns=resolved.runtime.tick_period_ns,lidar_ray_count=360,
             local_perception_config=resolved.runtime.sensor_inputs.inputs.lidar_source,
@@ -557,6 +568,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             sender.close()
             stack.close()
             timeline.close()
+            command_directory.cleanup()
         if capture_started:
             try:
                 capture = session.finalize(SimpleNamespace(status=0 if error is None and plant is not None and not plant.fault_layer and not plant.collision_count else 1),error=error)
