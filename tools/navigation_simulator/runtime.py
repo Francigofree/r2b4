@@ -397,6 +397,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     coverage_cells = set()
     resources = {"owned_rss_mb":0.,"owned_cpu_s":0.}
     phase_max_ms = {name:0. for name in ("resource_check","readiness","command_ingress","sensor_v3_observation")}
+    observation_phase_maxima = {}
     transitions = []
     trace_previous = None
     first_failure = None
@@ -410,12 +411,23 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     # stamps; a blocking filesystem operation must not strand the virtual clock.
     command_directory = tempfile.TemporaryDirectory(prefix="r2b4-nav-command-", dir="/dev/shm")
 
+    def observation_call(name, function, *args, **kwargs):
+        wall, cpu = time.perf_counter_ns(), time.thread_time_ns()
+        try:
+            return function(*args, **kwargs)
+        finally:
+            elapsed, used = time.perf_counter_ns()-wall, time.thread_time_ns()-cpu
+            if elapsed > observation_phase_maxima.get(name, {}).get("wall_ns", -1):
+                observation_phase_maxima[name] = dict(wall_ns=elapsed, thread_cpu_ns=used,
+                    tick_id=plant.tick, measurement_monotonic_ns=plant.now_ns)
+
     def observe(record, raw):
         nonlocal stationary,longest_stationary,min_clearance,samples,max_pose_error,trace_previous,first_failure
         layers = {layer.layer:layer.output for layer in record.result.trace.layers}
         estimate = layers.get("L3")
         if estimate is not None and "tf_drop" not in plant.faults:
-            sender.publish_odometry(slam_odometry(estimate, session_id, os.getpid()), now_ns=plant.now_ns)
+            observation_call("odometry_export", sender.publish_odometry,
+                slam_odometry(estimate, session_id, os.getpid()), now_ns=plant.now_ns)
         exported = getattr(plant,"_publish_scan",None)
         if exported is not None:
             cfg = resolved.lidar
@@ -425,9 +437,9 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                 receiver.remember_scan(exported)
             plant._publish_scan = None
         if raw is not None:
-            session.observe_raw_lidar(raw)
-        session.observe(record)
-        session.observe_decision(record)
+            observation_call("capture_raw", session.observe_raw_lidar, raw)
+        observation_call("capture_record", session.observe, record)
+        observation_call("capture_decision", session.observe_decision, record)
         if session.failed:
             raise RuntimeError("SIMULATION_CAPTURE_INTEGRITY_FAILURE")
         nav, mission = layers.get("L6"),layers.get("L5")
@@ -448,7 +460,8 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             row["localization_quality"] = encode_value(estimate.localization_quality)
             if active:
                 max_pose_error = max(max_pose_error,math.hypot(pose.x_m-plant.x,pose.y_m-plant.y))
-        timeline.write(json.dumps(row,allow_nan=False)+"\n")
+        encoded = observation_call("timeline_encode", json.dumps, row, allow_nan=False)+"\n"
+        observation_call("timeline_write", timeline.write, encoded)
         signature = (row["navigation_reason"],row["navigation_status"],row["safety"],row["safety_reason"],row["goal"])
         if signature != trace_previous:
             if len(transitions)<256:
@@ -619,6 +632,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                          "max_tick_wall_ms":tick_max_ns/1e6,"tick_wall_s":tick_wall_ns/1e9,"tick_thread_cpu_s":tick_cpu_ns/1e9,
                          "ticks_over_20ms":tick_overruns,"max_tick_lateness_ms":max_lateness_ns/1e6,**resources},
               "phase_max_wall_ms":phase_max_ms,
+              "observation_phase_maxima":observation_phase_maxima,
               "localization":{"accepted":receiver.accepted_packets,"rejected":receiver.dropped_packets,"last_reason":receiver.last_reason},
               "navigation_reasons":dict(reasons),"transitions":transitions,
               "slam":read_status(directory/"slam_status.json"),"nav2":read_status(directory/"nav_status.json"),

@@ -7,6 +7,35 @@ Az architekturális és async contract változatlan.
 
 ## Bizonyított okok és javítások
 
+### Újabb heartbeat tévesen érvénytelenített friss Nav2-parancsot
+
+Az első javítás utáni élő próba **654. tickjében** a controller eredeti
+parancsideje `12141142962644 ns`, a bridge-ben ekkor legújabb request forrása
+`12141156782782 ns`: **13,820138 ms-mal későbbi**. A callback a
+`12141167131714 ns` időpontban `STALE` választ ad. A szenzorok még frissek;
+a legutóbbi scan eredeti ideje `12141028538818 ns`, az odometriáé
+`12141135453727 ns`. A `velocity_lifetime` a legújabb heartbeat és a már
+elkészült parancs időbeli sorrendjét kérte számon, változatlan missionnél is.
+[Első tick](../../tmp/cruise_quality_post_live/first_stale.json).
+
+A bridge most legfeljebb 24 eredeti kis request/address párt tart meg.
+A velocity callback a parancs előállításakor már létező legújabb, azonos
+mission/goal/generation/limit requesthez kötődik. Az ACTIVE válasz ennek az
+**eredeti source contextjét és transform revisionjét** viszi tovább;
+nem címkézi át a parancsot az új heartbeat idejére. Mission-, cél-, limit-
+vagy generationváltás, CANCEL és heartbeat-lejárat törli a historyt.
+
+A child-goal acceptance, parancselőállítási idő, eredeti szenzormérések és
+lejáratok ellenőrzése megmarad. A deadline az eredeti request 350 ms-os
+heartbeat-boundján sem léphet túl. L6 a már meglévő issued-request historyban
+ellenőrzi a visszaérkező eredeti context/revision párost. Socket-teszt
+bizonyítja az új heartbeat elé elkészült parancs elfogadását és a változatlan
+measurement/source/expiry adatokat; negatív esetek bizonyítják az envelope-,
+mission-, goal-, generation- és expiry-tiltást.
+
+Ez konkrét, forrásból és lezárt inputból bizonyított téves elutasítás;
+nem tulajdonítom automatikusan az összes rögzített STALE tickjét ennek.
+
 ### Elrejtett tervezői sebességplafon
 
 Az aktív room-cruise mission és az L9 platformlimit már 0,45 m/s volt.
@@ -99,6 +128,34 @@ A célzott teszt blokkolt fájlírás mellett 100 további SLAM-snapshotot ad á
 100 ms alatt, 99 superseded értékkel; az utolsó mérési idő és póz változatlan.
 Ez nem ad új lokalizációs vagy motorjogosultságot.
 
+A páros szimulátoros injekció 4 s-ig blokkolja a `slam_status.tmp` írását,
+amikor a SLAM-póz eltávolodott 0,3 m-re. Szinkron írásnál a stall + 200 ms
+ablakban 108 lokalizációs HOLD és 92 STALE tick van, maximum 4,16 s fix-age.
+Háttérírásnál ugyanebben a 210 tickes ablakban **210 ACTIVE, nulla HOLD/STALE**,
+maximum **240 ms** fix-age; a writer tényleges I/O-ideje 4,002 s,
+31 pending snapshot superseded, nulla writer-hiba. A mérés ideje nem frissült.
+
+**A háttérírós teljes futás mégis FAIL:** a stall után, a 1593. tick
+környezetében a szimulátor `sensor_v3_observation` régiója 2,286 s-ig tartott,
+a 500 ms-os pacing-bound helyesen lezárta. Nulla ütközés, végső STOP és
+1617 tick MATCH. Ez nem lett PASS-ként elszámolva; a stall alatti folytonos
+pózfogadást bizonyítja, teljes timing-nemregressziót nem.
+[Szinkron](../../tmp/cruise_quality_slam_io_sync/run/result.json),
+[háttérírós](../../tmp/cruise_quality_slam_io_async/run/result.json).
+
+Egy külön, 80 ms-os bridge-pause próba szintén későbbi, 29 s körüli
+szimulátor-edge pacing-hibával zárult (1,232 s tick-wall), nulla ütközés,
+1657 tick MATCH. A pontos fizikai I/O/GIL/scheduler-ok nincs bizonyítva.
+A szimulátor ezért célzott wall/thread-CPU/tick mérést kapott a capture
+record/raw/decision és timeline encode/write régiókhoz; a pacing-bound nem nőtt.
+
+Az ezt követő 30 s-os instrumentált futás PASS, 3,425 m út, nulla ütközés,
+1744 tick MATCH. A legnagyobb timeline-write 62,30 ms wall / 0,081 ms
+thread-CPU; a capture record enqueue maximum 2,835 ms. Ez megmutatja a
+szimulátor megfigyelési fájlírásának változó várakozását, de nem bizonyítja,
+hogy a korábbi 1,2/2,3 s-os megszakadást ugyanaz okozta.
+[Instrumentált futás](../../tmp/cruise_quality_instrumented_final/run/result.json).
+
 ## Szimulált összehasonlítás
 
 Azonos nyílt szoba, seed 7, 30 s; első sor csak a kerekítési javítást
@@ -189,3 +246,91 @@ A tartós fizikai 0,45 m/s, a természetesebb/simább szobacirkálás, a hosszú
 üzem és minden szűk geometriájú manőver sikere még nem bizonyított.
 A rejectált hangolási kísérletek és további validáció eredményeit alább kell
 az elfogadott éles változtatásoktól elkülönítve értékelni.
+
+## Második élő próba: a mozgásminőség továbbra sem elfogadott
+
+Capture: `runtime/captures/v3_20261115_133333_30450_capture.mcap`, 60 s kért
+végrehajtás, teljes 50 Hz-es capture. A runtime szabályosan leállt, a capture
+integritása PASS; a behavior eredménye viszont **FAILED:
+REQUESTED_EXECUTION_UNPROVEN**. A felhasználói értékelés: „Még mindig darabos
+vagy bizonytalan”. Ez nem sikeres minőségi elfogadás.
+
+A ritkított L3-becslés szerint az elindulás utáni állás 12,5%, 12 megállás,
+a lineáris jerk RMS 3,311 m/s³, a szögjerk RMS 17,183 rad/s³; a pozitív
+sebesség p90 0,308 m/s. A korábbi 30 s-os menettel eltérő pálya és recovery
+miatt ezek leíró adatok, nem kontrollált rangsor. A simaság javulása nem igazolt.
+[Mintavételi módszer és eredmény](../../tmp/cruise_quality_second_quality.json).
+
+A sűrű parancsidővonal 130 kerékcél-nullázása közül **113 NAV2_STALE**, 13
+ACTIVE alatti nulla kérés, 4 PENDING. A 320 STALE tickből 214-ben még ACTIVE
+jellegű guidance szerepel; közülük 201 lejáratát pontosan a scan mérési
+ideje + 250 ms határozza meg. Az első a **742. tick**:
+
+| Határ | Monoton idő, ns |
+| --- | ---: |
+| Kötött scan mérése | 14223540539558 |
+| Parancs előállítása | 14223715985438 |
+| Scanből következő érvényességi határ | 14223790539558 |
+| Első STALE tick | 14223808850567 |
+| Következő parancs előállítása | 14223821309085 |
+
+A hibás tickben a command csak 92,865 ms idős, a scan viszont 268,311 ms.
+Az azonnali L9-nullázás és a következő érvényes parancsnál újrainduló
+felgyorsítás rögzített következmény. A következő parancs 105,324 ms-os rése
+rögzített; CPU/GIL/I/O/scheduler/ROS-queue eredete még nem bizonyított.
+A scan frissességi határ és a command TTL változatlan marad.
+[Sűrű idővonal](../../tmp/cruise_quality_second_live/dense.csv),
+[első hibás tick](../../tmp/cruise_quality_second_live/first_stale.json),
+[nullázási számlálók](../../tmp/cruise_quality_second_live/stop_causes.json).
+
+A native kumulatív számláló 368 eseményt jelez: 300 projekció, 60 nulla,
+8 elutasítás. A latest-snapshot capture ezekből 361 egyedi eseményt őrzött
+meg; **7 esemény részletes payloadja hiányzik**. A 7 megőrzött lethal-cell
+elutasításból 6-nál raw és projected megegyezik: ezeket nem a kerékprojekció
+hozta létre. Négy recovery-epizód, tíz próbálkozás és egy kimerült epizód
+látszik. A STOP/recovery aktivitás nem keverhető össze a friss cruise
+szakaszokkal. [Native események](../../tmp/cruise_quality_second_live/native_events.json),
+[recovery](../../tmp/cruise_quality_second_live/recovery_events.json).
+
+Az L11/encoder út külön nyitott kérdés: a 818. tickben a jobb kerék célja
+0,4856 m/s, a friss encoderbecslés 0,6545 m/s, L11 kimenet 0,4653, a feedback
+ready/trust érvényes. A 819. tick L3 v-becslése 0,5560 m/s, miközben L9
+0,45 m/s-t enged. Ez becsült túllendülést rögzít, nem független fizikai
+sebességmérést vagy bizonyított PI/kalibrációs gyökérokot. Emiatt sem
+indokolt vakon további sebesség- vagy PI-emelés.
+
+A SLAM status writer tényleges maximum írási falideje **5,154 s**, 45
+superseded státusszal, nulla írási hibával. A póz maximális befogadási kora
+442,4 ms, a záró 64-es ablak callback-queue maximuma 38,0 ms; a sűrű
+idővonalban nincs LOCALIZATION_HOLD. Az I/O kiemelése a callbackből ebben
+az élő menetben is működött. A korábbi elakadás teljes upstream oka és a
+Nav2 parancsrések eredete ettől külön kérdés.
+
+A behavior rögzített kezdete 14222948115340 ns, deadline-ja
+14282948115340 ns; a FAILED megfigyelés 14283090417061 ns. Lejárat körül
+STALE és ACTIVE tickek váltakoznak. A jelenlegi completion-szabály a
+lejáratkor megfigyelt ACTIVE állapotot is megköveteli; ez nem összegzett
+aktív időbizonyítás. A feltétel egyszerű elhagyása nem javítás a mozgáshibára,
+és nem történt ilyen változtatás.
+
+## Célzott késleltetésmérés
+
+A ROS edge a scan/odometry/command témák utolsó 64 callbackjéből külön
+rögzíti a mérés → DDS küldés, DDS transport és callback-queue időt.
+Az epoch–monotonic átszámítás a callback aktuális órakülönbségét használja;
+a hiányzó/érvénytelen DDS-adat explicit hiány, nem nulla késleltetés.
+Ez passzív megfigyelés, nem módosít mérési időt vagy guidance-határidőt.
+
+A native adapter öt fázisban mér: total, MPPI, raw publication, projection,
+collision. Kumulatív számláló/összeg/maximális wall és thread-CPU kerül a
+meglévő bounded motion-evidence snapshotba; a legnagyobb wallhoz tartozó
+CPU külön mező. A thread-CPU nem tartalmazza más worker szálak munkáját;
+a wall–CPU különbség önmagában nem bizonyít I/O- vagy scheduler-gyökérokot.
+
+A második capture explicit [Evidence Compiler-elemzése](../../tmp/cruise_quality_second_compiled/analysis.json)
+PASS, compiler és source integrity COMPLETE, 3632 tick. Az első két menet
+korábbi compiler-kötege tárhelynyeréshez veszteségmentes archívumba került:
+`tmp/cruise_quality_live/evidence.tar.gz` és
+`tmp/cruise_quality_post_live/evidence.tar.gz`; a riportok és az eredeti MCAP-ok
+megmaradtak. Az egyben indított második replay a 128 MiB-os materializálási
+korláton BLOCKED volt; a korlát emelése helyett checkpoint-ablakokra bontjuk.

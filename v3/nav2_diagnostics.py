@@ -147,6 +147,35 @@ class Nav2Telemetry:
         self.raw_command = None
         self.raw_command_count = 0
         self.motion_evidence = None
+        self.callback_timings = {key: deque(maxlen=64) for key in ("scan", "odometry", "command")}
+
+    def observe_callback(self, kind, measured, callback, info, *, wall_ns):
+        """Passive DDS/queue evidence; never changes a command's source time."""
+        offset = wall_ns-callback
+        def stamp(name):
+            value = info.get(name, 0) if isinstance(info, dict) else getattr(info, name, 0)
+            mapped = value-offset
+            return mapped if value > 0 and 0 < mapped <= callback else None
+        sent, received = stamp("source_timestamp"), stamp("received_timestamp")
+        valid = sent is not None and received is not None and sent <= received
+        self.callback_timings[kind].append({"measurement_ns": measured,
+            "callback_ns": callback, "dds_sent_ns": sent, "dds_received_ns": received,
+            "measurement_age_ns": _age(callback, measured),
+            "measurement_to_send_ns": None if sent is None or sent < measured else sent-measured,
+            "dds_transport_ns": received-sent if valid else None,
+            "callback_queue_ns": None if received is None else callback-received,
+            "dds_timestamp_valid": valid})
+
+    def callback_latency(self):
+        result = {}
+        for kind, rows in self.callback_timings.items():
+            summary = {"count": len(rows), "capacity": 64, "last": dict(rows[-1]) if rows else None}
+            for key in ("measurement_age_ns", "measurement_to_send_ns", "dds_transport_ns", "callback_queue_ns"):
+                values = sorted(row[key] for row in rows if row[key] is not None)
+                summary[key] = {"count": len(values), "max": max(values) if values else None,
+                    "p95": values[min(len(values)-1, math.ceil(.95*len(values))-1)] if values else None}
+            result[kind] = summary
+        return result
 
     def observe_motion_evidence(self, payload, received):
         if len(payload) > 32768:
@@ -471,6 +500,7 @@ class Nav2Telemetry:
                 "fresh": all(age is not None and age <= SENSOR_MAX_AGE_NS for age in sensor_ages.values())},
             "sensor_measurement_ns": {"scan": scan_ns, "odometry": odom_ns, "tf": tf_ns},
             "controller": self._rate(now), "odometry": self.odometry,
+            "callback_latency": self.callback_latency(),
             "mppi_raw_command": self.raw_command, "mppi_raw_command_count": self.raw_command_count,
             "motion_evidence": self.motion_evidence,
             "rc_recovery": state.get("rc_recovery"),

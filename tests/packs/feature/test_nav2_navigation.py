@@ -6,12 +6,12 @@ import time
 
 import pytest
 
-from v3.adapters.nav2_navigation import (Nav2NavigationClient, Nav2NavigationConfig,
+from v3.adapters.nav2_navigation import (HEARTBEAT_MAX_AGE_NS, Nav2NavigationClient, Nav2NavigationConfig,
     decode_packet, encode_packet, request_packet)
 from v3.contracts import CommandMode, GLOBAL_FRAME_ID, LOCAL_FRAME_ID, TickContext, Waypoint
 from v3.contracts.navigation import Nav2NavigationRequest, Nav2NavigationStatus
 from v3.nav2_navigation_bridge import (controller_goal_parameters, controller_velocity_parameters,
-    fallback_status, validate_request, velocity_lifetime)
+    fallback_status, validate_request, velocity_lifetime, velocity_request)
 from v3.slam_toolbox_bridge import odometry_twist
 from v3.adapters.slam_toolbox_transport import SlamOdometryPacket
 
@@ -261,6 +261,53 @@ def test_velocity_ttl_cannot_renew_delayed_sensor_or_previous_goal():
                     dict(accepted_ns=1_050_000_000), dict(produced_ns=1_060_000_000),
                     dict(tf_ns=0), dict(now_ns=1_400_000_000)):
         assert velocity_lifetime(packet, **{**args, **changes}) is None
+
+
+def test_newer_heartbeat_keeps_original_request_lineage_and_command_deadline(channel):
+    client, server = channel
+    original = request()
+    newer = replace(original, context=TickContext(11, original.context.monotonic_ns+60_000_000),
+        transform_revision=original.transform_revision+1)
+    history = []
+    for value in (original, newer):
+        client.submit(value)
+        data, address = server.recvfrom(4096)
+        history.append((decode_packet(data), address))
+    produced, now = original.context.monotonic_ns+10_000_000, newer.context.monotonic_ns+10_000_000
+    args = dict(now_ns=now, produced_ns=produced, accepted_ns=original.context.monotonic_ns,
+        scan_ns=original.context.monotonic_ns-10_000_000,
+        odom_ns=original.context.monotonic_ns, tf_ns=original.context.monotonic_ns)
+    assert velocity_lifetime(history[-1][0], **args) is None  # reproduced old rejection
+    binding = velocity_request(history, history[-1], produced)
+    assert binding == history[0]
+    deadline = velocity_lifetime(binding[0], **args)
+    assert deadline == produced+200_000_000
+    server.sendto(encode_packet(reply_for(original, produced_ns=produced,
+        valid_until_ns=deadline)), binding[1])
+    result = client.poll(TickContext(12, now))
+    assert result.guidance.status is Nav2NavigationStatus.ACTIVE
+    assert result.guidance.source_context == original.context
+    assert result.guidance.transform_revision == original.transform_revision
+    assert result.guidance.produced_ns == produced
+    assert result.guidance.valid_until_ns == deadline
+
+
+def test_velocity_binding_cannot_cross_goal_envelope_generation_or_expiry():
+    packet = request_packet(request())
+    history = [(packet, "original")]
+    produced = packet["source_ns"]+10_000_000
+    for change in (dict(mission_id="other"), dict(goal_id="other"), dict(odom_generation=3),
+                   dict(goal=[2., 0., None]), dict(max_v_mps=.1), dict(max_omega_rad_s=.5)):
+        newer = ({**packet, **change, "source_ns": produced+1}, "new")
+        assert velocity_request(history+[newer], newer, produced) is None
+    assert velocity_request(history, history[-1], packet["source_ns"]-1) is None
+    assert velocity_request([], history[-1], produced) is None
+    deadline = packet["source_ns"]+HEARTBEAT_MAX_AGE_NS
+    args = dict(now_ns=deadline-10_000_000,
+        produced_ns=deadline-20_000_000, accepted_ns=packet["source_ns"],
+        scan_ns=deadline-30_000_000, odom_ns=deadline-30_000_000, tf_ns=deadline-30_000_000)
+    assert velocity_lifetime(packet, **args) == deadline
+    assert velocity_lifetime(packet, **{**args, "now_ns":deadline+1}) is None
 
 
 def test_slam_odom_twist_uses_measurement_delta_and_same_generation():

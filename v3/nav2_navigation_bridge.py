@@ -18,6 +18,22 @@ from v3.adapters.nav2_navigation import (
 from v3.contracts import GLOBAL_FRAME_ID, LOCAL_FRAME_ID
 from v3.nav2_diagnostics import NAV2_SAMPLE_PERIOD_NS, Nav2Diagnostics, Nav2StatusWriter
 
+_REQUEST_IDENTITY = ("mission_id", "goal_id", "odom_generation", "mode", "goal",
+                     "goal_tolerance_m", "yaw_tolerance_rad", "max_v_mps", "max_omega_rad_s")
+
+
+def velocity_request(history, current, produced_ns):
+    """Bind a completed command to a request that existed at production.
+
+    A newer heartbeat for the same mission can arrive before the ROS command
+    callback. It must neither invalidate that command nor acquire its lineage.
+    """
+    if current is None:
+        return None
+    return next((item for item in reversed(history)
+        if item[0]["source_ns"] <= produced_ns
+        and all(item[0][key] == current[0][key] for key in _REQUEST_IDENTITY)), None)
+
 
 def validate_request(packet, now_ns):
     for key in ("mission_id", "goal_id"):
@@ -61,7 +77,8 @@ def velocity_lifetime(packet, *, now_ns, produced_ns, accepted_ns, scan_ns, odom
             and all(0 < stamp <= produced_ns and now_ns-stamp <= SENSOR_MAX_AGE_NS
                     for stamp in (scan_ns, odom_ns, tf_ns))):
         return None
-    deadline = min(produced_ns+COMMAND_TTL_NS, scan_ns+SENSOR_MAX_AGE_NS,
+    deadline = min(produced_ns+COMMAND_TTL_NS, packet["source_ns"]+HEARTBEAT_MAX_AGE_NS,
+                   scan_ns+SENSOR_MAX_AGE_NS,
                    odom_ns+SENSOR_MAX_AGE_NS, tf_ns+SENSOR_MAX_AGE_NS)
     return deadline if now_ns < deadline else None
 
@@ -174,6 +191,7 @@ def run(args):
     lifecycle = Nav2LifecycleMonitor(node, generation)
     active = False
     current = None
+    request_history = deque(maxlen=24)
     # All action state remains ROS-local. V3 mission identity is echoed only.
     sending, handle, result_future, cancel_future = None, None, None, None
     cancelling, cancel_started_ns, accepted_ns, settle_until_ns = False, 0, 0, 0
@@ -211,11 +229,12 @@ def run(args):
     def stamp_ns(message):
         return message.header.stamp.sec*1_000_000_000+message.header.stamp.nanosec-ros_offset_ns
 
-    def reply(status, *, produced_ns=None, valid_until_ns=None, v=0., omega=0., evidence=None):
+    def reply(status, *, produced_ns=None, valid_until_ns=None, v=0., omega=0., evidence=None,
+              binding=None):
         nonlocal sequence, last_reply_ns, last_active_until_ns
         if current is None:
             return
-        packet, address = current
+        packet, address = current if binding is None else binding
         now = time.monotonic_ns()
         produced_ns = now if produced_ns is None else produced_ns
         if produced_ns < packet["source_ns"]:
@@ -286,9 +305,11 @@ def run(args):
                 and abs(q.z*q.z+q.w*q.w-1.) <= .01):
             diagnostics.observe_map(message, measured, "local_costmap")
 
-    def scan_callback(message):
+    def scan_callback(message, info):
         nonlocal scan_ns
+        callback = time.monotonic_ns()
         measured = stamp_ns(message)
+        diagnostics.observe_callback("scan", measured, callback, info, wall_ns=time.time_ns())
         if (message.header.frame_id == "r2b4_laser"
                 and 0 <= time.monotonic_ns()-measured <= SENSOR_MAX_AGE_NS
                 and 16 <= len(message.ranges) <= 2048
@@ -302,9 +323,11 @@ def run(args):
             if not scan_history or measured > scan_history[-1]:
                 scan_history.append(measured)
 
-    def odom_callback(message):
+    def odom_callback(message, info):
         nonlocal odom_ns
+        callback = time.monotonic_ns()
         measured = stamp_ns(message)
+        diagnostics.observe_callback("odometry", measured, callback, info, wall_ns=time.time_ns())
         p, q, twist = message.pose.pose.position, message.pose.pose.orientation, message.twist.twist
         if (message.header.frame_id == LOCAL_FRAME_ID and message.child_frame_id == "base_link"
                 and 0 <= time.monotonic_ns()-measured <= SENSOR_MAX_AGE_NS
@@ -319,7 +342,9 @@ def run(args):
             if not odom_history or measured > odom_history[-1]:
                 odom_history.append(measured)
 
-    def velocity_callback(message):
+    def velocity_callback(message, info):
+        callback = time.monotonic_ns()
+        diagnostics.observe_callback("command", stamp_ns(message), callback, info, wall_ns=time.time_ns())
         diagnostics.observe_command(message, stamp_ns(message), time.monotonic_ns())
         if (current is None or handle is None or cancelling or not active
                 or terminal_status is not None or action_kind == "PLAN_DETOUR"):
@@ -332,8 +357,10 @@ def run(args):
         # Use already-observed measurements that existed at command production.
         evidence = [next((stamp for stamp in reversed(history) if stamp <= produced), 0)
                     for history in (scan_history, odom_history, tf_history)]
-        deadline = velocity_lifetime(current[0], now_ns=now, produced_ns=produced,
-            accepted_ns=accepted_ns, scan_ns=evidence[0], odom_ns=evidence[1], tf_ns=evidence[2])
+        binding = velocity_request(request_history, current, produced)
+        deadline = None if binding is None else velocity_lifetime(binding[0], now_ns=now,
+            produced_ns=produced, accepted_ns=accepted_ns,
+            scan_ns=evidence[0], odom_ns=evidence[1], tf_ns=evidence[2])
         v, omega = message.twist.linear.x, message.twist.angular.z
         if (deadline is None or message.header.frame_id not in ("", "base_link")
                 or not math.isfinite(v) or not math.isfinite(omega)
@@ -344,7 +371,7 @@ def run(args):
             reply("STALE")
             return
         reply("ACTIVE", produced_ns=produced, valid_until_ns=deadline, v=v, omega=omega,
-              evidence=evidence[:2])
+              evidence=evidence[:2], binding=binding)
         state["commands"] += 1
 
     qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -534,22 +561,24 @@ def run(args):
                         cruise.stop()
                         recovery.reset()
                         current, selected_goal, terminal_status, frontier_goal = None, None, None, None
+                        request_history.clear()
                     continue
                 if packet["source_ns"] <= latest_source_ns:
                     continue
                 latest_source_ns = packet["source_ns"]
                 same = current is not None and all(packet[key] == current[0][key]
-                    for key in ("mission_id", "goal_id", "odom_generation", "mode", "goal",
-                                "goal_tolerance_m", "yaw_tolerance_rad", "max_v_mps", "max_omega_rad_s"))
+                    for key in _REQUEST_IDENTITY)
                 if same and packet["source_ns"] <= current[0]["source_ns"]:
                     continue
                 if not same:
+                    request_history.clear()
                     begin_cancel(now)
                     cruise.stop()
                     recovery.reset()
                     recovery_cancel = False
                     selected_goal, terminal_status, frontier_goal = None, None, None
                 current = packet, address
+                request_history.append(current)
                 if packet["mode"] == "EXPLORE":
                     session = tuple(packet[key] for key in ("mission_id", "goal_id", "odom_generation"))
                     cruise.begin(session)
@@ -565,6 +594,7 @@ def run(args):
                 recovery.reset()
                 recovery_cancel = False
                 current, selected_goal, terminal_status, frontier_goal = None, None, None, None
+                request_history.clear()
             if (current is not None and current[0]["mode"] == "EXPLORE"
                     and cruise.phase == "FRONTIER" and frontier.complete):
                 # A completed map is normal: frontier discovery gives way to

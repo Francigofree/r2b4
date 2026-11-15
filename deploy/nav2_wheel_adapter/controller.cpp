@@ -6,6 +6,8 @@
 #include "pluginlib/class_list_macros.hpp"
 #include "std_msgs/msg/string.hpp"
 #include <array>
+#include <chrono>
+#include <ctime>
 #include <iomanip>
 #include <sstream>
 
@@ -74,6 +76,31 @@ bool commandCollides(nav2_costmap_2d::Costmap2D *map,
 }
 
 class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
+  struct Timing {
+    uint64_t count=0, wall_max_ns=0, wall_max_cpu_ns=0, cpu_max_ns=0, wall_sum_ns=0, cpu_sum_ns=0;
+  };
+  static uint64_t wallNow() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+  }
+  static uint64_t cpuNow() {
+    timespec value{};
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID,&value);
+    return static_cast<uint64_t>(value.tv_sec)*1000000000ULL+value.tv_nsec;
+  }
+  // Scalar observation only: distinguish actual compute from waits/preemption.
+  struct Phase {
+    WheelAwareMPPIController &owner; size_t index;
+    uint64_t wall=wallNow(), cpu=cpuNow();
+    ~Phase() {
+      const auto elapsed=wallNow()-wall, used=cpuNow()-cpu;
+      std::lock_guard<std::mutex> lock(owner.timing_mutex_);
+      auto &t=owner.timings_[index];
+      ++t.count; t.wall_sum_ns+=elapsed; t.cpu_sum_ns+=used;
+      if (elapsed>t.wall_max_ns) {t.wall_max_ns=elapsed; t.wall_max_cpu_ns=used;}
+      t.cpu_max_ns=std::max(t.cpu_max_ns,used);
+    }
+  };
  public:
   void configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr &parent,
       std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
@@ -119,11 +146,12 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
   geometry_msgs::msg::TwistStamped computeVelocityCommands(
       const geometry_msgs::msg::PoseStamped &pose,const geometry_msgs::msg::Twist &speed,
       nav2_core::GoalChecker *goal_checker) override {
+    Phase total{*this,0};
     measured_v_=speed.linear.x; measured_w_=speed.angular.z;
     geometry_msgs::msg::TwistStamped command;
-    try { command=MPPIController::computeVelocityCommands(pose,speed,goal_checker); }
+    try { Phase phase{*this,1}; command=MPPIController::computeVelocityCommands(pose,speed,goal_checker); }
     catch (const std::exception &) {record(pose,0.,0.,0.,0.,"mppi_exception",{},false); throw;}
-    raw_publisher_->publish(command);
+    { Phase phase{*this,2}; raw_publisher_->publish(command); }
     const double raw_v=command.twist.linear.x,raw_w=command.twist.angular.z;
     auto limits=limits_;
     const auto node=parent_.lock();
@@ -134,13 +162,15 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
       throw nav2_core::NoValidControl("Invalid mission envelope");
     }
     limits.max_v=std::min(limits.max_v,max_v); limits.max_omega=std::min(limits.max_omega,max_w);
-    const auto feasible=limits.projectMppi(raw_v,raw_w);
+    std::pair<double,double> feasible;
+    { Phase phase{*this,3}; feasible=limits.projectMppi(raw_v,raw_w); }
     command.twist.linear.x=feasible.first; command.twist.angular.z=feasible.second;
     auto *map=costmap_ros_->getCostmap();
     const auto &q=pose.pose.orientation;
     const double yaw=std::atan2(2.*(q.w*q.z+q.x*q.y),1.-2.*(q.y*q.y+q.z*q.z));
     CollisionEvidence collision;
     {
+      Phase phase{*this,4};
       std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*map->getMutex());
       collision=commandEvidence(map,costmap_ros_->getRobotFootprint(),pose.pose.position.x,
           pose.pose.position.y,yaw,feasible.first,feasible.second);
@@ -207,7 +237,20 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
          <<",\"pose\":["<<c.x<<','<<c.y<<','<<c.yaw<<"],\"cell\":["<<c.cell_x<<','<<c.cell_y<<"],\"cost\":"<<c.cost<<'}';
       out<<'}';
     }
-    out<<"]}";
+    out<<"],\"compute_timing\":{";
+    {
+      std::lock_guard<std::mutex> timing_lock(timing_mutex_);
+      const char *names[]={"total","mppi","raw_publish","projection","collision"};
+      for (size_t i=0;i<timings_.size();++i) {
+        if (i) out<<',';
+        const auto &t=timings_[i];
+        out<<'"'<<names[i]<<"\":{\"count\":"<<t.count<<",\"wall_max_ns\":"<<t.wall_max_ns
+           <<",\"wall_max_cpu_ns\":"<<t.wall_max_cpu_ns
+           <<",\"cpu_max_ns\":"<<t.cpu_max_ns<<",\"wall_sum_ns\":"<<t.wall_sum_ns
+           <<",\"cpu_sum_ns\":"<<t.cpu_sum_ns<<'}';
+      }
+    }
+    out<<"}}";
     std_msgs::msg::String message; message.data=out.str(); evidence_publisher_->publish(message);
     last_published_sequence_=event_count_;
     // Retain the last 16 across publications: a superseded observation still
@@ -217,6 +260,8 @@ class WheelAwareMPPIController : public nav2_mppi_controller::MPPIController {
   double mission_max_v_{},mission_max_omega_{};
   double measured_v_=0.,measured_w_=0.;
   std::mutex evidence_mutex_;
+  std::mutex timing_mutex_;
+  std::array<Timing,5> timings_{};
   std::array<Event,16> events_{};
   size_t head_=0,size_=0;
   uint64_t event_count_=0,projected_=0,zeroed_=0,rejected_=0,overflow_=0;

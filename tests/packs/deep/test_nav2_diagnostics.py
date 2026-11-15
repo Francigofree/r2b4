@@ -30,6 +30,35 @@ def helper():
     return Nav2Telemetry(10, 0, body_bounds_m=(-.10, .26, -.18, .18), lidar_xy_m=(-.005, 0.))
 
 
+def test_callback_latency_separates_scan_production_dds_and_executor_without_retiming():
+    telemetry = helper()
+    epoch = 1_700_000_000_000_000_000
+    telemetry.observe_callback("scan", 1_000_000_000, 1_200_000_000,
+        NS(source_timestamp=epoch+1_080_000_000, received_timestamp=epoch+1_085_000_000),
+        wall_ns=epoch+1_200_000_000)
+    row = observation(telemetry, 1_210_000_000)["callback_latency"]["scan"]
+    assert row["last"] == dict(measurement_ns=1_000_000_000, callback_ns=1_200_000_000,
+        dds_sent_ns=1_080_000_000, dds_received_ns=1_085_000_000,
+        measurement_age_ns=200_000_000, measurement_to_send_ns=80_000_000,
+        dds_transport_ns=5_000_000, callback_queue_ns=115_000_000, dds_timestamp_valid=True)
+    assert row["callback_queue_ns"]["max"] == 115_000_000
+    # Current wall/monotonic offset, including a corrected epoch clock.
+    telemetry.observe_callback("command", 2_000_000_000, 2_050_000_000,
+        {"source_timestamp": epoch+12_000_000_000, "received_timestamp": epoch+12_001_000_000},
+        wall_ns=epoch+12_050_000_000)
+    assert telemetry.callback_latency()["command"]["last"]["callback_queue_ns"] == 49_000_000
+    assert telemetry.command_count == 0
+    assert telemetry.scan is None
+    for index in range(100):
+        telemetry.observe_callback("odometry", 3_000_000_000+index, 3_100_000_000+index,
+            NS(source_timestamp=0, received_timestamp=0), wall_ns=epoch+3_100_000_000+index)
+    bounded = telemetry.callback_latency()["odometry"]
+    assert bounded["count"] == bounded["capacity"] == 64
+    assert bounded["last"]["measurement_ns"] == 3_000_000_099
+    assert not bounded["last"]["dds_timestamp_valid"]
+    assert bounded["dds_transport_ns"] == {"count": 0, "max": None, "p95": None}
+
+
 def test_controller_errors_are_bounded_and_transform_headroom_is_not_measurement_age():
     telemetry = helper()
     for index in range(20):
