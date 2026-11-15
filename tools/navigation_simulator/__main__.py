@@ -6,6 +6,7 @@ import inspect
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 
 from .evidence import analyze, replay, source_snapshot, write
 from .scenario import BUILTINS, builtin, validate
@@ -26,8 +27,8 @@ def parser():
         if name=="analyze":
             child.add_argument("--summary-only",action="store_true",help="stream native timeline without compiling DIAG reports")
     for name in ("simulate","regression","stress"):
-        child=commands.add_parser(name)
-        child.add_argument("--scenario",default="room",help="built-in name or scenario JSON")
+        child=commands.add_parser(name,aliases=["fault"] if name=="simulate" else [])
+        child.add_argument("--scenario",help="built-in name or scenario JSON; regression defaults to recorded baseline scene")
         child.add_argument("--duration-s",type=float)
         child.add_argument("--override",type=Path)
         child.add_argument("--ros-domain-id",type=int,default=75)
@@ -115,7 +116,10 @@ def main(argv=None,*,project_root=None):
             result=search(root,output,read_suite(args.suite),patches,domain=args.ros_domain_id,budget_s=args.budget_s)
         else:
             from .runtime import run
-            scenario=builtin(args.scenario) if args.scenario in BUILTINS else validate(read_json(args.scenario))
+            baseline=read_json(args.baseline) if args.mode=="regression" else None
+            selected=args.scenario or (None if baseline else "room")
+            scenario=(validate(baseline["scenario"]) if selected is None else
+                      builtin(selected) if selected in BUILTINS else validate(read_json(selected)))
             if args.duration_s is not None:
                 scenario=validate({**scenario,"duration_s":args.duration_s})
             overlay=read_overlay(args.override)
@@ -136,7 +140,6 @@ def main(argv=None,*,project_root=None):
                 result=run(root,output/"run",scenario,domain=args.ros_domain_id,overlay=overlay,
                            replay=not getattr(args,"no_replay",False))
                 if args.mode=="regression":
-                    baseline=read_json(args.baseline)
                     comparison=compare(baseline,result)
                     result={"status":"PASS" if comparison["status"] in {"IMPROVED","UNCHANGED"} else "FAIL",**{"comparison":comparison},
                             "run":str(output/"run/result.json"),"physical_output":False}
@@ -144,7 +147,7 @@ def main(argv=None,*,project_root=None):
         print(json.dumps({"status":result["status"],"output":str(output),"physical_output":False,
                           "failures":result.get("failures",[]),"reason":result.get("reason")},sort_keys=True))
         return 0 if result["status"] in {"PASS","MATCH","COMPLETE"} else 2
-    except (OSError,ValueError,RuntimeError) as exc:
+    except (OSError,ValueError,RuntimeError,TypeError,AttributeError,subprocess.SubprocessError) as exc:
         result={"status":"BLOCKED","reason":str(exc),"physical_output":False}
         if output:
             write(output/"error.json",result)

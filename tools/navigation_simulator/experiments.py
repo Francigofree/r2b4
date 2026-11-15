@@ -68,6 +68,8 @@ def variants(root,count=2,kind="nav2",seed=7):
 
 def compare(before,after):
     blockers=[]
+    if before.get("schema")!="R2B4_LOCAL_NAVIGATION_RESULT_V1" or after.get("schema")!="R2B4_LOCAL_NAVIGATION_RESULT_V1":
+        raise ValueError("unsupported navigation result schema")
     for key in ("schema","backend","scenario_sha256"):
         if before.get(key)!=after.get(key):
             blockers.append("UNPAIRED:"+key)
@@ -110,62 +112,111 @@ def compare(before,after):
             "scope":"paired synthetic scene; ROS execution can vary; V3 closed-input replay is checked separately"}
 
 
+def safe_evidence(result):
+    import math
+    behavior_failures = {"TRUTH_GOAL_NOT_REACHED", "EXCESSIVE_STATIONARY_INTERVAL", "INSUFFICIENT_PROGRESS"}
+    metrics = result.get("metrics", {})
+    duration = metrics.get("active_duration_s", 0.)
+    complete = (result.get("termination") == "GOAL_COMPLETE" and metrics.get("goal_reached") is True
+                or result.get("termination") == "DURATION_REACHED"
+                and duration >= result.get("scenario", {}).get("duration_s", math.inf) - .021)
+    return (result.get("physical_output") is False and result.get("final_stop") is True
+            and result.get("virtual_body_stopped") is True and result.get("replay", {}).get("status") == "MATCH"
+            and metrics.get("active_samples", 0) >= 1 and type(duration) in {int, float}
+            and math.isfinite(duration) and duration > 0 and complete
+            and all(type(v) not in {int, float} or math.isfinite(v) for v in metrics.values())
+            and metrics.get("collision_count") == 0
+            and set(result.get("failures", [])) <= behavior_failures)
+
+
 def score(result):
-    if result["status"]!="PASS" or result["replay"]["status"]!="MATCH" or not result["metrics"]["active_samples"]:
+    if not safe_evidence(result) or result["status"] != "PASS":
         return None
-    m=result["metrics"]
-    if result["scenario"]["behavior"]=="navigate":
-        return -(m["goal_error_m"]+m["active_duration_s"]*.01+m["path_length_m"]*.01)
-    return m["path_length_m"]/max(.02,m["active_duration_s"])-m["longest_stationary_s"]*.01
+    metrics = result["metrics"]
+    if result["scenario"]["behavior"] == "navigate":
+        return -(metrics["goal_error_m"] + metrics["active_duration_s"] * .01 + metrics["path_length_m"] * .01)
+    # Independent truth coverage, not distance driven around the same loop.
+    return ((metrics["unique_coverage_cells"] - 1) / metrics["active_duration_s"]
+            - .5 * metrics["longest_stationary_s"] / metrics["active_duration_s"])
 
 
-def search(root,output,suite,patches,*,domain=75,budget_s=600.,minimum_gain=.01):
+def _assessment(baseline, measured, count):
+    pairs = [compare(a, b) for a, b in zip(baseline, measured)]
+    eligible = (len(measured) == count and all(safe_evidence(row) and row["status"] == "PASS" for row in measured)
+                and all(not pair["regressed_metrics"] for base, pair in zip(baseline, pairs) if base["status"] == "PASS"))
+    gains = [(score(trial) - score(base)) / max(1., abs(score(base)))
+             for base, trial in zip(baseline, measured)
+             if score(base) is not None and score(trial) is not None]
+    fixed = sum(base["status"] != "PASS" and trial["status"] == "PASS" for base, trial in zip(baseline, measured))
+    return {"eligible": eligible, "trials": measured, "pairs": pairs, "fixed_scenarios": fixed,
+            "mean_score_gain": sum(gains) / len(gains) if gains else 0.,
+            "numeric_gain_scope": "common PASS scenarios only; FAIL-to-PASS is a separate behavior result"}
+
+
+def search(root, output, suite, patches, *, domain=75, budget_s=600., minimum_gain=.01):
     from .runtime import run
-    started=time.monotonic()
-    baseline={}
-    tested=[]
-    best=None
-    # Baseline has the same finite conditions as every overlay; no recording
-    # is treated as counterfactual sensor data.
-    for group,scenes in suite.items():
-        baseline[group]=[run(root,output/"baseline"/f"{group}_{i}",scene,domain=domain) for i,scene in enumerate(scenes)]
-    source_ids={trial["source_sha256"] for rows in baseline.values() for trial in rows}
-    if len(source_ids)!=1 or any(score(trial) is None for rows in baseline.values() for trial in rows):
-        result={"status":"BLOCKED","reason":"BASELINE_NOT_COMPLETE_SAFE_PASS","baseline":baseline,"variants":[]}
-        write(output/"autotune.json",result)
-        return result
-    for index,patch in enumerate(patches):
-        if time.monotonic()-started>=budget_s:
-            break
-        row={"index":index,"overlay":patch,"groups":{},"eligible":True}
-        for group,scenes in suite.items():
-            results=[]
-            for i,scene in enumerate(scenes):
-                measured=run(root,output/f"variant_{index}"/f"{group}_{i}",scene,domain=domain,overlay=patch)
-                results.append(measured)
-                if measured["source_sha256"] not in source_ids:
-                    row["eligible"]=False
-            pairs=[compare(a,b) for a,b in zip(baseline[group],results)]
-            row["groups"][group]={"trials":results,"pairs":pairs}
-            if any(pair["blockers"] or pair["regressed_metrics"] for pair in pairs):
-                row["eligible"]=False
+    started = time.monotonic()
+    source_id = None
+    baseline = {}
+    tested = []
+    reason = None
+    best = None
+    frozen_index = None
+    validation = None
+
+    def trials(scenes, target, patch=None):
+        nonlocal source_id, reason
+        rows = []
+        for index, scene in enumerate(scenes):
+            if time.monotonic() - started >= budget_s:
+                reason = "BUDGET_EXHAUSTED"
                 break
-        gains=[score(trial)-score(base) for group,data in row["groups"].items()
-               for base,trial in zip(baseline[group],data["trials"]) if score(trial) is not None]
-        row["mean_score_gain"]=sum(gains)/len(gains) if row["eligible"] and gains else None
-        tested.append(row)
-        if row["eligible"] and row["mean_score_gain"]>minimum_gain and (best is None or row["mean_score_gain"]>best["mean_score_gain"]):
-            best=row
-        # A fault/process death is evidence to inspect, not a trigger for an
-        # automatic retry or further tuning on an unhealthy stack.
-        if any(trial["status"]!="PASS" for data in row["groups"].values() for trial in data["trials"]):
-            break
+            row = run(root, target / str(index), scene, domain=domain, overlay=patch)
+            rows.append(row)
+            if source_id is None:
+                source_id = row["source_sha256"]
+            if source_id != row["source_sha256"]:
+                reason = "SOURCE_CHANGED_DURING_SEARCH"
+                break
+            if not safe_evidence(row):
+                reason = "EVIDENCE_OR_SAFETY_FAILURE"
+                break
+        return rows
+
+    baseline["train"] = trials(suite["train"], output / "baseline" / "train")
+    if reason is None:
+        for index, patch in enumerate(patches):
+            measured = trials(suite["train"], output / f"variant_{index}" / "train", patch)
+            row = {"index": index, "overlay": patch,
+                   **_assessment(baseline["train"], measured, len(suite["train"]))}
+            tested.append(row)
+            if reason is not None:
+                break
+    # Freeze one winner on training evidence. Holdout is evaluated once and
+    # cannot select a replacement if that winner fails validation.
+    if reason is None and len(tested) == len(patches):
+        ranked = sorted((row for row in tested if row["eligible"]
+                         and (row["fixed_scenarios"] > 0 or row["mean_score_gain"] > minimum_gain)),
+                        key=lambda row: (-row["fixed_scenarios"], -row["mean_score_gain"], row["index"]))
+        if ranked:
+            chosen = ranked[0]
+            frozen_index = chosen["index"]
+            baseline["holdout"] = trials(suite["holdout"], output / "baseline" / "holdout")
+            if reason is None:
+                measured = trials(suite["holdout"], output / f"variant_{frozen_index}" / "holdout", chosen["overlay"])
+                validation = _assessment(baseline["holdout"], measured, len(suite["holdout"]))
+                if reason is None and validation["eligible"]:
+                    best = chosen
     if best:
-        write(output/"best_override.json",{"schema":OVERRIDE,**best["overlay"]})
-    result={"schema":"R2B4_LOCAL_NAVIGATION_AUTOTUNE_V1","status":"COMPLETE" if len(tested)==len(patches) else "INCOMPLETE",
-            "baseline":baseline,"variants":tested,"best_index":None if best is None else best["index"],
-            "automatic_application":False,"production_config_written":False,"physical_output":False,
-            "elapsed_s":time.monotonic()-started,"limitations":["Train and holdout are supplied synthetic environments, not physical calibration.",
-                "Real ROS scheduling needs repeated measurements before treating small score gains as stable."]}
-    write(output/"autotune.json",result)
+        write(output / "best_override.json", {"schema": OVERRIDE, **best["overlay"]})
+    result = {"schema": "R2B4_LOCAL_NAVIGATION_AUTOTUNE_V1",
+              "status": "COMPLETE" if reason is None else "INCOMPLETE", "reason": reason,
+              "baseline": baseline, "variants": tested,
+              "frozen_train_winner": frozen_index, "holdout_validation": validation,
+              "best_index": None if best is None else best["index"],
+              "automatic_application": False, "production_config_written": False, "physical_output": False,
+              "elapsed_s": time.monotonic() - started,
+              "limitations": ["One training winner is checked once on supplied independent holdout scenes.",
+                              "Synthetic model and real ROS scheduling need independent repetition before physical conclusions."]}
+    write(output / "autotune.json", result)
     return result

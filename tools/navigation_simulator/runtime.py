@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections import Counter, deque
 from dataclasses import replace
+from functools import partial
 import fcntl
 import json
 import math
@@ -41,6 +42,7 @@ class Stack:
         self.root, self.output, self.resolved, self.domain = root, output, resolved, domain
         self.children, self.logs, self.paused = {}, [], set()
         self.expected_exits = set()
+        self.extra_pids = []
         self.lock = None
         from tools.nav2_planner import _paths, _write_geometry, _commands, _navigation_environment
         from tools.slam_toolbox import _paths as slam_paths, _ros_environment
@@ -76,6 +78,7 @@ class Stack:
                           "--output-dir", str(output), "--maximum-pose-age-ns", str(resolved.lidar.global_pose_max_age_ns)], slam_env))
 
     def start(self):
+        from tools.slam_toolbox import _terminate_with_parent
         self.lock = (self.root/"tmp"/f"navigation_sim_domain_{self.domain}.lock").open("a")
         try:
             fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -89,21 +92,32 @@ class Stack:
             log = (self.output/(name+".log")).open("w")
             self.logs.append(log)
             child = subprocess.Popen(command, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
-                                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                                     preexec_fn=partial(_terminate_with_parent,os.getpid()))
             self.children[name] = child
             os.setpriority(os.PRIO_PROCESS, child.pid, 10)
 
     def check(self, memory_limit_mb=1536):
         rss_kb = cpu_ticks = 0
+        pids=[os.getpid(),*self.extra_pids]
         for name, child in self.children.items():
             if child.poll() is not None:
                 if name not in self.expected_exits:
                     raise RuntimeError(f"SIMULATION_PROCESS_EXIT:{name}:{child.returncode}")
                 continue
+            pids.append(child.pid)
+        frontier=read_status(self.output/"nav_status.json").get("frontier_pid")
+        if type(frontier) is int and frontier>1:
+            try:
+                if os.getpgid(frontier)==self.children["bridge"].pid:
+                    pids.append(frontier)
+            except ProcessLookupError:
+                pass
+        for pid in set(pids):
             try:
                 # Only owned children; include their ROS executor threads in CPU.
-                rss_kb += int(Path(f"/proc/{child.pid}/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE") // 1024
-                stat = Path(f"/proc/{child.pid}/stat").read_text().rsplit(")",1)[1].split()
+                rss_kb += int(Path(f"/proc/{pid}/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE") // 1024
+                stat = Path(f"/proc/{pid}/stat").read_text().rsplit(")",1)[1].split()
                 cpu_ticks += int(stat[11]) + int(stat[12])
             except FileNotFoundError:
                 pass
@@ -315,6 +329,8 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     from v3.process_sidecars import ProcessMcapCaptureSession
     root, directory = Path(root).resolve(), Path(directory).resolve()
     scenario, overlay = validate(scenario), overlay or {}
+    if not isinstance(overlay,dict) or set(overlay)-{"vezerles","nav2","slam"}:
+        raise ValueError("unsupported simulation overlay fields")
     resolved = resolve_config(root, overlay.get("vezerles"))
     config = resolved.runtime.composition.live_control.control
     if not config.navigation.full_nav2_enabled:
@@ -348,6 +364,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     max_lateness_ns = 0
     max_pose_error = 0.
     samples = 0
+    coverage_cells = set()
     resources = {"owned_rss_mb":0.,"owned_cpu_s":0.}
     phase_max_ms = {name:0. for name in ("resource_check","readiness","command_ingress","sensor_v3_observation")}
     transitions = []
@@ -360,7 +377,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     applied_faults = set()
 
     def observe(record, raw):
-        nonlocal stationary,longest_stationary,min_clearance,samples,max_pose_error,trace_previous
+        nonlocal stationary,longest_stationary,min_clearance,samples,max_pose_error,trace_previous,first_failure
         layers = {layer.layer:layer.output for layer in record.result.trace.layers}
         estimate = layers.get("L3")
         if estimate is not None and "tf_drop" not in plant.faults:
@@ -407,16 +424,23 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             trace_previous = signature
         if active:
             samples += 1
+            coverage_cells.add((math.floor(plant.x/.25),math.floor(plant.y/.25)))
             min_clearance = min(min_clearance,clearance)
             stopped = abs(row["v_mps"]) < .02 and abs(row["omega_rad_s"]) < .1
             stationary = stationary+plant.dt_ns/1e9 if stopped else 0.
             longest_stationary = max(longest_stationary,stationary)
             reasons[row["navigation_reason"]] += 1
+            if stationary>scenario["expect"]["maximum_stationary_s"] and first_failure is None:
+                first_failure={"tick_id":plant.tick,"monotonic_ns":plant.now_ns,"layer":"behavior_observation",
+                    "reason":"STATIONARY_INTERVAL_EXCEEDS_EXPECTATION","stationary_s":stationary,
+                    "navigation_reason":row["navigation_reason"],"safety_reason":row["safety_reason"],"causal_proof":False}
 
     try:
         stack.start()
         session.start()
         capture_started = True
+        stack.extra_pids.append(session._process.pid)
+        os.setpriority(os.PRIO_PROCESS,session._process.pid,10)
         world = World(scenario,resolved.lidar.safety_body_bounds_m)
         ingress = resolved.edges.command_ingress
         plant = Plant(scenario,config,composition,sink,directory,time.monotonic_ns(),observe,lambda *args:None,
@@ -510,20 +534,30 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                     plant.step()
             except BaseException as exc:
                 error = error or exc
-        composition.close()
-        backend.close()
-        sender.close()
-        stack.close()
-        timeline.close()
+        try:
+            composition.close()
+        except BaseException as exc:
+            error=error or exc
+        finally:
+            backend.close()
+            sender.close()
+            stack.close()
+            timeline.close()
         if capture_started:
-            capture = session.finalize(SimpleNamespace(status=0 if error is None else 1),error=error)
+            try:
+                capture = session.finalize(SimpleNamespace(status=0 if error is None else 1),error=error)
+            except BaseException as exc:
+                error=error or exc
     expected = scenario["expect"]
     truth_error = math.hypot(plant.x-scenario["goal"]["x_m"],plant.y-scenario["goal"]["y_m"]) if plant else None
-    goal_reached = truth_error is not None and truth_error<=scenario["position_tolerance_m"]
+    yaw_error=abs(math.atan2(math.sin(plant.yaw-scenario["goal"]["yaw_rad"]),math.cos(plant.yaw-scenario["goal"]["yaw_rad"]))) if plant and "yaw_rad" in scenario["goal"] else None
+    goal_reached = (truth_error is not None and truth_error<=scenario["position_tolerance_m"]
+                    and (yaw_error is None or yaw_error<=scenario["yaw_tolerance_rad"]))
     final_stop = plant is not None and plant.output==(0.,0.)
     body_stopped=plant is not None and max(abs(plant.left),abs(plant.right))<.005
     failures = []
-    if error: failures.append(termination)
+    if error: failures.append(f"{type(error).__name__}:{error}")
+    if not samples: failures.append("NO_ACTIVE_SAMPLES")
     if not final_stop: failures.append("FINAL_STOP_NOT_PROVEN")
     if not body_stopped: failures.append("VIRTUAL_BODY_NOT_SETTLED")
     if plant and plant.collision_count: failures.append("FOOTPRINT_COLLISION")
@@ -531,6 +565,9 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     if expected["goal_reached"] and not goal_reached: failures.append("TRUTH_GOAL_NOT_REACHED")
     if plant and plant.path_length<expected["minimum_path_m"]: failures.append("INSUFFICIENT_PROGRESS")
     if longest_stationary>expected["maximum_stationary_s"]: failures.append("EXCESSIVE_STATIONARY_INTERVAL")
+    if failures and first_failure is None:
+        first_failure={"tick_id":plant.tick-1 if plant else None,"monotonic_ns":plant.now_ns if plant else None,
+                       "layer":"experiment_expectation","reason":failures[0],"causal_proof":False}
     after = source_snapshot(root)
     if snapshot["sha256"]!=after["sha256"]: failures.append("SOURCE_CHANGED_DURING_RUN")
     result = {"schema":"R2B4_LOCAL_NAVIGATION_RESULT_V1","status":"FAIL" if failures else "PASS",
@@ -538,8 +575,9 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
               "scenario_sha256":digest(scenario),"source_sha256":snapshot["sha256"],"overlay":overlay,"overlay_sha256":digest(overlay),
               "config_snapshot_id":resolved.snapshot_id,"termination":termination,"failures":failures,
               "first_failure":first_failure,"final_stop":final_stop,"virtual_body_stopped":body_stopped,"capture":str(capture) if capture else None,
-              "metrics":{"path_length_m":plant.path_length if plant else 0,"goal_error_m":truth_error,
+              "metrics":{"path_length_m":plant.path_length if plant else 0,"goal_error_m":truth_error,"goal_yaw_error_rad":yaw_error,
                          "goal_reached":goal_reached,"longest_stationary_s":longest_stationary,
+                         "unique_coverage_cells":len(coverage_cells),"coverage_cell_size_m":.25,
                          "minimum_clearance_m":min_clearance if math.isfinite(min_clearance) else None,
                          "collision_count":plant.collision_count if plant else 0,"active_samples":samples,
                          "active_duration_s":samples*.02,"max_localization_error_m":max_pose_error,

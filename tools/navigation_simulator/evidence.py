@@ -37,6 +37,19 @@ def source_snapshot(root):
                   "r2b4_orchestration/motion_simulation.py", "tools/tuners/r2b4_navigation_autotuner.py",
                   "tools/tuners/r2b4_motion_tuner.py", "conf/nav2_planner.yaml", "conf/slam_toolbox.yaml",
                   "conf/nav2_navigate.xml", "conf/frontier_exploration.yaml", "conf/nav2_fastdds.xml"))
+    # ROS algorithms and the wheel-aware adapter include compiled production
+    # code; a rebuilt binary must invalidate comparison evidence as well.
+    for relative in ("runtime/deps/nav2-wheel-adapter/lib/libr2b4_nav2_wheel_adapter.so",
+                     "runtime/deps/nav2-planner/lib/libnav2_smac_planner.so",
+                     "runtime/deps/nav2-planner/lib/libmppi_controller.so",
+                     "runtime/deps/nav2-planner/lib/libmppi_critics.so",
+                     "runtime/deps/slam-toolbox/lib/libasync_slam_toolbox.so",
+                     "runtime/deps/nav2-planner/lib/nav2_controller/controller_server",
+                     "runtime/deps/nav2-planner/lib/nav2_planner/planner_server",
+                     "runtime/deps/slam-toolbox/lib/slam_toolbox/async_slam_toolbox_node",
+                     "runtime/deps/frontier-exploration/lib/explore_lite/explore"):
+        if (root/relative).is_file():
+            paths.add(relative)
     files = {path: file_hash(root / path) for path in sorted(paths) if (root / path).is_file()}
     def git(*args):
         result = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, timeout=5)
@@ -65,7 +78,7 @@ def analyze(capture, root, output, *, compile_reports=True):
     result = {"schema": "R2B4_LOCAL_NAVIGATION_ANALYSIS_V1", "source": str(capture.resolve()),
               "source_sha256": file_hash(capture), "inspection": inspection, "physical_output": False,
               "findings": [], "reports": {}}
-    if inspection["status"] != "PASS":
+    if inspection["status"] != "PASS" or inspection["final_metadata"].get("complete")!="true":
         result.update(status="BLOCKED", reason="CAPTURE_INTEGRITY_FAILURE")
         write(output / "analysis.json", result)
         return result
