@@ -109,7 +109,9 @@ def controller_velocity_parameters(packet, limits):
             or max_v <= 0 or min_v > 0 or max_omega <= 0):
         raise ValueError("invalid controller velocity limits")
     return (min(max_v, packet["max_v_mps"]),
-            max(min_v, -packet["max_v_mps"]),
+            # Normal room coverage drives forward. Explicit, costmap-checked
+            # BackUp recovery is a separate native behavior, not MPPI reverse.
+            0. if packet.get("mode") == "EXPLORE" else max(min_v, -packet["max_v_mps"]),
             min(max_omega, packet["max_omega_rad_s"]))
 
 

@@ -454,6 +454,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     capture_started = False
     termination = "DURATION_REACHED"
     applied_faults = set()
+    last_checkpoint_ns = None
     # Keep the canonical mailbox and validation, but isolate ephemeral command
     # metadata from capture writes on the Pi's storage. ROS uses real monotonic
     # stamps; a blocking filesystem operation must not strand the virtual clock.
@@ -471,6 +472,13 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
 
     def observe(record, raw):
         nonlocal stationary,longest_stationary,min_clearance,samples,max_pose_error,trace_previous,first_failure
+        nonlocal last_checkpoint_ns
+        from v3.execution import REPLAY_STATE_CHECKPOINT_INTERVAL_NS
+        context = record.inputs.context
+        if (record.result.trace.fault_layer is None and (last_checkpoint_ns is None
+                or context.monotonic_ns-last_checkpoint_ns >= REPLAY_STATE_CHECKPOINT_INTERVAL_NS)):
+            record = replace(record, state_checkpoint_after=composition.checkpoint())
+            last_checkpoint_ns = context.monotonic_ns
         layers = {layer.layer:layer.output for layer in record.result.trace.layers}
         estimate = layers.get("L3")
         if estimate is not None and "tf_drop" not in plant.faults:

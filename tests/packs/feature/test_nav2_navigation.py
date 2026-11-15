@@ -82,7 +82,7 @@ def test_mission_linear_cap_does_not_scale_angular_cap_or_leak_between_missions(
     for mode, speed in (("EXPLORE", .45), ("NAVIGATE", .25), ("EXPLORE", .45)):
         packet = dict(mode=mode, max_v_mps=speed, max_omega_rad_s=1.4)
         forward, reverse, omega = controller_velocity_parameters(packet, platform)
-        assert (forward, reverse, omega) == (speed, -.20, 1.4)
+        assert (forward, reverse, omega) == (speed, 0. if mode == "EXPLORE" else -.20, 1.4)
         assert omega > 2*.15/.3557  # the calibrated stationary-turn floor
     packet = dict(max_v_mps=.1, max_omega_rad_s=.6)
     assert controller_velocity_parameters(packet, platform) == (.1, -.1, .6)

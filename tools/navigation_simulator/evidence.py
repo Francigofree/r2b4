@@ -60,15 +60,80 @@ def source_snapshot(root):
 
 def replay(capture, root, output):
     from v3.replay import replay_capture, V3ReplayError, write_replay_result
-    from v3.mcap_replay_bridge import McapReplayBridgeError
+    from v3.mcap_replay_bridge import McapReplayBridgeError, ReplayWindow
+    from v3.mcap_reader import McapReader, McapReadError
+    if Path(capture).suffix == ".mcap":
+        try:
+            count = int(McapReader(capture).latest_metadata("r2b4.capture.final").get("tick_count", 0))
+        except (McapReadError, ValueError):
+            count = 0  # The canonical reader below owns the actual rejection.
+        if count > ReplayWindow().max_materialized_ticks:
+            result = _replay_windows(capture, root, output)
+            write(output, result)
+            return result
     try:
         result = replay_capture(capture, project_root=root)
     except (V3ReplayError,McapReplayBridgeError) as exc:
-        result = {"status": "BLOCKED", "reason": str(exc), "physical_output": False}
+        if "bounded materialization budget" in str(exc) and Path(capture).suffix == ".mcap":
+            result = _replay_windows(capture, root, output)
+        else:
+            result = {"status": "BLOCKED", "reason": str(exc), "physical_output": False}
         write(output, result)
     else:
         write_replay_result(result, output)
     return result
+
+
+def _replay_windows(capture, root, output):
+    """Use canonical checkpoint slices without raising the native memory bound."""
+    from v3.mcap_reader import McapReader, TICK_TOPIC
+    from v3.mcap_replay_bridge import McapReplayBridgeError
+    from v3.replay import ReplaySelection, replay_capture, V3ReplayError, write_replay_result
+    windows = []
+    authority_sha256 = file_hash(capture)
+    start = end = None
+    count = size = total = 0
+    ranges = []
+    previous = None
+    for message in McapReader(capture).iter_messages(topics=(TICK_TOPIC,)):
+        if previous is not None and message.sequence != previous+1:
+            return dict(status="BLOCKED", reason="REPLAY_TICK_SEQUENCE_GAP", physical_output=False)
+        previous = message.sequence
+        if count and (count >= 1000 or size+len(message.data) > 32*1024*1024):
+            ranges.append((start, end, count))
+            start, count, size = None, 0, 0
+        start = message.sequence if start is None else start
+        end = message.sequence
+        count, size = count+1, size+len(message.data)
+    if count:
+        ranges.append((start, end, count))
+    for start, end, count in ranges:
+        path = Path(output).with_name(f"{Path(output).stem}_ticks_{start}_{end}.json")
+        try:
+            result = replay_capture(capture, project_root=root,
+                selection=ReplaySelection(start_tick_id=start, end_tick_id=end))
+        except (V3ReplayError, McapReplayBridgeError) as exc:
+            result = dict(status="BLOCKED", reason=str(exc), physical_output=False)
+        if result["status"] == "MATCH":
+            scope = result.get("scope", {}).get("resolved", {})
+            if (result.get("capture", {}).get("sha256") != authority_sha256
+                    or scope.get("first_tick_id") != start or scope.get("last_tick_id") != end
+                    or scope.get("tick_count") != count
+                    or result.get("determinism", {}).get("selected_tick_count") != count):
+                result = dict(status="BLOCKED", reason="REPLAY_WINDOW_COVERAGE_OR_SOURCE_MISMATCH", physical_output=False)
+        write_replay_result(result, path)
+        windows.append(dict(start_tick_id=start, end_tick_id=end, tick_count=count,
+            status=result["status"], result=str(path), reason=result.get("reason")))
+        total += count
+        if result["status"] != "MATCH":
+            break
+    return dict(schema="R2B4_NATIVE_REPLAY_WINDOWS_V1", physical_output=False,
+        status="MATCH" if windows and len(windows)==len(ranges)
+            and all(w["status"]=="MATCH" for w in windows) else windows[-1]["status"] if windows else "BLOCKED",
+        scope="all decision ticks, independent canonical checkpoint slices",
+        continuous_state_comparison=False,
+        capture=str(Path(capture).resolve()), source_sha256=authority_sha256,
+        selected_tick_count=total, windows=windows)
 
 
 def analyze(capture, root, output, *, compile_reports=True):

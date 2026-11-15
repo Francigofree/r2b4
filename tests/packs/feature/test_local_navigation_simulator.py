@@ -88,6 +88,37 @@ def test_navigation_endurance_duration_does_not_expand_skill_experiment_budget()
         motion_scenario({"duration_s": 31.})
 
 
+@pytest.mark.parametrize("late_failure", [None, "MISMATCH", "BLOCKED", "EMPTY_SCOPE", "OTHER_CAPTURE"])
+def test_partitioned_replay_never_hides_a_failed_or_uncompared_tail(tmp_path, monkeypatch, late_failure):
+    from types import SimpleNamespace
+    import v3.mcap_reader
+    import v3.mcap_replay_bridge  # Bind its native reader before the test double.
+    import v3.replay
+    from tools.navigation_simulator.evidence import _replay_windows, file_hash
+    source = tmp_path/"capture.mcap"
+    source.write_bytes(b"test authority")
+    class Reader:
+        def __init__(self, path):
+            pass
+        def iter_messages(self, **kwargs):
+            return (SimpleNamespace(sequence=i, data=b"tick") for i in range(1003))
+    monkeypatch.setattr(v3.mcap_reader, "McapReader", Reader)
+    def native(path, *, project_root, selection):
+        start, end = selection.start_tick_id, selection.end_tick_id
+        tail = end == 1002
+        status = late_failure if tail and late_failure in {"MISMATCH", "BLOCKED"} else "MATCH"
+        count = 0 if tail and late_failure == "EMPTY_SCOPE" else end-start+1
+        return dict(status=status, capture=dict(sha256="other" if tail and late_failure=="OTHER_CAPTURE" else file_hash(source)),
+            scope=dict(resolved=dict(first_tick_id=start, last_tick_id=end, tick_count=count)),
+            determinism=dict(selected_tick_count=count))
+    monkeypatch.setattr(v3.replay, "replay_capture", native)
+    result = _replay_windows(source, PROJECT_ROOT, tmp_path/"replay.json")
+    assert (result["status"] == "MATCH") is (late_failure is None)
+    assert result["selected_tick_count"] == 1003
+    assert result["windows"][-1]["end_tick_id"] == 1002
+    assert result["continuous_state_comparison"] is False
+
+
 def test_real_v3_sensor_edge_preserves_delayed_lineage_without_truth_fix(tmp_path):
     from v3.adapters.slam_toolbox_transport import SlamLocalizationReceiver
     from v3.composition.native_control import NativeControlComposition
