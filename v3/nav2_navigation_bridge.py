@@ -80,6 +80,22 @@ def controller_goal_parameters(packet):
         packet["max_v_mps"], packet["max_omega_rad_s"])
 
 
+def controller_velocity_parameters(packet, limits):
+    """Translate independent mission/platform axes into MPPI's native caps.
+
+    Nav2's SpeedLimit scales angular speed by the linear-speed ratio too. A
+    slower translating mission must still retain its independently allowed
+    turning speed, including physically realizable stationary turns.
+    """
+    max_v, min_v, max_omega = limits
+    if (not all(math.isfinite(value) for value in limits)
+            or max_v <= 0 or min_v > 0 or max_omega <= 0):
+        raise ValueError("invalid controller velocity limits")
+    return (min(max_v, packet["max_v_mps"]),
+            max(min_v, -packet["max_v_mps"]),
+            min(max_omega, packet["max_omega_rad_s"]))
+
+
 def fallback_status(now_ns, active_until_ns, *, terminal_status, fresh,
                     lifecycle_active, action_active):
     """Do not overwrite an unexpired proposal with a heartbeat-only PENDING.
@@ -106,7 +122,6 @@ def run(args):
     from sensor_msgs.msg import LaserScan
     from nav2_msgs.action import NavigateToPose, BackUp, Spin, ComputePathToPose
     from std_msgs.msg import String
-    from nav2_msgs.msg import SpeedLimit
     from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
     from rcl_interfaces.srv import SetParametersAtomically
     from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
@@ -150,7 +165,6 @@ def run(args):
     backup = ActionClient(node, BackUp, "/backup")
     spin = ActionClient(node, Spin, "/spin")
     planner = ActionClient(node, ComputePathToPose, "/compute_path_to_pose")
-    speed_publisher = node.create_publisher(SpeedLimit, "/speed_limit", 1)
     goal_parameters = node.create_client(SetParametersAtomically, "/controller_server/set_parameters_atomically")
     parameter_future, parameter_values, applied_tolerances, parameter_started_ns = None, None, None, 0
     tf_buffer = Buffer()
@@ -544,10 +558,6 @@ def run(args):
                     # fresh sensors/map/TF and applied mission tolerances.
                     if cruise.phase == "FRONTIER":
                         edge_call("frontier_start", frontier.start, session)
-                limit = SpeedLimit()
-                limit.header.stamp = node.get_clock().now().to_msg()
-                limit.percentage, limit.speed_limit = False, float(packet["max_v_mps"])
-                speed_publisher.publish(limit)
             if current is not None and now-current[0]["source_ns"] > HEARTBEAT_MAX_AGE_NS:
                 reply("STALE")
                 begin_cancel(now)
@@ -664,7 +674,9 @@ def run(args):
                     applied_tolerances, parameter_future = parameter_values, None
                 elif now-parameter_started_ns > 2_000_000_000:
                     raise RuntimeError("NAV2_GOAL_TOLERANCE_TIMEOUT")
-            desired = None if current is None else controller_goal_parameters(current[0])
+            desired = None if current is None else (
+                controller_goal_parameters(current[0])
+                + controller_velocity_parameters(current[0], args.controller_limits))
             if (current is not None and active and not cancelling and sending is None and handle is None
                     and terminal_status is None and now >= settle_until_ns):
                 if parameter_future is None and applied_tolerances != desired and goal_parameters.service_is_ready():
@@ -673,7 +685,8 @@ def run(args):
                         value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE, double_value=value))
                         for name, value in zip(("goal_checker.xy_goal_tolerance", "goal_checker.yaw_goal_tolerance",
                             "FollowPath.mission_max_v_mps",
-                            "FollowPath.mission_max_omega_rad_s"), desired)]
+                            "FollowPath.mission_max_omega_rad_s", "FollowPath.vx_max",
+                            "FollowPath.vx_min", "FollowPath.wz_max"), desired)]
                     parameter_values, parameter_started_ns = desired, now
                     parameter_future = edge_call("parameter_request", goal_parameters.call_async, parameters)
             fresh = (map_valid and 0 <= now-map_received_ns <= 6_000_000_000
@@ -874,6 +887,7 @@ def main():
     parser.add_argument("--socket", required=True)
     parser.add_argument("--status-path", required=True)
     parser.add_argument("--robot-geometry", required=True, type=json.loads)
+    parser.add_argument("--controller-limits", required=True, type=json.loads)
     parser.add_argument("--behavior-tree", required=True)
     parser.add_argument("--frontier-executable", required=True)
     parser.add_argument("--frontier-params", required=True)

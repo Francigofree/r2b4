@@ -144,7 +144,8 @@ def test_supervisor_spawns_one_manager_with_exact_managed_servers(full):
     paths = {key: Path("/isolated") / key for key in
              ("prefix", "params", "geometry", "socket", "status", "bt", "frontier", "frontier_params")}
     geometry = {"body_bounds_m": [-.10, .26, -.18, .18], "lidar_xy_m": [-.005, 0.]}
-    commands = _commands(paths, full=full, radius=.3, robot_geometry=geometry)
+    limits = (.45, -.20, 1.4)
+    commands = _commands(paths, full=full, radius=.3, robot_geometry=geometry, controller_limits=limits)
     managers = [command for name, command in commands if name == "lifecycle_manager"]
     assert len(managers) == 1
     manager = managers[0]
@@ -161,6 +162,7 @@ def test_supervisor_spawns_one_manager_with_exact_managed_servers(full):
                 assert "cmd_vel:=/r2b4/nav2/cmd_vel" in command
         bridge = commands[-1][1]
         assert json.loads(bridge[bridge.index("--robot-geometry")+1]) == geometry
+        assert json.loads(bridge[bridge.index("--controller-limits")+1]) == list(limits)
 
 
 def test_status_readiness_requires_own_bridge_and_fresh_manager_response(monkeypatch, tmp_path):

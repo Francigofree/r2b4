@@ -40,8 +40,9 @@ class Nav2StatusWriter:
     callbacks, command state or navigation authority crosses this thread.
     """
 
-    def __init__(self, path):
+    def __init__(self, path, *, file_mode=None):
         self.path = Path(path)
+        self._file_mode = file_mode
         self._condition = threading.Condition()
         self._pending = None
         self._closing = False
@@ -78,6 +79,8 @@ class Nav2StatusWriter:
             error = None
             try:
                 temporary.write_text(encoded)
+                if self._file_mode is not None:
+                    temporary.chmod(self._file_mode)
                 temporary.replace(self.path)
             except OSError as exc:
                 error = f"{type(exc).__name__}:{exc}"[:192]

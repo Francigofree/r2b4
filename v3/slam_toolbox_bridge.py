@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import signal
 import socket
+import sys
 import time
 
 from v3.adapters.slam_toolbox_transport import (
@@ -193,11 +194,11 @@ def conservative_covariance(covariance) -> tuple[float, float, float]:
     return bounded
 
 
-def _write_status(path: Path, value: dict) -> None:
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, sort_keys=True, allow_nan=False) + "\n")
-    os.chmod(temporary, 0o600)
-    temporary.replace(path)
+def publish_status(writer, state):
+    # Reuse the existing bounded observation writer. Its input is immutable
+    # JSON; no ROS object, pose callback or localization authority crosses it.
+    snapshot = dict(state, status_writer=writer.snapshot())
+    writer.publish(json.dumps(snapshot, sort_keys=True, allow_nan=False) + "\n")
 
 
 def run(args) -> int:
@@ -352,6 +353,8 @@ def run(args) -> int:
     map_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                          reliability=ReliabilityPolicy.RELIABLE)
     node.create_subscription(OccupancyGrid, "/map", map_callback, map_qos)
+    from v3.nav2_diagnostics import Nav2StatusWriter
+    status_writer = Nav2StatusWriter(status_path, file_mode=0o600)
     try:
         while not stopped and rclpy.ok():
             now = time.monotonic_ns()
@@ -488,7 +491,7 @@ def run(args) -> int:
             if now - last_status_ns >= 200_000_000:
                 state["pose_latency_window"] = pose_latency_window(pose_timings)
                 state["observed_monotonic_ns"] = now
-                _write_status(status_path, state)
+                publish_status(status_writer, state)
                 last_status_ns = now
         state["state"] = "STOPPED"
         return 0
@@ -497,11 +500,15 @@ def run(args) -> int:
         state["error"] = f"{type(exc).__name__}:{exc}"
         raise
     finally:
-        _write_status(status_path, state)
-        node.destroy_node()
-        rclpy.shutdown()
-        ingress.close()
-        path.unlink(missing_ok=True)
+        try:
+            publish_status(status_writer, state)
+            if not status_writer.close():
+                print("SLAM status writer shutdown deadline exceeded", file=sys.stderr, flush=True)
+        finally:
+            node.destroy_node()
+            rclpy.shutdown()
+            ingress.close()
+            path.unlink(missing_ok=True)
 
 
 def main(argv=None) -> int:

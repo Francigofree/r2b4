@@ -10,7 +10,8 @@ from v3.adapters.nav2_navigation import (Nav2NavigationClient, Nav2NavigationCon
     decode_packet, encode_packet, request_packet)
 from v3.contracts import CommandMode, GLOBAL_FRAME_ID, LOCAL_FRAME_ID, TickContext, Waypoint
 from v3.contracts.navigation import Nav2NavigationRequest, Nav2NavigationStatus
-from v3.nav2_navigation_bridge import controller_goal_parameters, fallback_status, validate_request, velocity_lifetime
+from v3.nav2_navigation_bridge import (controller_goal_parameters, controller_velocity_parameters,
+    fallback_status, validate_request, velocity_lifetime)
 from v3.slam_toolbox_bridge import odometry_twist
 from v3.adapters.slam_toolbox_transport import SlamOdometryPacket
 
@@ -74,6 +75,20 @@ def test_controller_uses_requested_goal_tolerances_and_only_requested_yaw(yaw):
     assert 0 < xy <= value.goal_tolerance_m
     assert angle == math.pi if yaw is None else 0 < angle <= value.yaw_tolerance_rad
     assert (v, omega) == (value.max_v_mps, value.max_omega_rad_s)
+
+
+def test_mission_linear_cap_does_not_scale_angular_cap_or_leak_between_missions():
+    platform = (.45, -.20, 1.4)
+    for mode, speed in (("EXPLORE", .45), ("NAVIGATE", .25), ("EXPLORE", .45)):
+        packet = dict(mode=mode, max_v_mps=speed, max_omega_rad_s=1.4)
+        forward, reverse, omega = controller_velocity_parameters(packet, platform)
+        assert (forward, reverse, omega) == (speed, -.20, 1.4)
+        assert omega > 2*.15/.3557  # the calibrated stationary-turn floor
+    packet = dict(max_v_mps=.1, max_omega_rad_s=.6)
+    assert controller_velocity_parameters(packet, platform) == (.1, -.1, .6)
+    assert controller_velocity_parameters(dict(max_v_mps=.6, max_omega_rad_s=2.), platform) == platform
+    assert controller_velocity_parameters(dict(max_v_mps=.45, max_omega_rad_s=1.4),
+        (.3, -.15, .9)) == (.3, -.15, .9)
 
 
 def test_completion_after_tick_closure_waits_without_revoking_fresh_guidance(channel):

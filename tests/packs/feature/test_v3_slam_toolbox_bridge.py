@@ -9,10 +9,49 @@ from v3.adapters.slam_toolbox_transport import SlamOdometryPacket, SlamScanPacke
 from v3.slam_toolbox_bridge import (
     MAX_ODOM_BRACKET_NS, align_scan, conservative_covariance, ros_scan_ranges,
     pose_latency, pose_latency_window,
+    publish_status,
 )
 
 
 MEASURED_NS = 2_000_000_000
+
+
+def test_slam_status_io_stall_cannot_block_polling_or_mutate_measurement_time(tmp_path, monkeypatch):
+    import json
+    import threading
+    import time
+    from pathlib import Path
+    from v3.nav2_diagnostics import Nav2StatusWriter
+    entered, release = threading.Event(), threading.Event()
+    original = Path.write_text
+
+    def stalled(path, encoded, *args, **kwargs):
+        entered.set()
+        assert release.wait(3.)
+        return original(path, encoded, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", stalled)
+    writer = Nav2StatusWriter(tmp_path/"slam.json", file_mode=0o600)
+    state = dict(last_pose_measurement_ns=MEASURED_NS, last_pose=[1., 2., .3], state="ACTIVE")
+    try:
+        publish_status(writer, state)
+        assert entered.wait(1.)
+        started = time.monotonic()
+        for sequence in range(2, 102):
+            state.update(last_pose_sequence=sequence, observed_monotonic_ns=MEASURED_NS+sequence)
+            publish_status(writer, state)
+        assert time.monotonic()-started < .1
+        assert writer.snapshot()["superseded"] == 99
+        assert writer.snapshot()["written"] == 0
+        state["last_pose"][0] = 99.  # pending JSON is detached from live state
+    finally:
+        release.set()
+        assert writer.close()
+    saved = json.loads(writer.path.read_text())
+    assert saved["last_pose_measurement_ns"] == MEASURED_NS
+    assert saved["last_pose_sequence"] == 101
+    assert saved["last_pose"] == [1., 2., .3]
+    assert writer.path.stat().st_mode & 0o777 == 0o600
 
 
 def test_pose_latency_preserves_rejected_measurement_and_separates_dds_queue():

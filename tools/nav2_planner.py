@@ -164,7 +164,7 @@ def _write_geometry(paths, control):
     return radius
 
 
-def _commands(paths, *, full, radius, robot_geometry=None):
+def _commands(paths, *, full, radius, robot_geometry=None, controller_limits=None):
     servers = ("nav2_planner", "planner_server"),
     if full:
         servers += (("nav2_controller", "controller_server"),
@@ -192,10 +192,13 @@ def _commands(paths, *, full, radius, robot_geometry=None):
     if full:
         if robot_geometry is None:
             raise ValueError("Nav2 diagnostics requires resolved robot geometry")
+        if controller_limits is None:
+            raise ValueError("Nav2 requires resolved controller velocity limits")
         command += ["--behavior-tree", str(paths["bt"]),
                     "--frontier-executable", str(paths["frontier"] / "lib/explore_lite/explore"),
                     "--frontier-params", str(paths["frontier_params"]),
-                    "--robot-geometry", json.dumps(robot_geometry, allow_nan=False, separators=(",", ":"))]
+                    "--robot-geometry", json.dumps(robot_geometry, allow_nan=False, separators=(",", ":")),
+                    "--controller-limits", json.dumps(controller_limits, allow_nan=False)]
     return commands + [("bridge", command)]
 
 
@@ -427,7 +430,10 @@ def _supervise(root, ros_domain_id):
                                            control.lidar_safety.minimum_clearance_m),
                           "lidar_xy_m": [resolved.lidar.matcher.lidar_x_offset_m,
                                          resolved.lidar.matcher.lidar_y_offset_m]}
-        for name, command in _commands(paths, full=full, radius=radius, robot_geometry=robot_geometry):
+        limits = control.operational_constraints
+        controller_limits = (limits.max_v_mps, -min(.20, limits.max_v_mps), limits.max_omega_rad_s)
+        for name, command in _commands(paths, full=full, radius=radius, robot_geometry=robot_geometry,
+                                       controller_limits=controller_limits):
             log = (paths["work"] / f"{name}.log").open("a")
             logs.append(log)
             children.append(subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,

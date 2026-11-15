@@ -71,7 +71,9 @@ class Stack:
         geometry = {"body_bounds_m": resolved.lidar.safety_body_bounds_m,
                     "padding_m": max(control.navigation.footprint_safety_margin_m, control.lidar_safety.minimum_clearance_m),
                     "lidar_xy_m": [resolved.lidar.matcher.lidar_x_offset_m, resolved.lidar.matcher.lidar_y_offset_m]}
-        commands = _commands(paths, full=True, radius=radius, robot_geometry=geometry)
+        limits = control.operational_constraints
+        commands = _commands(paths, full=True, radius=radius, robot_geometry=geometry,
+            controller_limits=(limits.max_v_mps, -min(.20, limits.max_v_mps), limits.max_omega_rad_s))
         self.commands = {name: (cmd, nav_env) for name, cmd in commands}
         self.commands.update(slam=([str(slam["prefix"]/"lib/slam_toolbox/async_slam_toolbox_node"),
                                    "--ros-args", "--params-file", str(output/"slam.yaml")], slam_env),
