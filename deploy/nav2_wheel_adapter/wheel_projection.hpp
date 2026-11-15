@@ -81,13 +81,20 @@ struct WheelLimits {
       }
     }
     if (!found) return {0., 0.};
-    return {std::abs(best.first) <= 1e-12 ? 0. : best.first,
-            std::abs(best.second) <= 1e-12 ? 0. : best.second/half};
+    // Match Python's exact body envelope after floating-point intersections
+    // and conversion back from wheel turn to angular velocity.
+    const auto body_bound = [](double value, double requested, double cap) {
+      const double magnitude = std::min({std::max(0., std::copysign(1., requested)*value),
+                                         std::abs(requested), cap});
+      return magnitude > 1e-12 ? std::copysign(magnitude, requested) : 0.;
+    };
+    return {body_bound(best.first, v, max_v), body_bound(best.second/half, omega, max_omega)};
   }
 
-  // MPPI averages can cross the non-convex wheel deadband. A source wheel may
-  // stop as well as remain in its original direction. The canonical V3 helper
-  // above keeps its established semantics for all existing callers.
+  // MPPI averages can cross the non-convex wheel deadband. Retain the canonical
+  // fixed-family projection too: reducing curvature can raise the inner wheel
+  // to its floor without amplifying either body axis. Stopped-wheel branches
+  // add feasible pivots, but must not exclude such ordinary rolling arcs.
   std::pair<double, double> projectMppi(double v, double omega) const {
     if (!std::isfinite(v) || !std::isfinite(omega) || track <= 0.) return {0., 0.};
     const double half=track*.5, turn=omega*half;
@@ -97,6 +104,7 @@ struct WheelLimits {
       const double value=std::pow(candidate.first-v,2)+std::pow((candidate.second-omega)*half,2);
       if (value+1e-14<score) {score=value; best=candidate;}
     };
+    offer(project(v,omega));
     for (int branch=0;branch<4;++branch) offer(project(v,omega,branch));
     const double left=v-turn,right=v+turn;
     if (left*right<0.) {

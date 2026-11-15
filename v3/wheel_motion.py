@@ -110,8 +110,16 @@ class WheelMotionLimits:
         if not feasible:
             return 0.0, 0.0
         x, y = min(feasible, key=lambda p: ((p[0]-v)**2 + (p[1]-turn)**2, p))
-        return (0.0 if abs(x) <= 1e-12 else x,
-                0.0 if abs(y) <= 1e-12 else y/half_track)
+        # Plane intersections and the turn -> omega conversion can round one
+        # ULP outside the requested body envelope. L9's strict no-amplification
+        # contract must hold for the returned values, not just within the
+        # solver's feasibility tolerance.
+        def body_bound(value: float, requested: float, cap: float) -> float:
+            magnitude = min(max(0.0, math.copysign(1.0, requested) * value),
+                            abs(requested), cap)
+            return math.copysign(magnitude, requested) if magnitude > 1e-12 else 0.0
+        return (body_bound(x, v, max_v_mps),
+                body_bound(y/half_track, omega, max_omega_rad_s))
 
     def degraded_linear_cap(self, v: float, omega: float, scale: float) -> float:
         # Reserve room for steering at the reduced angular cap. The caller's

@@ -1,0 +1,33 @@
+[INFO] [1794741490.990252906] [lifecycle_manager_navigation]: Creating
+[INFO] [1794741491.018605198] [lifecycle_manager_navigation]: [34m[1mCreating and initializing lifecycle service clients[0m[0m
+[INFO] [1794741491.222526786] [lifecycle_manager_navigation]: [34m[1mStarting managed nodes bringup...[0m[0m
+[INFO] [1794741491.222605323] [lifecycle_manager_navigation]: [34m[1mConfiguring planner_server[0m[0m
+[INFO] [1794741491.361831617] [lifecycle_manager_navigation]: [34m[1mConfiguring controller_server[0m[0m
+[INFO] [1794741491.528113194] [lifecycle_manager_navigation]: [34m[1mConfiguring behavior_server[0m[0m
+[INFO] [1794741491.635577233] [lifecycle_manager_navigation]: [34m[1mConfiguring bt_navigator[0m[0m
+[INFO] [1794741492.099448266] [lifecycle_manager_navigation]: [34m[1mActivating planner_server[0m[0m
+[INFO] [1794741492.413612557] [lifecycle_manager_navigation]: Server planner_server connected with bond.
+[INFO] [1794741492.413674317] [lifecycle_manager_navigation]: [34m[1mActivating controller_server[0m[0m
+[INFO] [1794741492.626653253] [lifecycle_manager_navigation]: Server controller_server connected with bond.
+[INFO] [1794741492.626718679] [lifecycle_manager_navigation]: [34m[1mActivating behavior_server[0m[0m
+[INFO] [1794741492.736749621] [lifecycle_manager_navigation]: Server behavior_server connected with bond.
+[INFO] [1794741492.736845492] [lifecycle_manager_navigation]: [34m[1mActivating bt_navigator[0m[0m
+[INFO] [1794741492.892402305] [lifecycle_manager_navigation]: Server bt_navigator connected with bond.
+[INFO] [1794741492.892463083] [lifecycle_manager_navigation]: [34m[1mManaged nodes are active[0m[0m
+[INFO] [1794741492.892478657] [lifecycle_manager_navigation]: [34m[1mCreating bond timer...[0m[0m
+[INFO] [1794741571.690002862] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794741571.690666329] [lifecycle_manager_navigation]: Running Nav2 LifecycleManager rcl preshutdown (lifecycle_manager_navigation)
+[INFO] [1794741571.691922262] [lifecycle_manager_navigation]: [34m[1mTerminating bond timer...[0m[0m
+[INFO] [1794741571.692607229] [lifecycle_manager_navigation]: [34m[1mHave not received a heartbeat from behavior_server.[0m[0m
+[ERROR] [1794741571.692991546] [lifecycle_manager_navigation]: CRITICAL FAILURE: SERVER behavior_server IS DOWN after not receiving a heartbeat for 2000 ms. Shutting down related nodes.
+[INFO] [1794741571.693081676] [lifecycle_manager_navigation]: [34m[1mResetting managed nodes...[0m[0m
+[INFO] [1794741571.693137028] [lifecycle_manager_navigation]: [34m[1mDeactivating bt_navigator[0m[0m
+[ERROR] [1794741571.694637296] [lifecycle_manager_navigation]: Failed to change state for node: bt_navigator
+[INFO] [1794741571.694719204] [lifecycle_manager_navigation]: [34m[1mDeactivating behavior_server[0m[0m
+[ERROR] [1794741571.695494042] [lifecycle_manager_navigation]: Failed to change state for node: behavior_server
+[INFO] [1794741571.695568024] [lifecycle_manager_navigation]: [34m[1mDeactivating controller_server[0m[0m
+[ERROR] [1794741571.696085823] [lifecycle_manager_navigation]: Failed to change state for node: controller_server
+[INFO] [1794741571.696213139] [lifecycle_manager_navigation]: [34m[1mDeactivating planner_server[0m[0m
+[ERROR] [1794741571.698466170] [lifecycle_manager_navigation]: Failed to change state for node: planner_server
+[INFO] [1794741571.698547652] [lifecycle_manager_navigation]: [34m[1mCleaning up bt_navigator[0m[0m
+[ERROR] [1794741571.742473182] [lifecycle_manager_navigation]: Failed to change state for node: bt_navigator

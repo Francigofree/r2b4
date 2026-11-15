@@ -140,7 +140,7 @@ def _write_geometry(paths, control):
              f"      xy_goal_tolerance: {constraints.goal_tolerance_m / 2}\n"
              f"      yaw_goal_tolerance: {constraints.yaw_tolerance_rad / 2}\n"
              "    FollowPath:\n"
-             f"      vx_max: {min(.30, limits.max_v_mps)}\n"
+             f"      vx_max: {limits.max_v_mps}\n"
              f"      vx_min: {-min(.20, limits.max_v_mps)}\n"
              f"      wz_max: {limits.max_omega_rad_s}\n"
              f"      ax_max: {max(limits.max_acceleration_mps2, minimum * 20.0 * 1.1)}\n"

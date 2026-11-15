@@ -13,8 +13,10 @@ import pytest
 
 from rig import ROOT, healthy_localization, resolved_config
 from tools.nav2_planner import _write_geometry
-from v3.contracts import (LOCAL_FRAME_ID, MotionIntent, RobotEstimate, TickContext)
-from v3.layers.l9_operational_constraints import OperationalConstraintLayer
+from v3.contracts import (LOCAL_FRAME_ID, MotionIntent, QualityState, RobotEstimate, TickContext)
+from v3.layers.l9_operational_constraints import (
+    OperationalConstraintLayer, OperationalConstraintsStateCheckpoint,
+)
 from v3.wheel_motion import WheelMotionLimits
 
 
@@ -52,6 +54,15 @@ int main() {
   check(0., 0., 0.); // t=0 checked even for a stop
   const auto e=r2b4_nav2::commandEvidence(&map, footprint, 0., 0., 0., 0., 0.);
   std::cout << e.reason << " " << e.sample << " " << e.cell_x << " " << e.cell_y << " " << e.cost << "\n";
+  // A reduced-curvature projection visits different cells. It must be
+  // rechecked even when the original MPPI arc was collision-free.
+  nav2_costmap_2d::Costmap2D changed_arc(100, 100, .01, -.5, -.5, 0);
+  changed_arc.setCost(74, 42, nav2_costmap_2d::LETHAL_OBSTACLE);
+  r2b4_nav2::WheelLimits limits{.3557, .15, .582, .45, 1.4, 32.};
+  const double v=.1754808426, omega=.4100486338;
+  const auto projected=limits.projectMppi(v, omega);
+  std::cout << r2b4_nav2::commandCollides(&changed_arc, footprint, 0., 0., 0., v, omega) << "\n";
+  std::cout << r2b4_nav2::commandCollides(&changed_arc, footprint, 0., 0., 0., projected.first, projected.second) << "\n";
 }
 ''')
     (tmp_path / "CMakeLists.txt").write_text('''
@@ -81,7 +92,7 @@ target_link_libraries(collision "''' + str(prefix / "lib/libmppi_controller.so")
         capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == ["0", "1", "0", "1", "1", "1", "0", "1",
-        "lethal_cell 0 50 50 254"]
+        "lethal_cell 0 50 50 254", "0", "1"]
 
 
 @pytest.fixture(scope="module")
@@ -135,8 +146,8 @@ int main(int argc, char **) {
 def _assert_envelope(limits, v, omega, caps, projected):
     result_v, result_omega = projected
     tolerance = 2e-10
-    assert abs(result_v) <= min(abs(v), caps[0]) + tolerance
-    assert abs(result_omega) <= min(abs(omega), caps[1]) + tolerance
+    assert abs(result_v) <= min(abs(v), caps[0])
+    assert abs(result_omega) <= min(abs(omega), caps[1])
     if abs(result_v) > tolerance:
         assert abs(result_omega) <= caps[2] * abs(result_v) + tolerance
     source_wheels = limits.wheels(v, omega)
@@ -202,6 +213,42 @@ def _scalar(text, name):
     return float(values[0])
 
 
+def test_projection_roundoff_cannot_amplify_body_axes_or_fault_l9(native_projector):
+    control = resolved_config().runtime.composition.live_control.control
+    physical = control.operational_constraints
+    limits = physical.wheel_limits
+    cap = limits.degraded_linear_cap(physical.max_v_mps, physical.max_omega_rad_s,
+                                     physical.degraded_velocity_scale)
+    # First failing simulator tick: the turn/half-track round trip amplified
+    # omega by one ULP and violated ConstrainedMotion's strict envelope.
+    v, omega = .30000001192092896, .05078178644180298
+    cases = [(sv*x, sw*w) for x in (math.nextafter(v, 0.), v, math.nextafter(v, math.inf))
+        for w in (math.nextafter(omega, 0.), omega, math.nextafter(omega, math.inf))
+        for sv in (-1., 1.) for sw in (-1., 1.)]
+    actual = native_projector([(limits.track_width_m, limits.minimum_mps,
+        limits.maximum_mps, cap, physical.max_omega_rad_s,
+        physical.max_curvature_rad_per_m, x, w) for x, w in cases])
+    for (x, w), native in zip(cases, actual):
+        projected = limits.constrain(x, w, max_v_mps=cap,
+            max_omega_rad_s=physical.max_omega_rad_s,
+            max_curvature_rad_per_m=physical.max_curvature_rad_per_m)
+        for result in (native, projected):
+            assert abs(result[0]) <= min(abs(x), cap)
+            assert abs(result[1]) <= abs(w)
+            _assert_envelope(limits, x, w, (cap, physical.max_omega_rad_s,
+                physical.max_curvature_rad_per_m), result)
+        context = TickContext(932, 2_000_000_000)
+        limiter = OperationalConstraintLayer(physical)
+        limiter.restore(OperationalConstraintsStateCheckpoint(
+            TickContext(931, 1_980_000_000), math.copysign(cap, x),
+            math.copysign(.05273760482668876, w)))
+        estimate = RobotEstimate(context, LOCAL_FRAME_ID, 0., 0., 0., 0., 0.,
+            (0.,)*25, localization_quality=healthy_localization(local_translation=QualityState.DEGRADED))
+        result = limiter.evaluate(MotionIntent(context, x, w, 20_000_000,
+            control.mission.default_constraints, transition_allowed=True), estimate)
+        assert abs(result.allowed_omega_rad_s) <= abs(w)
+
+
 def test_nav2_geometry_crosses_deadband_but_physical_l9_ramp_and_goal_contract_stay_bounded(tmp_path):
     control = resolved_config().runtime.composition.live_control.control
     physical = control.operational_constraints
@@ -214,6 +261,7 @@ def test_nav2_geometry_crosses_deadband_but_physical_l9_ramp_and_goal_contract_s
     assert proposal_acceleration * period >= physical.wheel_limits.target_center_spin_rad_s
     assert _scalar(geometry, "ax_max") * period >= physical.wheel_limits.target_minimum_mps
     assert _scalar(geometry, "wz_max") >= physical.wheel_limits.target_center_spin_rad_s
+    assert _scalar(geometry, "vx_max") == physical.max_v_mps
     assert 0. < _scalar(geometry, "xy_goal_tolerance") <= control.mission.default_constraints.goal_tolerance_m
     assert 0. < _scalar(geometry, "yaw_goal_tolerance") <= control.mission.default_constraints.yaw_tolerance_rad
     for key, expected in {
@@ -241,11 +289,17 @@ def test_nav2_geometry_crosses_deadband_but_physical_l9_ramp_and_goal_contract_s
     assert allowed.allowed_omega_rad_s < proposal_acceleration * .02
 
 
-def test_mppi_stop_branches_retain_drivable_arcs_spin_and_reverse_without_amplification(native_projector):
+def test_mppi_projection_retains_rolling_arcs_pivots_spin_and_reverse_within_body_envelope(native_projector):
     limits = WheelMotionLimits(track_width_m=.3557, minimum_mps=.15, maximum_mps=.582)
     caps = (.45, 1.4, 32.)
     cases = [(.1087, -.8206), (-.1087, .8206), (0., .9), (.001, 1.),
              (.2, .2), (-.2, 0.), (.1, 0.), (0., .5)]
+    # Live sequence 7: the original inner wheel is below the floor. Both body
+    # axes can stay bounded while curvature decreases and that wheel reaches
+    # the physical minimum. Individual raw wheel magnitudes are not hard caps.
+    counterexample = (.1754808426, .4100486338)
+    cases += [(sv*counterexample[0], sw*counterexample[1])
+              for sv in (-1., 1.) for sw in (-1., 1.)]
     rng = random.Random(0x5243)
     cases += [(rng.uniform(-.45, .45), rng.uniform(-1.4, 1.4)) for _ in range(1000)]
     actual = native_projector([(limits.track_width_m, .15, .582, *caps, v, w)
@@ -255,10 +309,12 @@ def test_mppi_stop_branches_retain_drivable_arcs_spin_and_reverse_without_amplif
     assert actual[2] == pytest.approx((0., .9))
     assert actual[3][0] == 0. and actual[3][1] > .9
     assert actual[4:8] == pytest.approx([(.2, .2), (-.2, 0.), (0., 0.), (0., 0.)])
+    for (v, w), result in zip(cases[8:12], actual[8:12]):
+        assert result[0] == pytest.approx(v)
+        assert 0. < abs(result[1]) < abs(w)
+        assert min(abs(x) for x in limits.wheels(*result)) == pytest.approx(limits.minimum_mps)
     for (v, w), result in zip(cases, actual):
         _assert_envelope(limits, v, w, caps, result)
-        for source, projected in zip(limits.wheels(v, w), limits.wheels(*result)):
-            assert abs(projected) <= abs(source)+2e-10
         # The ROS adaptation enters V3's unchanged physical envelope unchanged.
         assert limits.constrain(*result, max_v_mps=caps[0], max_omega_rad_s=caps[1],
             max_curvature_rad_per_m=caps[2]) == pytest.approx(result, abs=2e-10)
