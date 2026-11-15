@@ -6,10 +6,10 @@
 #include "pluginlib/class_list_macros.hpp"
 #include "std_msgs/msg/string.hpp"
 #include <array>
+#include <optional>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
-#include <optional>
 #include <sstream>
 
 namespace r2b4_nav2 {
@@ -21,20 +21,61 @@ struct CollisionEvidence {
   double sampling_guard = 0.;
 };
 
-// One command evaluation holds the costmap mutex, including all alternative
-// velocities. Reuse its exact hard-cell set only within that evaluation; no
-// costmap revision, pose or footprint can make a later command use old cells.
-struct CollisionCells {
-  struct Cell {int x, cost;};
-  std::vector<std::vector<Cell>> rows;
-  explicit CollisionCells(nav2_costmap_2d::Costmap2D *map)
-      : rows(map->getSizeInCellsY()) {
-    for (unsigned int y=0; y<map->getSizeInCellsY(); ++y)
-      for (unsigned int x=0; x<map->getSizeInCellsX(); ++x) {
-        const int cost=map->getCost(x,y);
-        if (cost>=nav2_costmap_2d::LETHAL_OBSTACLE)
-          rows[y].push_back({static_cast<int>(x),cost});
+// Reuse only footprint-invariant geometry within one mutex-held command
+// evaluation. Each new call observes the current footprint and costmap.
+struct CollisionFootprint {
+  struct Axis {double x,y,low,high;};
+  double radius=0.;
+  bool points_valid=true, axes_valid=true;
+  std::vector<Axis> axes;
+  explicit CollisionFootprint(const nav2_costmap_2d::Footprint &footprint) {
+    if (footprint.size()<3 || footprint.size()>32) {points_valid=false; return;}
+    for (const auto &p:footprint) {
+      if (!std::isfinite(p.x+p.y)) {points_valid=false; return;}
+      radius=std::max(radius,std::hypot(p.x,p.y));
+    }
+    axes.reserve(footprint.size());
+    for (size_t i=0;i<footprint.size();++i) {
+      const auto &p=footprint[i], &q=footprint[(i+1)%footprint.size()];
+      double nx=q.y-p.y,ny=p.x-q.x, length=std::hypot(nx,ny);
+      if (length<1e-12) {axes_valid=false; return;}
+      nx/=length; ny/=length;
+      double low=1e100,high=-1e100;
+      for (const auto &vertex:footprint) {
+        const double d=nx*vertex.x+ny*vertex.y;
+        low=std::min(low,d); high=std::max(high,d);
       }
+      if (high-(nx*p.x+ny*p.y)>1e-9) {axes_valid=false; return;}
+      axes.push_back({nx,ny,low,high});
+    }
+  }
+};
+
+// Lazily summarize hard cells in rows revisited by a swept footprint. The
+// costmap mutex covers this entire short-lived cache and every alternative.
+// A zero bit range skips only cells the original loop would also skip.
+struct CollisionRows {
+  nav2_costmap_2d::Costmap2D *map;
+  size_t words;
+  std::vector<uint64_t> bits;
+  std::vector<bool> ready;
+  explicit CollisionRows(nav2_costmap_2d::Costmap2D *value)
+      : map(value), words((map->getSizeInCellsX()+63)/64),
+        bits(words*map->getSizeInCellsY()), ready(map->getSizeInCellsY(),false) {}
+  bool clear(int y,int minx,int maxx) {
+    auto *row=bits.data()+y*words;
+    if (!ready[y]) {
+      for (unsigned int x=0;x<map->getSizeInCellsX();++x)
+        if (map->getCost(x,y)>=nav2_costmap_2d::LETHAL_OBSTACLE)
+          row[x/64]|=uint64_t{1}<<(x%64);
+      ready[y]=true;
+    }
+    for (int word=minx/64;word<=maxx/64;++word) {
+      const int low=word==minx/64?minx%64:0;
+      const int high=word==maxx/64?maxx%64:63;
+      if (row[word] & ((UINT64_MAX<<low) & (UINT64_MAX>>(63-high)))) return false;
+    }
+    return true;
   }
 };
 
@@ -43,38 +84,28 @@ struct CollisionCells {
 // Inflation is a preference; lethal, unknown and map exit are hard constraints.
 CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
     const nav2_costmap_2d::Footprint &footprint, double x, double y, double yaw,
-    double v, double omega, const CollisionCells *shared_cells=nullptr) {
+    double v, double omega, const CollisionFootprint *shared_geometry=nullptr,
+    CollisionRows *shared_rows=nullptr) {
   CollisionEvidence e;
   e.origin_x=map->getOriginX(); e.origin_y=map->getOriginY(); e.resolution=map->getResolution();
   const double res=map->getResolution(), r=res*.5;
-  double radius=0.;
   if (footprint.size()<3 || footprint.size()>32 || !std::isfinite(res) || res<=0. ||
       !std::isfinite(x+y+yaw+v+omega)) {e.reason="invalid_geometry"; return e;}
-  struct Axis {double x,y,low,high;};
-  std::vector<Axis> axes;
-  for (const auto &p : footprint) {
-    if (!std::isfinite(p.x+p.y)) {e.reason="invalid_geometry"; return e;}
-    radius=std::max(radius,std::hypot(p.x,p.y));
+  std::optional<CollisionFootprint> own_geometry;
+  if (!shared_geometry) {
+    own_geometry.emplace(footprint);
+    shared_geometry=&*own_geometry;
   }
-  const double travel=std::abs(v)+radius*std::abs(omega); // unchanged one-second horizon
+  const auto &geometry=*shared_geometry;
+  if (!geometry.points_valid) {e.reason="invalid_geometry"; return e;}
+  const double travel=std::abs(v)+geometry.radius*std::abs(omega); // unchanged one-second horizon
   if (travel/(res*.25)>128.) {e.reason="trajectory_bound_exceeded"; return e;}
   e.steps=std::max(1,static_cast<int>(std::ceil(travel/(res*.25))));
   if (e.steps>128) {e.reason="trajectory_bound_exceeded"; return e;}
   e.sampling_guard=travel/(2*e.steps);
-  for (size_t i=0;i<footprint.size();++i) {
-    const auto &p=footprint[i], &q=footprint[(i+1)%footprint.size()];
-    double nx=q.y-p.y,ny=p.x-q.x, length=std::hypot(nx,ny);
-    if (length<1e-12) {e.reason="invalid_geometry"; return e;}
-    nx/=length; ny/=length;
-    double low=1e100,high=-1e100;
-    for (const auto &vertex:footprint) {
-      const double d=nx*vertex.x+ny*vertex.y;
-      low=std::min(low,d); high=std::max(high,d);
-    }
-    // CCW convex footprint only; fail closed on an invalid configuration.
-    if (high-(nx*p.x+ny*p.y)>1e-9) {e.reason="invalid_geometry"; return e;}
-    axes.push_back({nx,ny,low-e.sampling_guard,high+e.sampling_guard});
-  }
+  if (!geometry.axes_valid) {e.reason="invalid_geometry"; return e;}
+  auto axes=geometry.axes;
+  for (auto &a:axes) {a.low-=e.sampling_guard; a.high+=e.sampling_guard;}
   nav2_costmap_2d::Footprint guarded(footprint.size());
   for (size_t i=0;i<axes.size();++i) {
     const auto &a=axes[(i+axes.size()-1)%axes.size()], &b=axes[i];
@@ -90,13 +121,9 @@ CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
       a.low=std::min(a.low,d); a.high=std::max(a.high,d);
     }
   }
-  std::optional<CollisionCells> own_cells;
-  if (!shared_cells) {
-    own_cells.emplace(map);
-    shared_cells=&*own_cells;
-  }
   struct WorldAxis {double nx,ny,extent;};
-  std::vector<WorldAxis> world_axes(axes.size());
+  std::array<WorldAxis,32> world_axes;
+  std::optional<CollisionRows> own_rows;
   for (int i=0; i<=e.steps; ++i) {
     const double t=static_cast<double>(i)/e.steps, angle=yaw+omega*t;
     const double px=x+(std::abs(omega)<1e-9 ? v*t*std::cos(yaw)
@@ -119,28 +146,32 @@ CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
         maxy>=static_cast<int>(map->getSizeInCellsY())) {
       e.reason="out_of_map"; e.cell_x=minx<0?minx:maxx; e.cell_y=miny<0?miny:maxy; return e;
     }
-    bool axes_ready=false;
+    size_t ready_axes=0;
+    // Preserve the cheap early collision exit. Short sweeps do not revisit
+    // enough cells to amortize even a lazy row summary.
+    const bool reuse_rows=i>0 && e.steps>=8;
+    if (reuse_rows && !shared_rows) {
+      own_rows.emplace(map);
+      shared_rows=&*own_rows;
+    }
     for (int my=miny; my<=maxy; ++my) {
-      const auto &row=shared_cells->rows[my];
-      auto cell=std::lower_bound(row.begin(),row.end(),minx,
-          [](const auto &entry,int value) {return entry.x<value;});
-      for (; cell!=row.end() && cell->x<=maxx; ++cell) {
-      const int mx=cell->x, cost=cell->cost;
+      if (reuse_rows && shared_rows->clear(my,minx,maxx)) continue;
+      for (int mx=minx; mx<=maxx; ++mx) {
+      const int cost=map->getCost(mx,my);
+      if (cost<nav2_costmap_2d::LETHAL_OBSTACLE) continue;
       double wx,wy; map->mapToWorld(mx,my,wx,wy);
       const double dx=wx-px,dy=wy-py;
       if (wx+r<xmin-1e-10 || wx-r>xmax+1e-10 ||
           wy+r<ymin-1e-10 || wy-r>ymax+1e-10) continue;
       bool separated=false;
-      if (!axes_ready) {
-        for (size_t j=0; j<axes.size(); ++j) {
-          const auto &a=axes[j];
+      for (size_t j=0; j<axes.size(); ++j) {
+        const auto &a=axes[j];
+        if (j==ready_axes) {
           const double nx=c*a.x-s*a.y, ny=s*a.x+c*a.y;
           world_axes[j]={nx,ny,r*(std::abs(nx)+std::abs(ny))};
+          ++ready_axes;
         }
-        axes_ready=true;
-      }
-      for (size_t j=0; j<axes.size(); ++j) {
-        const auto &a=axes[j]; const auto &w=world_axes[j];
+        const auto &w=world_axes[j];
         const double d=w.nx*dx+w.ny*dy;
         if (d<a.low-w.extent-1e-10 || d>a.high+w.extent+1e-10) {separated=true; break;}
       }
@@ -168,9 +199,10 @@ CommandProjection collisionFreeCommand(nav2_costmap_2d::Costmap2D *map,
     const nav2_costmap_2d::Footprint &footprint, double x, double y, double yaw,
     const WheelLimits &limits, double v, double omega, std::pair<double,double> initial) {
   CommandProjection result{initial, {}};
-  const CollisionCells cells(map);
+  const CollisionFootprint geometry(footprint);
+  CollisionRows rows(map);
   auto check = [&](std::pair<double,double> command) {
-    return commandEvidence(map,footprint,x,y,yaw,command.first,command.second,&cells);
+    return commandEvidence(map,footprint,x,y,yaw,command.first,command.second,&geometry,&rows);
   };
   result.collision=check(result.command);
   if (std::string(result.collision.reason)=="clear") return result;

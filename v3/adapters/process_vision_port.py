@@ -156,7 +156,6 @@ class ProcessVisionPort:
                  socket_path: str | Path | None = None) -> None:
         self._client = VisionClient(socket_path, root=root, timeout_s=ready_timeout_s)
         self._condition = threading.Condition()
-        self._wake = threading.Event()
         self._closed = False
         self._demand = False
         self._revision = 0
@@ -195,7 +194,6 @@ class ProcessVisionPort:
             self._clear()
             conn = self._conn if not active else None
             self._condition.notify_all()
-        self._wake.set()
         if conn is not None:
             try:
                 conn.shutdown(socket.SHUT_RDWR)
@@ -242,11 +240,10 @@ class ProcessVisionPort:
     def _collect(self) -> None:
         import select
         while not self._closed:
-            self._wake.wait(0.1)
-            self._wake.clear()
             with self._condition:
-                if not self._demand:
-                    continue
+                self._condition.wait_for(lambda: self._closed or self._demand)
+                if self._closed:
+                    return
                 revision = self._revision
             conn = None
             reader = None
@@ -262,7 +259,10 @@ class ProcessVisionPort:
                     with self._condition:
                         if not self._demand or revision != self._revision:
                             break
-                    readable, _, _ = select.select([conn], [], [], 0.05)
+                    # Demand release/stop shuts this socket down, waking the
+                    # wait immediately. Silence needs no periodic Python wake;
+                    # freshness still expires from the original measurement.
+                    readable, _, _ = select.select([conn], [], [])
                     if readable:
                         self._accept(recv_json_line(conn, reader=reader), revision)
             except Exception as exc:
@@ -272,12 +272,9 @@ class ProcessVisionPort:
                         self._condition.notify_all()
                 # A failed active demand is explicit. Do not silently reconnect
                 # and replace its generation; the mission must release it.
-                while not self._closed:
-                    with self._condition:
-                        if revision != self._revision or not self._demand:
-                            break
-                    self._wake.wait(0.1)
-                    self._wake.clear()
+                with self._condition:
+                    self._condition.wait_for(lambda: self._closed
+                        or revision != self._revision or not self._demand)
             finally:
                 if reader is not None:
                     reader.close()
@@ -376,7 +373,6 @@ class ProcessVisionPort:
             self._revision += 1
             self._clear()
             self._condition.notify_all()
-        self._wake.set()
         conn = self._conn
         if conn is not None:
             try:
