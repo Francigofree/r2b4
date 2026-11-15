@@ -54,6 +54,8 @@ def test_real_v3_sensor_edge_preserves_delayed_lineage_without_truth_fix(tmp_pat
         plant.step()
         first={row.kind:row for row in records[-1].inputs.raw_devices.samples}
         assert "lidar_pose" not in first and "lidar_relative_motion" not in first
+        safety={field.key:field.value for field in first["lidar_safety_clearance"].values}
+        assert safety["clearance_basis"]==config.lidar_safety.clearance_basis
         measured=first["lidar_local_points"].captured_monotonic_ns
         sequence=first["lidar_local_points"].sequence
         plant.faults={"lidar_drop"}
@@ -123,3 +125,48 @@ def test_comparison_never_rewards_a_short_failed_or_unpaired_run():
 def test_default_search_has_independent_geometry():
     suite=read_suite(None)
     assert suite["train"][0]["room"]!=suite["holdout"][0]["room"]
+
+
+def _complete_result():
+    result=_result()
+    result.update(virtual_body_stopped=True,failures=[],termination="GOAL_COMPLETE")
+    result["metrics"].update(active_samples=100,goal_reached=True,longest_stationary_s=.1,unique_coverage_cells=4)
+    return result
+
+
+def test_tuning_rejects_truncated_evidence_and_does_not_reward_loops():
+    from tools.navigation_simulator.experiments import safe_evidence,score
+    result=_complete_result()
+    assert safe_evidence(result)
+    result.update(termination="DURATION_REACHED")
+    result["metrics"].update(active_duration_s=.02,active_samples=1)
+    assert not safe_evidence(result)
+    first=_complete_result()
+    first["scenario"]["behavior"]="roomcruise"
+    second=deepcopy(first)
+    second["metrics"]["path_length_m"]*=100
+    assert score(first)==score(second)
+
+
+def test_autotune_freezes_train_winner_before_holdout_and_never_reselects(tmp_path,monkeypatch):
+    from tools.navigation_simulator import runtime
+    from tools.navigation_simulator.experiments import search
+    calls=[]
+    def measure(root,directory,scene,*,domain,overlay=None):
+        result=_complete_result()
+        result["scenario"]=scene
+        result["scenario_sha256"]="train" if "train" in directory.parts else "holdout"
+        variant=overlay.get("vezerles",{}).get("layers",{}).get("motion_realization",{}).get("heading_gain") if overlay else None
+        calls.append(("holdout" if "holdout" in directory.parts else "train",variant))
+        if variant is not None:
+            result["metrics"]["active_duration_s"]=8 if variant==1.1 else 6
+        if "holdout" in directory.parts and variant is not None:
+            result.update(status="FAIL",termination="DURATION_REACHED",failures=["TRUTH_GOAL_NOT_REACHED"])
+            result["metrics"].update(active_duration_s=scene["duration_s"],goal_reached=False)
+        return result
+    monkeypatch.setattr(runtime,"run",measure)
+    patches=[{"vezerles":{"layers":{"motion_realization":{"heading_gain":value}}}} for value in (1.1,1.2)]
+    result=search(PROJECT_ROOT,tmp_path,read_suite(None),patches)
+    assert result["frozen_train_winner"]==1 and result["best_index"] is None
+    assert calls==[("train",None),("train",1.1),("train",1.2),("holdout",None),("holdout",1.2)]
+    assert not (tmp_path/"best_override.json").exists()

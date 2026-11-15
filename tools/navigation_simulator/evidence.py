@@ -77,7 +77,7 @@ def analyze(capture, root, output, *, compile_reports=True):
     inspection = inspect_mcap(capture, deep=True)
     result = {"schema": "R2B4_LOCAL_NAVIGATION_ANALYSIS_V1", "source": str(capture.resolve()),
               "source_sha256": file_hash(capture), "inspection": inspection, "physical_output": False,
-              "findings": [], "reports": {}}
+              "findings": [], "reports": {}, "analysis_source_sha256":source_snapshot(root)["sha256"]}
     if inspection["status"] != "PASS" or inspection["final_metadata"].get("complete")!="true":
         result.update(status="BLOCKED", reason="CAPTURE_INTEGRITY_FAILURE")
         write(output / "analysis.json", result)
@@ -175,9 +175,24 @@ def scenario_from_mcap(capture):
             return validate(original)
     poses = deque(maxlen=8)
     observations = []
+    incident=None
+    for message,row in reader.iter_json_messages(topics=(TICK_TOPIC,EVENT_TOPIC)):
+        if message.topic==EVENT_TOPIC:
+            if row.get("source_topic")!="v3.navigation_decision":
+                continue
+            row=row.get("payload",{})
+        layers=row.get("expected",{}).get("layers",{})
+        fault=row.get("expected",{}).get("fault_layer")
+        if fault or layers.get("L12",{}).get("safety_decision")=="FAULT" or layers.get("L6",{}).get("status")=="FAILED":
+            incident={"tick_id":row.get("tick_id"),"monotonic_ns":row.get("monotonic_ns",message.log_time_ns),
+                      "fault_layer":fault,"navigation_reason":layers.get("L6",{}).get("reason"),
+                      "safety_reason":layers.get("L12",{}).get("reason")}
+            break
     # First scan-bound scene only; avoids combining moving objects and drift
     # over an entire run into one purported static world.
-    for message, row in reader.iter_json_messages(topics=(TICK_TOPIC, EVENT_TOPIC)):
+    window=({"start_ns":max(0,incident["monotonic_ns"]-500_000_000),
+             "end_ns":incident["monotonic_ns"]+250_000_000} if incident else {})
+    for message, row in reader.iter_json_messages(topics=(TICK_TOPIC, EVENT_TOPIC),**window):
         if message.topic == TICK_TOPIC:
             pose = row.get("expected", {}).get("layers", {}).get("L3", {}).get("global_pose")
             if pose:
@@ -209,6 +224,7 @@ def scenario_from_mcap(capture):
                              "scan_sequence": observation["source_sequence"],
                              "measurement_monotonic_ns": observation["measurement_monotonic_ns"],
                              "pose_monotonic_ns": timestamp, "pose": pose,
+                             "recorded_incident":incident,
                              "reconstruction": "single robot-base endpoint cloud, 0.2 m occupied cells, approximate room bounds",
                              "truncated_cells": max(0,len(cells)-64), "exact_replay": False,
                              "unobserved_space": "assumed empty; requires human review", "causal_reproduction_proven": False})

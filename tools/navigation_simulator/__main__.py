@@ -26,7 +26,7 @@ def parser():
         child.add_argument("--output",type=Path)
         if name=="analyze":
             child.add_argument("--summary-only",action="store_true",help="stream native timeline without compiling DIAG reports")
-    for name in ("simulate","regression","stress"):
+    for name in ("simulate","regression","stress","watch"):
         child=commands.add_parser(name,aliases=["fault"] if name=="simulate" else [])
         child.add_argument("--scenario",help="built-in name or scenario JSON; regression defaults to recorded baseline scene")
         child.add_argument("--duration-s",type=float)
@@ -35,8 +35,10 @@ def parser():
         child.add_argument("--output",type=Path)
         if name=="simulate":
             child.add_argument("--no-replay",action="store_true")
-        if name=="regression":
+        if name in {"regression","watch"}:
             child.add_argument("--baseline",type=Path,required=True,help="previous result.json, same scenario; code may differ")
+        if name=="watch":
+            child.add_argument("--max-runs",type=int,default=20,help="initial regression, then source changes; stop on first failure")
         if name=="stress":
             child.add_argument("--repeat",type=int,default=10,help="finite serial sessions, stop on the first failure (1..1000)")
     child=commands.add_parser("autotune")
@@ -98,6 +100,11 @@ def main(argv=None,*,project_root=None):
             scenario=scenario_from_mcap(args.capture)
             write(output/"scenario.json",scenario)
             result={"status":"PASS","scenario":str(output/"scenario.json"),"physical_output":False}
+        elif args.mode=="watch":
+            from .watch import watch
+            if args.duration_s is not None or args.override is not None:
+                raise ValueError("watch uses the baseline scene and current production configuration; use --scenario for an explicit alternate scene")
+            result=watch(root,output,args.baseline,scenario=args.scenario,domain=args.ros_domain_id,max_runs=args.max_runs)
         elif args.mode=="autotune":
             import math
             if not math.isfinite(args.budget_s) or not 1<=args.budget_s<=86400:
