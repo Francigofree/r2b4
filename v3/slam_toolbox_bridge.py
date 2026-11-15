@@ -355,6 +355,10 @@ def run(args) -> int:
     node.create_subscription(OccupancyGrid, "/map", map_callback, map_qos)
     from v3.nav2_diagnostics import Nav2StatusWriter
     status_writer = Nav2StatusWriter(status_path, file_mode=0o600)
+    # Register once: the rclpy convenience wrapper adds/removes the node and
+    # triggers the executor guard on every poll, rebuilding an unchanged set.
+    executor = rclpy.get_global_executor()
+    executor.add_node(node)
     try:
         while not stopped and rclpy.ok():
             now = time.monotonic_ns()
@@ -485,7 +489,7 @@ def run(args) -> int:
                     if state["scans_published"] >= args.max_scans:
                         raise RuntimeError("SLAM_SESSION_SCAN_LIMIT_SAVE_AND_RESTART")
             spin_started_ns = time.monotonic_ns()
-            rclpy.spin_once(node, timeout_sec=0.005)
+            executor.spin_once(timeout_sec=0.005)
             state["spin_once_max_ns"] = max(state.get("spin_once_max_ns", 0),
                                             time.monotonic_ns()-spin_started_ns)
             if now - last_status_ns >= 200_000_000:
@@ -505,6 +509,7 @@ def run(args) -> int:
             if not status_writer.close():
                 print("SLAM status writer shutdown deadline exceeded", file=sys.stderr, flush=True)
         finally:
+            executor.remove_node(node)
             node.destroy_node()
             rclpy.shutdown()
             ingress.close()

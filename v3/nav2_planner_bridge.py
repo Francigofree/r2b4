@@ -134,9 +134,11 @@ def run(args):
         result.pose.orientation.z, result.pose.orientation.w = math.sin(yaw/2), math.cos(yaw/2)
         return result
 
+    executor = rclpy.get_global_executor()
+    executor.add_node(node)
     try:
         while not stopped and rclpy.ok():
-            rclpy.spin_once(node, timeout_sec=.002)
+            executor.spin_once(timeout_sec=.002)
             now = time.monotonic_ns()
             active = lifecycle.poll(now)
             state["state"] = "RUNNING" if active else "STARTING"
@@ -232,6 +234,7 @@ def run(args):
         if state["state"] != "FAILED":
             state["state"] = "STOPPED"
         status_path.write_text(json.dumps(state, sort_keys=True)+"\n")
+        executor.remove_node(node)
         node.destroy_node()
         rclpy.shutdown()
     return 0

@@ -60,10 +60,23 @@ def _expand_data_fields(value: object) -> object:
     return value
 
 
-def compact_tick_row(row: Mapping[str, object]) -> dict[str, object]:
+def compact_tick_row(row: Mapping[str, object], *, data_fields_compacted: bool = False) -> dict[str, object]:
     """Return a losslessly compacted tick row for on-disk JSON storage."""
 
-    compacted = _compact_data_fields(row)
+    if data_fields_compacted:
+        # The fused encoder owns a fresh graph. Copy only the dictionaries
+        # whose references below change; never mutate the caller's row.
+        compacted = dict(row)
+        expected = compacted.get("expected")
+        if isinstance(expected, dict):
+            expected = dict(expected)
+            compacted["expected"] = expected
+            layers = expected.get("layers")
+            if isinstance(layers, dict):
+                expected["layers"] = {name: dict(value) if isinstance(value, dict) else value
+                                      for name, value in layers.items()}
+    else:
+        compacted = _compact_data_fields(row)
     if not isinstance(compacted, dict):
         raise CaptureCompactionError("tick row must compact to an object")
 

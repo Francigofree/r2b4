@@ -667,15 +667,18 @@ class McapCaptureConsumer:
             # production publisher supplied only a bounded C-packed buffer.
             payload = unpack_local_costmap(payload)
         checkpoint: object | None = None
+        data_fields_compacted = False
         if isinstance(payload, BehaviorCaptureRecord):
-            row = encode_behavior_record(payload)
+            row = encode_behavior_record(payload, compact_data_fields=True)
+            data_fields_compacted = True
         elif item.topic == "v3.capture_record" and isinstance(payload, Mapping):
             row = dict(payload)
             checkpoint = row.pop(IPC_CHECKPOINT_KEY, None)
             row.pop(IPC_TRIGGER_REASON_KEY, None)
         elif isinstance(payload, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
             row = (encode_capture_record(payload) if self._config.sensor_debug
-                   else encode_behavior_record(project_behavior_record(payload)))
+                   else encode_behavior_record(project_behavior_record(payload), compact_data_fields=True))
+            data_fields_compacted = not self._config.sensor_debug
             if self._config.sensor_debug and isinstance(payload, ExecutionRecord) and payload.state_checkpoint_after is not None:
                 checkpoint = encode_value(payload.state_checkpoint_after)
         else:
@@ -689,7 +692,7 @@ class McapCaptureConsumer:
                 checkpoint = None
             if len(referenced) > self._config.max_referenced_revisions_per_tick:
                 raise CaptureEncodingError("tick exceeds referenced LiDAR revision bound")
-            stored_row = compact_tick_row(row)
+            stored_row = compact_tick_row(row, data_fields_compacted=data_fields_compacted)
             tick = EncodedRecord(
                 hub_sequence=item.sequence,
                 published_monotonic_ns=item.published_monotonic_ns,
@@ -791,7 +794,12 @@ class McapCaptureConsumer:
                 ),
             )
 
-        event = (encode_navigation_event(payload) if isinstance(payload, NavigationDecisionEvent)
+        # These two producer paths already supply validated JSON data: the
+        # Nav2 sampler decodes JSON, and local-costmap unpacking builds/validates
+        # its JSON row above. Re-encoding them only copies the same large graph.
+        # _json_bytes still rejects non-finite or non-JSON values.
+        event = (payload if item.topic in (NAV2_OBSERVATION_TOPIC, LOCAL_COSTMAP_TOPIC)
+                 else encode_navigation_event(payload) if isinstance(payload, NavigationDecisionEvent)
                  else encode_value(payload))
         event_time = item.published_monotonic_ns
         event_sequence = item.sequence

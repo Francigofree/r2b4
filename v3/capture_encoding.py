@@ -55,8 +55,13 @@ def _validate_trace_layers(
     return expected
 
 
-def encode_value(value: object) -> object:
+def encode_value(value: object, *, compact_data_fields: bool = False) -> object:
     """Encode typed V3 values without making serialization runtime authority."""
+
+    return _encode_value(value, compact_data_fields)
+
+
+def _encode_value(value: object, compact_data_fields: bool) -> object:
 
     if isinstance(value, Enum):
         return value.value
@@ -67,24 +72,35 @@ def encode_value(value: object) -> object:
             raise CaptureEncodingError("capture values must be finite")
         return value
     if is_dataclass(value) and not isinstance(value, type):
-        return {
+        encoded = {
             "__type__": type(value).__name__,
             **{
-                field.name: encode_value(getattr(value, field.name))
+                field.name: _encode_value(getattr(value, field.name), compact_data_fields)
                 for field in fields(value)
             },
         }
+        return _encoded_data_field(encoded) if compact_data_fields else encoded
     if isinstance(value, Mapping):
-        return {str(key): encode_value(item) for key, item in value.items()}
+        encoded = {str(key): _encode_value(item, compact_data_fields) for key, item in value.items()}
+        return _encoded_data_field(encoded) if compact_data_fields else encoded
     if isinstance(value, frozenset):
         if not all(isinstance(item, str) for item in value):
             raise CaptureEncodingError(
                 "capture frozenset values must contain strings"
             )
-        return [encode_value(item) for item in sorted(value)]
+        return [_encode_value(item, compact_data_fields) for item in sorted(value)]
     if isinstance(value, (tuple, list)):
-        return [encode_value(item) for item in value]
+        return [_encode_value(item, compact_data_fields) for item in value]
     raise CaptureEncodingError(f"cannot serialize capture value {type(value).__name__}")
+
+
+def _encoded_data_field(value: dict[str, object]) -> dict[str, object]:
+    # Exactly the existing on-disk DataField shape, fused into encoding so the
+    # observation consumer need not walk and copy the completed graph again.
+    if (len(value) == 3 and value.get("__type__") == "DataField"
+            and isinstance(value.get("key"), str) and "value" in value):
+        return {"$df": [value["key"], value["value"]]}
+    return value
 
 
 def encode_capture_record(record: CaptureRecord) -> dict[str, object]:

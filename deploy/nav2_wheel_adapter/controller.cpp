@@ -9,6 +9,7 @@
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 
 namespace r2b4_nav2 {
@@ -20,12 +21,29 @@ struct CollisionEvidence {
   double sampling_guard = 0.;
 };
 
+// One command evaluation holds the costmap mutex, including all alternative
+// velocities. Reuse its exact hard-cell set only within that evaluation; no
+// costmap revision, pose or footprint can make a later command use old cells.
+struct CollisionCells {
+  struct Cell {int x, cost;};
+  std::vector<std::vector<Cell>> rows;
+  explicit CollisionCells(nav2_costmap_2d::Costmap2D *map)
+      : rows(map->getSizeInCellsY()) {
+    for (unsigned int y=0; y<map->getSizeInCellsY(); ++y)
+      for (unsigned int x=0; x<map->getSizeInCellsX(); ++x) {
+        const int cost=map->getCost(x,y);
+        if (cost>=nav2_costmap_2d::LETHAL_OBSTACLE)
+          rows[y].push_back({static_cast<int>(x),cost});
+      }
+  }
+};
+
 // Check the complete configured convex polygon against complete occupied cells.
 // The generated polygon already includes the physical Euclidean body margin.
 // Inflation is a preference; lethal, unknown and map exit are hard constraints.
 CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
     const nav2_costmap_2d::Footprint &footprint, double x, double y, double yaw,
-    double v, double omega) {
+    double v, double omega, const CollisionCells *shared_cells=nullptr) {
   CollisionEvidence e;
   e.origin_x=map->getOriginX(); e.origin_y=map->getOriginY(); e.resolution=map->getResolution();
   const double res=map->getResolution(), r=res*.5;
@@ -72,6 +90,13 @@ CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
       a.low=std::min(a.low,d); a.high=std::max(a.high,d);
     }
   }
+  std::optional<CollisionCells> own_cells;
+  if (!shared_cells) {
+    own_cells.emplace(map);
+    shared_cells=&*own_cells;
+  }
+  struct WorldAxis {double nx,ny,extent;};
+  std::vector<WorldAxis> world_axes(axes.size());
   for (int i=0; i<=e.steps; ++i) {
     const double t=static_cast<double>(i)/e.steps, angle=yaw+omega*t;
     const double px=x+(std::abs(omega)<1e-9 ? v*t*std::cos(yaw)
@@ -94,22 +119,35 @@ CollisionEvidence commandEvidence(nav2_costmap_2d::Costmap2D *map,
         maxy>=static_cast<int>(map->getSizeInCellsY())) {
       e.reason="out_of_map"; e.cell_x=minx<0?minx:maxx; e.cell_y=miny<0?miny:maxy; return e;
     }
-    for (int my=miny; my<=maxy; ++my) for (int mx=minx; mx<=maxx; ++mx) {
-      const int cost=map->getCost(mx,my);
-      if (cost<nav2_costmap_2d::LETHAL_OBSTACLE) continue;
+    bool axes_ready=false;
+    for (int my=miny; my<=maxy; ++my) {
+      const auto &row=shared_cells->rows[my];
+      auto cell=std::lower_bound(row.begin(),row.end(),minx,
+          [](const auto &entry,int value) {return entry.x<value;});
+      for (; cell!=row.end() && cell->x<=maxx; ++cell) {
+      const int mx=cell->x, cost=cell->cost;
       double wx,wy; map->mapToWorld(mx,my,wx,wy);
       const double dx=wx-px,dy=wy-py;
       if (wx+r<xmin-1e-10 || wx-r>xmax+1e-10 ||
           wy+r<ymin-1e-10 || wy-r>ymax+1e-10) continue;
       bool separated=false;
-      for (const auto &a:axes) {
-        const double nx=c*a.x-s*a.y, ny=s*a.x+c*a.y;
-        const double d=nx*dx+ny*dy, extent=r*(std::abs(nx)+std::abs(ny));
-        if (d<a.low-extent-1e-10 || d>a.high+extent+1e-10) {separated=true; break;}
+      if (!axes_ready) {
+        for (size_t j=0; j<axes.size(); ++j) {
+          const auto &a=axes[j];
+          const double nx=c*a.x-s*a.y, ny=s*a.x+c*a.y;
+          world_axes[j]={nx,ny,r*(std::abs(nx)+std::abs(ny))};
+        }
+        axes_ready=true;
+      }
+      for (size_t j=0; j<axes.size(); ++j) {
+        const auto &a=axes[j]; const auto &w=world_axes[j];
+        const double d=w.nx*dx+w.ny*dy;
+        if (d<a.low-w.extent-1e-10 || d>a.high+w.extent+1e-10) {separated=true; break;}
       }
       if (separated) continue;
       e.reason=cost==nav2_costmap_2d::NO_INFORMATION?"unknown_cell":"lethal_cell";
       e.cell_x=mx; e.cell_y=my; e.cost=cost; return e;
+      }
     }
   }
   e.sample=-1; return e;
@@ -130,8 +168,9 @@ CommandProjection collisionFreeCommand(nav2_costmap_2d::Costmap2D *map,
     const nav2_costmap_2d::Footprint &footprint, double x, double y, double yaw,
     const WheelLimits &limits, double v, double omega, std::pair<double,double> initial) {
   CommandProjection result{initial, {}};
+  const CollisionCells cells(map);
   auto check = [&](std::pair<double,double> command) {
-    return commandEvidence(map,footprint,x,y,yaw,command.first,command.second);
+    return commandEvidence(map,footprint,x,y,yaw,command.first,command.second,&cells);
   };
   result.collision=check(result.command);
   if (std::string(result.collision.reason)=="clear") return result;

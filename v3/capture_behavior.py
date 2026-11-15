@@ -109,13 +109,13 @@ def project_behavior_record(record: CaptureRecord) -> BehaviorCaptureRecord:
     )
 
 
-def _encode_fields(value: BehaviorFields) -> dict[str, object]:
+def _encode_fields(value: BehaviorFields, *, compact_data_fields: bool = False) -> dict[str, object]:
     def encode(item: object) -> object:
         if isinstance(item, BehaviorFields):
-            return _encode_fields(item)
+            return _encode_fields(item, compact_data_fields=compact_data_fields)
         if isinstance(item, tuple):
             return [encode(child) for child in item]
-        return encode_value(item)
+        return encode_value(item, compact_data_fields=compact_data_fields)
 
     return {
         name: encode(item)
@@ -123,22 +123,25 @@ def _encode_fields(value: BehaviorFields) -> dict[str, object]:
     }
 
 
-def encode_behavior_record(record: BehaviorCaptureRecord) -> dict[str, object]:
+def encode_behavior_record(record: BehaviorCaptureRecord, *, compact_data_fields: bool = False) -> dict[str, object]:
+    def encode(value: BehaviorFields) -> dict[str, object]:
+        return _encode_fields(value, compact_data_fields=compact_data_fields)
+
     expected = {
         "fault_layer": record.fault_layer,
-        "layers": {name: _encode_fields(value) for name, value in record.layers},
+        "layers": {name: encode(value) for name, value in record.layers},
     }
     if record.writer_failure is not None:
-        expected["writer_failure"] = _encode_fields(record.writer_failure)
+        expected["writer_failure"] = encode(record.writer_failure)
     row = {
         "record_type": record.record_type,
         "tick_id": record.context.tick_id,
         "monotonic_ns": record.context.monotonic_ns,
-        "inputs": _encode_fields(record.inputs),
+        "inputs": encode(record.inputs),
         "expected": expected,
     }
     if record.edge_fault is not None:
-        row["edge_fault"] = _encode_fields(record.edge_fault)
+        row["edge_fault"] = encode(record.edge_fault)
     if record.evidence:
-        row["tick_evidence"] = encode_value(record.evidence)
+        row["tick_evidence"] = encode_value(record.evidence, compact_data_fields=compact_data_fields)
     return row
