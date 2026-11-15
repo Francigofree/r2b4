@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -348,6 +349,8 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
         raise ValueError("full production Nav2 must be enabled; no simulated planner fallback")
     if resolved.runtime.tick_period_ns != 20_000_000:
         raise ValueError("simulator currently requires the production 50 Hz tick contract")
+    if shutil.disk_usage(root).free<256*1024*1024:
+        raise RuntimeError("simulation needs at least 256 MiB free capture space")
     directory.mkdir(parents=True, exist_ok=False)
     snapshot = source_snapshot(root)
     write(directory/"source.json",snapshot)
@@ -556,7 +559,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             timeline.close()
         if capture_started:
             try:
-                capture = session.finalize(SimpleNamespace(status=0 if error is None else 1),error=error)
+                capture = session.finalize(SimpleNamespace(status=0 if error is None and plant is not None and not plant.fault_layer and not plant.collision_count else 1),error=error)
             except BaseException as exc:
                 error=error or exc
     expected = scenario["expect"]

@@ -37,7 +37,7 @@ Nav2-socketek és a gyermeklogok futásonként külön könyvtárban vannak. Ugy
 szimulátordomain egyidejű használatát helyi lock zárja ki. A ROS-domain más,
 független eszközzel való foglalását az operátornak kerülni kell. A tesztek sorosan
 futnak, az OMP/BLAS szálkorlátokat a production környezetaktiválás adja. A saját
-gyermekek RSS-limitje 1536 MiB, nice értéke 10; váratlan process exit, memória-
+futtató és gyermekei összesített RSS-limitje 1536 MiB, a ROS/capture nice értéke 10; váratlan process exit, memória-
 vagy pacing-határ túllépés lezárja a futást. Nincs automatikus hibáspróba-ismétlés.
 
 ## Használat
@@ -71,6 +71,10 @@ Beépített világok: `room`, `corridor`, `dead_end`, `moving_obstacle`,
 `lidar_dropout`, `explore`. Saját JSON szcenárióval 0.1–30 s-os véges próbák
 adhatók meg. A `stress` ezeket teljes indítás/leállítással ismétli, így a
 lifecycle is terhelődik; ez nem egy megszakítás nélküli többórás mapping session.
+A stress alapból 3600 s-os idő- és 1024 MiB-os outputkerettel fut; ezeket
+`--budget-s` és `--max-output-mb` állítja. A kereteket a véges próbák között
+ellenőrzi, így legfeljebb egy próba méretével/idejével léphet túl. Új próba
+256 MiB-nál kevesebb szabad capture-hely mellett nem indul.
 
 ## Világ és érzékelők
 
@@ -201,3 +205,30 @@ Nav2/SLAM ütemezése nem determinisztikus; azonos seed nem jelent bitazonos ROS
 futást. A natív replay csak azonos lezárt V3-inputokra ad MATCH-et. A felsorolt
 CLI-módok létezése önmagában nem bizonyítja az összes recovery/lifecycle/
 fault-kombinációt, többórás stabilitást vagy a fizikai robot modellpontosságát.
+
+## Fejlesztési ellenőrzés, 2026-11-15
+
+- Új célzott pack: **8 PASS**; canonical `./r test`: **14 PASS**.
+- Valódi Pi/ROS/SLAM/Nav2, motormentes LiDAR-kieséses integráció:
+  **PASS**, 60 aktív tick, 0 ütközés, virtuális végső STOP és megállt test.
+  [Futás](../tmp/nav_sim_final_9mxqxv6u/evidence/run/result.json).
+- Ugyanennek a teljes **242 tickje natív replay MATCH**, ismételt trace-egyezéssel.
+  [Replay](../tmp/nav_sim_final_9mxqxv6u/evidence/run/replay.json).
+- Közvetlen MCAP → explicit compiler **COMPLETE**, source integrity **COMPLETE**,
+  321 üzenet; navigation, navigation_root_cause és motion_performance riport.
+  [Elemzés](../tmp/nav_sim_final_9mxqxv6u/analysis/analysis.json).
+- Valódi 5 Hz-es mintavett capture-re a célzott teszt
+  **BLOCKED / CAPTURE_INCOMPLETE** replay-t bizonyít.
+- A 20 s-os, 1 m-es célteszt **FAIL** maradt: 0.0412 m megtett út,
+  0.9589 m végső célhiba, 0 ütközés, replay MATCH.
+  [Sikertelen navigáció](../tmp/nav_sim_05wmht5f/run/result.json).
+  Ez reprodukálható vizsgálati helyzet; a navigációs ok nincs bizonyítva/javítva.
+- A régi `test_skill_motion_simulation.py` opcionális packban **8 FAIL / 13 PASS**:
+  a legacy L6 backend összeállítása full-Nav2 módban tiltott, a régi skill-plant
+  pedig Nav2 provider nélkül nem kap navigációs útmutatást. Ez a pack jelenlegi
+  production konfigurációval nincs összhangban; a fejlesztés nem állította át
+  emiatt az aktív konfigurációt.
+
+Nem futott teljes release, többórás RC-stressz, minden recovery/lifecycle fault,
+valódi paraméterjavulást igazoló teljes keresés vagy fizikai mozgásteszt.
+A felhasználó meglévő `conf/nav2_planner.yaml` módosítása tartalmilag megmaradt.

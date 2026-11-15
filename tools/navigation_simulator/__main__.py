@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import tempfile
 import subprocess
+import time
+import math
 
 from .evidence import analyze, replay, source_snapshot, write
 from .scenario import BUILTINS, builtin, validate
@@ -41,6 +43,8 @@ def parser():
             child.add_argument("--max-runs",type=int,default=20,help="initial regression, then source changes; stop on first failure")
         if name=="stress":
             child.add_argument("--repeat",type=int,default=10,help="finite serial sessions, stop on the first failure (1..1000)")
+            child.add_argument("--budget-s",type=float,default=3600.)
+            child.add_argument("--max-output-mb",type=int,default=1024)
     child=commands.add_parser("autotune")
     child.add_argument("--suite",type=Path,help="explicit train/holdout scenes; default room/corridor")
     child.add_argument("--variants",type=int,default=2)
@@ -106,7 +110,6 @@ def main(argv=None,*,project_root=None):
                 raise ValueError("watch uses the baseline scene and current production configuration; use --scenario for an explicit alternate scene")
             result=watch(root,output,args.baseline,scenario=args.scenario,domain=args.ros_domain_id,max_runs=args.max_runs)
         elif args.mode=="autotune":
-            import math
             if not math.isfinite(args.budget_s) or not 1<=args.budget_s<=86400:
                 raise ValueError("budget-s must be 1..86400")
             if args.overlays:
@@ -133,15 +136,25 @@ def main(argv=None,*,project_root=None):
             if args.mode=="stress":
                 if not 1<=args.repeat<=1000:
                     raise ValueError("repeat must be 1..1000")
+                if not math.isfinite(args.budget_s) or not 1<=args.budget_s<=86400 or not 32<=args.max_output_mb<=4096:
+                    raise ValueError("stress budget-s must be 1..86400, max-output-mb 32..4096")
                 results=[]
+                started=time.monotonic()
+                reason=None
                 for index in range(args.repeat):
-                    trial=run(root,output/f"run_{index:04d}",scenario,domain=args.ros_domain_id,overlay=overlay)
-                    results.append({"index":index,"status":trial["status"],"metrics":trial["metrics"],"failures":trial["failures"]})
-                    write(output/"stress.json",{"status":"RUNNING","runs":results,"physical_output":False})
-                    if trial["status"]!="PASS":
+                    size=sum(path.stat().st_size for path in output.rglob("*") if path.is_file())
+                    if time.monotonic()-started>=args.budget_s or size>=args.max_output_mb*1024*1024:
+                        reason="TIME_OR_OUTPUT_BUDGET_EXHAUSTED"
                         break
-                result={"status":"PASS" if len(results)==args.repeat and all(row["status"]=="PASS" for row in results) else "FAIL",
-                        "requested":args.repeat,"completed":len(results),"runs":results,"physical_output":False}
+                    trial=run(root,output/f"run_{index:04d}",scenario,domain=args.ros_domain_id,overlay=overlay)
+                    if results and trial["source_sha256"]!=results[0]["source_sha256"]:
+                        reason="SOURCE_CHANGED_BETWEEN_RUNS"
+                    results.append({"index":index,"status":trial["status"],"source_sha256":trial["source_sha256"],"metrics":trial["metrics"],"failures":trial["failures"]})
+                    write(output/"stress.json",{"status":"RUNNING","runs":results,"physical_output":False})
+                    if trial["status"]!="PASS" or reason:
+                        break
+                result={"status":"PASS" if reason is None and len(results)==args.repeat and all(row["status"]=="PASS" for row in results) else "FAIL",
+                        "requested":args.repeat,"completed":len(results),"reason":reason,"runs":results,"physical_output":False}
                 write(output/"stress.json",result)
             else:
                 result=run(root,output/"run",scenario,domain=args.ros_domain_id,overlay=overlay,
