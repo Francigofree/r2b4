@@ -8497,3 +8497,768 @@ terminate called without an active exception
 [INFO] [1794762863.512107864] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
 [INFO] [1794762863.520080739] [global_costmap.global_costmap]: Destroying
 [INFO] [1794762863.550964773] [planner_server]: Destroying
+[WARN] [1794770467.532150634] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794770467.532196746] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794770467.651236497] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770467.652376929] [planner_server]: Creating
+[INFO] [1794770467.753527939] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770467.758382964] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794770468.239933775] [planner_server]: Configuring
+[INFO] [1794770468.240061461] [global_costmap.global_costmap]: Configuring
+[INFO] [1794770468.257444348] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794770468.266167320] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794770468.275102089] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794770468.300914742] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794770468.301099039] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794770468.302693696] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794770468.319497691] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794770468.320234047] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794770468.321301608] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794770468.414508984] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 80 at 0.050000 m/pix
+[INFO] [1794770468.432832394] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794770468.432911450] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794770468.435348796] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794770468.441655218] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794770468.441748218] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794770469.188411933] [planner_server]: Activating
+[INFO] [1794770469.188578916] [global_costmap.global_costmap]: Activating
+[INFO] [1794770469.188655175] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794770469.188815510] [global_costmap.global_costmap]: start
+[INFO] [1794770469.439894599] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770469.444575142] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794770474.389232057] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 80 at 0.050000 m/pix
+[INFO] [1794770476.389813759] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 80 at 0.050000 m/pix
+[INFO] [1794770480.389976092] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 82 at 0.050000 m/pix
+[INFO] [1794770482.389080313] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 92 at 0.050000 m/pix
+[INFO] [1794770484.390125974] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 96 at 0.050000 m/pix
+[INFO] [1794770486.389953354] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 161 X 99 at 0.050000 m/pix
+[INFO] [1794770488.389122159] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 161 X 125 at 0.050000 m/pix
+[INFO] [1794770490.182600223] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770489.880 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770490.389069693] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 161 X 125 at 0.050000 m/pix
+[INFO] [1794770496.384711404] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794770496.384785479] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794770496.384914535] [planner_server]: Deactivating
+[INFO] [1794770496.384954535] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794770496.391754589] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770496.391884146] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770496.412386420] [planner_server]: Cleaning up
+[INFO] [1794770496.477922301] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794770496.498482723] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794770496.500698568] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794770496.560951551] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770496.574761216] [global_costmap.global_costmap]: Destroying
+[INFO] [1794770496.598442562] [planner_server]: Destroying
+[WARN] [1794770524.084370156] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794770524.084430582] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794770524.200428970] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770524.201718311] [planner_server]: Creating
+[INFO] [1794770524.238316744] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770524.239094989] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794770524.305567135] [planner_server]: Configuring
+[INFO] [1794770524.305722043] [global_costmap.global_costmap]: Configuring
+[INFO] [1794770524.320885216] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794770524.328938036] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794770524.334774641] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794770524.342786701] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794770524.342861683] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794770524.344238302] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794770524.353495147] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794770524.353577888] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794770524.354093854] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794770524.418632879] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 156 X 128 at 0.050000 m/pix
+[INFO] [1794770524.434290443] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794770524.434740371] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794770524.436076748] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794770524.438358334] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794770524.439124949] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794770524.931402930] [planner_server]: Activating
+[INFO] [1794770524.931474264] [global_costmap.global_costmap]: Activating
+[INFO] [1794770524.931490135] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794770524.931585376] [global_costmap.global_costmap]: start
+[INFO] [1794770525.182794069] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770525.184134261] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794770525.531752703] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 158 X 128 at 0.050000 m/pix
+[INFO] [1794770527.533801340] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 158 X 128 at 0.050000 m/pix
+[INFO] [1794770529.533710784] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 128 at 0.050000 m/pix
+[INFO] [1794770537.532958825] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 128 at 0.050000 m/pix
+[INFO] [1794770539.533988252] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 129 at 0.050000 m/pix
+[INFO] [1794770541.531749108] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 130 at 0.050000 m/pix
+[INFO] [1794770543.531757350] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 130 at 0.050000 m/pix
+[INFO] [1794770545.531979373] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 159 X 130 at 0.050000 m/pix
+[INFO] [1794770547.534345206] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 160 X 130 at 0.050000 m/pix
+[INFO] [1794770549.531744238] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 160 X 138 at 0.050000 m/pix
+[INFO] [1794770551.531756639] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 160 X 156 at 0.050000 m/pix
+[INFO] [1794770563.531764209] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 160 X 157 at 0.050000 m/pix
+[INFO] [1794770577.531773754] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 161 X 157 at 0.050000 m/pix
+[INFO] [1794770585.532016223] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 161 X 162 at 0.050000 m/pix
+[INFO] [1794770591.531770164] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 161 X 162 at 0.050000 m/pix
+[INFO] [1794770593.533332331] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 161 X 162 at 0.050000 m/pix
+[INFO] [1794770641.824831625] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770641.532 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770655.806626029] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770655.524 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770663.623186904] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794770663.623237737] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794770663.623324664] [planner_server]: Deactivating
+[INFO] [1794770663.623368349] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794770663.737381830] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770663.737491052] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770663.748050146] [planner_server]: Cleaning up
+[INFO] [1794770663.771259048] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794770663.778250474] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794770663.780644431] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794770663.806988350] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770663.812582288] [global_costmap.global_costmap]: Destroying
+[INFO] [1794770663.823929385] [planner_server]: Destroying
+[WARN] [1794770680.758286303] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794770680.758349489] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794770681.224981917] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770681.228689714] [planner_server]: Creating
+[INFO] [1794770681.264771871] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770681.265665968] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794770681.347255406] [planner_server]: Configuring
+[INFO] [1794770681.347325443] [global_costmap.global_costmap]: Configuring
+[INFO] [1794770681.360066697] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794770681.368937744] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794770681.373160878] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794770681.381827702] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794770681.381901332] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794770681.382453817] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794770681.388891129] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794770681.388986074] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794770681.389475947] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794770681.447994483] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 142 X 120 at 0.050000 m/pix
+[INFO] [1794770681.468413111] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794770681.468490611] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794770681.470240584] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794770681.473364249] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794770681.473458027] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794770682.074191692] [planner_server]: Activating
+[INFO] [1794770682.074287100] [global_costmap.global_costmap]: Activating
+[INFO] [1794770682.074329360] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794770682.074371545] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "base_link" passed to canTransform argument source_frame - frame does not exist
+[INFO] [1794770682.574438801] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "base_link" passed to canTransform argument source_frame - frame does not exist
+[INFO] [1794770683.074446093] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "base_link" passed to canTransform argument source_frame - frame does not exist
+[INFO] [1794770683.574515627] [global_costmap.global_costmap]: start
+[INFO] [1794770683.774796738] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 145 X 121 at 0.050000 m/pix
+[INFO] [1794770683.778954686] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770683.780274323] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794770683.974762403] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 145 X 121 at 0.050000 m/pix
+[INFO] [1794770686.174763295] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 121 at 0.050000 m/pix
+[INFO] [1794770689.985717019] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 121 at 0.050000 m/pix
+[INFO] [1794770692.175001009] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 122 at 0.050000 m/pix
+[INFO] [1794770694.174952189] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 123 at 0.050000 m/pix
+[INFO] [1794770696.174765370] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 157 X 124 at 0.050000 m/pix
+[INFO] [1794770698.174807924] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 157 X 124 at 0.050000 m/pix
+[INFO] [1794770700.174778147] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 157 X 127 at 0.050000 m/pix
+[INFO] [1794770716.175199358] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 157 X 147 at 0.050000 m/pix
+[INFO] [1794770734.175035762] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 157 X 158 at 0.050000 m/pix
+[INFO] [1794770736.176076341] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 157 X 159 at 0.050000 m/pix
+[INFO] [1794770782.393870223] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794770782.393960723] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794770782.394048723] [planner_server]: Deactivating
+[INFO] [1794770782.394093890] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794770782.574833368] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770782.574911183] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770782.585046738] [planner_server]: Cleaning up
+[INFO] [1794770782.592858706] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794770782.597505972] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794770782.602687926] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794770782.613501559] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770782.618200269] [global_costmap.global_costmap]: Destroying
+[INFO] [1794770782.630543132] [planner_server]: Destroying
+[WARN] [1794770871.258706848] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794770871.258759293] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794770871.370388604] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770871.373373121] [planner_server]: Creating
+[INFO] [1794770871.504936930] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794770871.506969589] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794770871.568316293] [planner_server]: Configuring
+[INFO] [1794770871.568386757] [global_costmap.global_costmap]: Configuring
+[INFO] [1794770871.586514040] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794770871.596864578] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794770871.601869865] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794770871.607371450] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794770871.607552155] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794770871.608194177] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794770871.614924954] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794770871.615114585] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794770871.615958812] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794770871.737729605] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794770871.737887235] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794770871.739149816] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794770871.742791928] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794770871.743968342] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794770872.281387565] [planner_server]: Activating
+[INFO] [1794770872.281471324] [global_costmap.global_costmap]: Activating
+[INFO] [1794770872.281491584] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794770872.281573251] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794770872.781583474] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794770873.285195771] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794770873.745195888] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 138 at 0.050000 m/pix
+[INFO] [1794770873.781667568] [global_costmap.global_costmap]: start
+[INFO] [1794770873.832699494] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770873.834823024] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794770874.184267334] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 138 at 0.050000 m/pix
+[INFO] [1794770876.184372894] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 138 at 0.050000 m/pix
+[INFO] [1794770878.184553325] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 138 at 0.050000 m/pix
+[INFO] [1794770888.184400425] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 138 at 0.050000 m/pix
+[INFO] [1794770890.185093220] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 138 at 0.050000 m/pix
+[INFO] [1794770896.184264245] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 143 at 0.050000 m/pix
+[INFO] [1794770902.187094284] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 143 at 0.050000 m/pix
+[INFO] [1794770906.184241889] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 171 at 0.050000 m/pix
+[INFO] [1794770928.715136182] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770928.429 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770953.213726035] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770952.903 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770959.196034461] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770958.899 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770962.572963744] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770962.292 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770966.486622599] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770966.192 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770969.298310979] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770968.991 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770972.376613173] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794770972.088 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794770977.908616037] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794770977.908688278] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794770977.908775445] [planner_server]: Deactivating
+[INFO] [1794770977.908810927] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794770977.985407032] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794770977.985489588] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770977.997277023] [planner_server]: Cleaning up
+[INFO] [1794770978.049261567] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794770978.082591342] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794770978.132017039] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794770978.213241984] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794770978.230887636] [global_costmap.global_costmap]: Destroying
+[INFO] [1794770978.256933131] [planner_server]: Destroying
+[WARN] [1794771040.669098986] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794771040.669145746] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794771040.790041670] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771040.795420477] [planner_server]: Creating
+[INFO] [1794771040.829059977] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771040.829506905] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794771041.206638867] [planner_server]: Configuring
+[INFO] [1794771041.206795442] [global_costmap.global_costmap]: Configuring
+[INFO] [1794771041.223006994] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794771041.232832807] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794771041.236403790] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794771041.242063488] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794771041.242148729] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794771041.243644089] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794771041.249968383] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794771041.250054939] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794771041.251865208] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794771041.346725618] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794771041.346812582] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794771041.347855495] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794771041.352542058] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794771041.352663429] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794771041.953617510] [planner_server]: Activating
+[INFO] [1794771041.953769622] [global_costmap.global_costmap]: Activating
+[INFO] [1794771041.953810567] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794771041.953846437] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794771042.453912353] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794771042.547798980] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 126 at 0.050000 m/pix
+[INFO] [1794771042.953983102] [global_costmap.global_costmap]: start
+[INFO] [1794771043.154977651] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794771043.157262664] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794771043.354157302] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 126 at 0.050000 m/pix
+[INFO] [1794771045.354128705] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 126 at 0.050000 m/pix
+[INFO] [1794771049.354137588] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 126 at 0.050000 m/pix
+[INFO] [1794771055.354234439] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 142 X 148 at 0.050000 m/pix
+[INFO] [1794771057.354161625] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 148 at 0.050000 m/pix
+[INFO] [1794771059.354671168] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 148 at 0.050000 m/pix
+[INFO] [1794771063.354493582] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 151 at 0.050000 m/pix
+[INFO] [1794771071.554732880] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 151 at 0.050000 m/pix
+[INFO] [1794771073.354182656] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 152 at 0.050000 m/pix
+[INFO] [1794771075.354157462] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 173 at 0.050000 m/pix
+[INFO] [1794771091.757703119] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 173 at 0.050000 m/pix
+[INFO] [1794771111.554832013] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 152 X 173 at 0.050000 m/pix
+[INFO] [1794771113.358567255] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 152 X 173 at 0.050000 m/pix
+[INFO] [1794771121.941263110] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771121.644 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771135.797205787] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771135.528 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771139.758962025] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771139.424 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771145.497916524] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771145.216 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771150.879098701] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771150.612 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771158.190738178] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771157.906 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771161.588951062] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771161.303 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771165.684549210] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771165.402 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771169.896428336] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771169.601 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771178.181955985] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794771178.182155764] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794771178.182648637] [planner_server]: Deactivating
+[INFO] [1794771178.182825693] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794771178.356611246] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794771178.357723086] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794771178.370774121] [planner_server]: Cleaning up
+[INFO] [1794771178.391229956] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794771178.400155098] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794771178.446680115] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794771178.483283262] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794771178.500704728] [global_costmap.global_costmap]: Destroying
+[INFO] [1794771178.529707537] [planner_server]: Destroying
+[WARN] [1794771373.260939657] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794771373.261008695] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794771373.330476618] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771373.331675421] [planner_server]: Creating
+[INFO] [1794771373.367985512] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771373.371163900] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794771373.965093924] [planner_server]: Configuring
+[INFO] [1794771373.965188591] [global_costmap.global_costmap]: Configuring
+[INFO] [1794771373.991799943] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794771374.010710604] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794771374.016682211] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794771374.030966013] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794771374.031057032] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794771374.033909418] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794771374.044851071] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794771374.044994146] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794771374.047135010] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794771374.132287521] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 142 X 123 at 0.050000 m/pix
+[INFO] [1794771374.162510874] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794771374.162776523] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794771374.163416731] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794771374.167929478] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794771374.168231146] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794771374.651669075] [planner_server]: Activating
+[INFO] [1794771374.652444024] [global_costmap.global_costmap]: Activating
+[INFO] [1794771374.652587191] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794771374.652974231] [global_costmap.global_costmap]: start
+[INFO] [1794771374.853139733] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 124 at 0.050000 m/pix
+[INFO] [1794771374.854159979] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794771374.855715173] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794771378.853698979] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 124 at 0.050000 m/pix
+[INFO] [1794771380.853556952] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 146 at 0.050000 m/pix
+[INFO] [1794771382.853130480] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 147 at 0.050000 m/pix
+[INFO] [1794771384.853134992] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 147 at 0.050000 m/pix
+[INFO] [1794771386.853137819] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 147 at 0.050000 m/pix
+[INFO] [1794771399.053127908] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 147 at 0.050000 m/pix
+[INFO] [1794771401.053143166] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 169 at 0.050000 m/pix
+[INFO] [1794771402.856039808] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 170 at 0.050000 m/pix
+[INFO] [1794771407.053127681] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 170 at 0.050000 m/pix
+[INFO] [1794771409.053503405] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 170 at 0.050000 m/pix
+[INFO] [1794771429.053124856] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 152 X 171 at 0.050000 m/pix
+[INFO] [1794771431.056229564] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 153 X 171 at 0.050000 m/pix
+[INFO] [1794771433.053111811] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 153 X 171 at 0.050000 m/pix
+[WARN] [1794771434.797508080] [planner_server]: GridBased plugin failed to plan from (-0.92, -0.69) to (0.36, 0.12): "no valid path found"
+[WARN] [1794771434.799918297] [planner_server]: [compute_path_to_pose] [ActionServer] Aborting handle.
+[INFO] [1794771435.053700710] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 153 X 171 at 0.050000 m/pix
+[INFO] [1794771435.171269513] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771434.882 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771464.421984305] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794771464.422049472] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794771464.422165473] [planner_server]: Deactivating
+[INFO] [1794771464.422205603] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794771464.456185940] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794771464.456305922] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794771464.466725906] [planner_server]: Cleaning up
+[INFO] [1794771464.538966013] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794771464.551060154] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794771464.554850990] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794771464.588311417] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794771464.597050670] [global_costmap.global_costmap]: Destroying
+[INFO] [1794771464.607262523] [planner_server]: Destroying
+[WARN] [1794771483.213333114] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794771483.213384004] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794771483.254280861] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771483.255533794] [planner_server]: Creating
+[INFO] [1794771483.275451924] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771483.275992130] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794771483.791148928] [planner_server]: Configuring
+[INFO] [1794771483.791240687] [global_costmap.global_costmap]: Configuring
+[INFO] [1794771483.812451083] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794771483.830016681] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794771483.838224264] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794771483.872961439] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794771483.873056643] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794771483.874559892] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794771483.885476916] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794771483.890933558] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794771483.894762135] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794771484.017114131] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794771484.017252762] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794771484.019780368] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794771484.023389666] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794771484.023508630] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794771484.522666301] [planner_server]: Activating
+[INFO] [1794771484.522855432] [global_costmap.global_costmap]: Activating
+[INFO] [1794771484.522958266] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794771484.523063063] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794771485.023724038] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794771485.523127803] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794771486.024785359] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794771486.048206952] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 225 X 233 at 0.050000 m/pix
+[INFO] [1794771486.523207730] [global_costmap.global_costmap]: start
+[INFO] [1794771486.726089953] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794771486.727283738] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794771500.723576949] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 229 X 233 at 0.050000 m/pix
+[INFO] [1794771508.923395967] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 229 X 233 at 0.050000 m/pix
+[INFO] [1794771510.923380712] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 231 X 233 at 0.050000 m/pix
+[INFO] [1794771512.923363847] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 232 X 233 at 0.050000 m/pix
+[INFO] [1794771514.925721940] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 233 X 233 at 0.050000 m/pix
+[INFO] [1794771526.923788675] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 237 X 233 at 0.050000 m/pix
+[INFO] [1794771553.125715204] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 237 X 234 at 0.050000 m/pix
+[INFO] [1794771566.923436846] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 237 X 234 at 0.050000 m/pix
+[INFO] [1794771568.923371959] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 237 X 234 at 0.050000 m/pix
+[INFO] [1794771570.927880413] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 237 X 234 at 0.050000 m/pix
+[INFO] [1794771573.323384876] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 237 X 234 at 0.050000 m/pix
+[INFO] [1794771573.438451787] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771573.149 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771603.120788282] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771602.822 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771615.489726307] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771615.214 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771615.511756357] [planner_server]: Goal was canceled. Canceling planning action.
+[INFO] [1794771615.511907469] [planner_server]: [compute_path_to_pose] [ActionServer] Client requested to cancel the goal. Cancelling.
+[INFO] [1794771623.323364302] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 239 X 234 at 0.050000 m/pix
+[INFO] [1794771625.123386984] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 239 X 235 at 0.050000 m/pix
+[INFO] [1794771641.264192606] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771640.980 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771647.252665084] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771646.974 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771651.556206346] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771651.271 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771660.250594826] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771659.957 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771668.740322164] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771668.448 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771675.488150299] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771675.144 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771679.320210095] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771679.040 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771685.115767213] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771684.831 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771689.299459402] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771689.030 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771693.421884912] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771693.126 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771697.209403379] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771696.924 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771703.785389090] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794771703.785489849] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794771703.785586794] [planner_server]: Deactivating
+[INFO] [1794771703.785618295] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794771703.924467505] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794771703.924552043] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794771703.935261548] [planner_server]: Cleaning up
+[INFO] [1794771703.986844617] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794771704.014943998] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794771704.015219111] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794771704.075394099] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794771704.098217654] [global_costmap.global_costmap]: Destroying
+[INFO] [1794771704.152862722] [planner_server]: Destroying
+[WARN] [1794771749.744873481] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794771749.745013964] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794771749.834311024] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771749.836086793] [planner_server]: Creating
+[INFO] [1794771749.950894998] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794771749.954520574] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794771750.058944738] [planner_server]: Configuring
+[INFO] [1794771750.059021479] [global_costmap.global_costmap]: Configuring
+[INFO] [1794771750.088729499] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794771750.097654697] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794771750.102002963] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794771750.106671045] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794771750.107539068] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794771750.108256665] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794771750.113330156] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794771750.113471027] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794771750.114229513] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794771750.184536670] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 134 X 141 at 0.050000 m/pix
+[INFO] [1794771750.201955861] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794771750.202162121] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794771750.204422801] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794771750.208214452] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794771750.208421101] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794771750.825669348] [planner_server]: Activating
+[INFO] [1794771750.825753664] [global_costmap.global_costmap]: Activating
+[INFO] [1794771750.825776053] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794771750.825900202] [global_costmap.global_costmap]: start
+[INFO] [1794771751.026061203] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 138 X 142 at 0.050000 m/pix
+[INFO] [1794771751.036840986] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794771751.044453566] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794771752.826089227] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 143 at 0.050000 m/pix
+[INFO] [1794771754.826589291] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 143 at 0.050000 m/pix
+[INFO] [1794771756.826053886] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 143 at 0.050000 m/pix
+[INFO] [1794771760.826756531] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 143 at 0.050000 m/pix
+[INFO] [1794771762.828258396] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 143 at 0.050000 m/pix
+[INFO] [1794771764.826076259] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 139 X 143 at 0.050000 m/pix
+[INFO] [1794771891.026060854] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 143 at 0.050000 m/pix
+[INFO] [1794771905.426083609] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 143 at 0.050000 m/pix
+[INFO] [1794771905.779394141] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771905.491 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771909.855539823] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771909.585 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771912.454818147] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771912.187 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771915.086541692] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771914.783 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771921.962152734] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771921.676 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771969.226071890] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 143 at 0.050000 m/pix
+[INFO] [1794771973.227574162] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 143 at 0.050000 m/pix
+[INFO] [1794771975.514749276] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771975.227 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771985.428566513] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 149 at 0.050000 m/pix
+[INFO] [1794771985.493826733] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771985.212 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771987.226087159] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 145 X 149 at 0.050000 m/pix
+[INFO] [1794771991.837240982] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794771991.510 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794771993.233770124] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 149 at 0.050000 m/pix
+[INFO] [1794771997.226066602] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 149 at 0.050000 m/pix
+[INFO] [1794771999.227012858] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 149 at 0.050000 m/pix
+[INFO] [1794772001.426286049] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 149 at 0.050000 m/pix
+[INFO] [1794772011.081318727] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772010.791 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772016.454266366] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772016.185 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772021.456691283] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772021.179 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772031.886616627] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772031.573 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772033.226205038] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 150 at 0.050000 m/pix
+[INFO] [1794772054.562324294] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772054.252 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772057.328306903] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772057.049 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772063.534280996] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772063.246 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772069.420841583] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772069.141 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794772079.609263961] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794772079.326 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[WARN] [1794773422.975293300] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794773422.980125696] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794773423.206931754] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794773423.256887227] [planner_server]: Creating
+[INFO] [1794773423.294296995] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794773423.302074206] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794773423.305430968] [planner_server]: Configuring
+[INFO] [1794773423.306306365] [global_costmap.global_costmap]: Configuring
+[INFO] [1794773423.337273472] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794773423.378184331] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794773423.387934218] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794773423.408741692] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794773423.408816615] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794773423.409193418] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794773423.413155808] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794773423.413216936] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794773423.413582590] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794773423.478565076] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 140 X 102 at 0.050000 m/pix
+[INFO] [1794773423.640775983] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794773423.640908923] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794773423.641918242] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794773423.651710073] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794773423.651858327] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794773424.575150913] [planner_server]: Activating
+[INFO] [1794773424.575220058] [global_costmap.global_costmap]: Activating
+[INFO] [1794773424.575237650] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794773424.575256391] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773425.075330049] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773425.575330603] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773426.075332956] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773426.575335417] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773427.075374637] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773427.575324849] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773428.075324077] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773428.575322066] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773429.075382867] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773429.575322776] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773430.075324755] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773430.575329924] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773431.075324239] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773431.575334145] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773432.075326029] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773432.575326701] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773433.075329238] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773433.575330206] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773434.075361908] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773434.575324999] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773435.075326249] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773435.575328936] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773436.075327856] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773436.575327115] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773437.075327699] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773437.575330079] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773438.075328228] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773438.575328464] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773439.075326597] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773439.575329313] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773440.075324314] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773440.575330874] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773441.075382588] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773441.575327396] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773442.075325041] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773442.575327940] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773443.075328288] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773443.575329941] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773444.075330820] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773444.575329333] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773445.075331516] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773445.575329014] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773446.075327848] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773446.575327956] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773447.075325158] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773447.575329630] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773448.075323937] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773448.575330528] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773449.075328213] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773449.575386363] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773450.075325293] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Could not find a connection between 'R2B4_BOOT_ROBOT_MAP' and 'base_link' because they are not part of the same tree.Tf has two or more unconnected trees.
+[INFO] [1794773450.306137652] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794773450.306208261] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794773450.306244205] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794773450.307702840] [global_costmap.global_costmap]: start
+[ERROR] [1794773450.315436414] [global_costmap.global_costmap]: Caught exception in callback for transition 13
+[ERROR] [1794773450.315694668] [global_costmap.global_costmap]: Original error: could not create subscription: rcl node's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/node.c:404
+[ERROR] [1794773450.315723464] [global_costmap.global_costmap]: Failed to finish transition 3. Current state is now: errorprocessing (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[ERROR] [1794773450.315735704] [planner_server]: Failed to finish transition 3. Current state is now: inactive (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[INFO] [1794773450.317938231] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+Warning: class_loader.ClassLoader: SEVERE WARNING!!! Attempting to unload library while objects created by this loader exist in the heap! You should delete your objects before attempting to unload the library or destroying the ClassLoader. The library will NOT be unloaded.
+         at line 127 in /home/runner/conda-bld/bld/rattler-build_ros2-class-loader_1791447710/work/ros2-class-loader/src/work/src/class_loader.cpp
+terminate called without an active exception
+[WARN] [1794773508.681253964] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794773508.681305466] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794773508.744522519] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794773508.745727541] [planner_server]: Creating
+[INFO] [1794773508.823824974] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794773508.825024699] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794773509.458156215] [planner_server]: Configuring
+[INFO] [1794773509.458277626] [global_costmap.global_costmap]: Configuring
+[INFO] [1794773509.472962732] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794773509.479383699] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794773509.482469299] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794773509.487001539] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794773509.487096727] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794773509.487680598] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794773509.491782768] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794773509.491879716] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794773509.492263024] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794773509.549513492] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 140 X 104 at 0.050000 m/pix
+[INFO] [1794773509.563463056] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794773509.563632802] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794773509.566967706] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794773509.569952414] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794773509.570127142] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794773510.043095400] [planner_server]: Activating
+[INFO] [1794773510.043206662] [global_costmap.global_costmap]: Activating
+[INFO] [1794773510.043248904] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794773510.043537617] [global_costmap.global_costmap]: start
+[INFO] [1794773510.246759729] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794773510.250063612] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794773510.443705678] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 104 at 0.050000 m/pix
+[INFO] [1794773514.443769437] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 104 at 0.050000 m/pix
+[INFO] [1794773520.443827969] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 107 at 0.050000 m/pix
+[INFO] [1794773522.445975676] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 142 X 118 at 0.050000 m/pix
+[INFO] [1794773524.443693831] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 127 at 0.050000 m/pix
+[INFO] [1794773526.443774983] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 149 at 0.050000 m/pix
+[INFO] [1794773542.444229229] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 149 at 0.050000 m/pix
+[INFO] [1794773544.443695828] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 162 at 0.050000 m/pix
+[INFO] [1794773546.443707096] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 171 at 0.050000 m/pix
+[INFO] [1794773550.445599167] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 172 at 0.050000 m/pix
+[INFO] [1794773554.443704460] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 150 X 172 at 0.050000 m/pix
+[INFO] [1794773556.443715101] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 172 at 0.050000 m/pix
+[INFO] [1794773572.445530633] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 152 X 172 at 0.050000 m/pix
+[INFO] [1794773574.444380572] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 152 X 172 at 0.050000 m/pix
+[INFO] [1794773638.727451309] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794773638.422 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794773646.105041586] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794773646.105097530] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794773646.105166049] [planner_server]: Deactivating
+[INFO] [1794773646.105207641] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794773646.243735574] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794773646.243815408] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794773646.253958600] [planner_server]: Cleaning up
+[INFO] [1794773646.266174843] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794773646.270372683] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794773646.270856404] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794773646.285185584] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794773646.292843396] [global_costmap.global_costmap]: Destroying
+[INFO] [1794773646.306517097] [planner_server]: Destroying
+[WARN] [1794773876.253429956] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794773876.253489918] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794773876.378868881] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794773876.380153510] [planner_server]: Creating
+[INFO] [1794773876.451372358] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794773876.453883117] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794773876.636691869] [planner_server]: Configuring
+[INFO] [1794773876.636747739] [global_costmap.global_costmap]: Configuring
+[INFO] [1794773876.653388199] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794773876.658436292] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794773876.662220015] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794773876.667118536] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794773876.667194405] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794773876.668246741] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794773876.672324848] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794773876.672396570] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794773876.674107785] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794773876.749563830] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794773876.749640495] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794773876.750679054] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794773876.752777246] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794773876.753019742] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794773877.263458973] [planner_server]: Activating
+[INFO] [1794773877.263622896] [global_costmap.global_costmap]: Activating
+[INFO] [1794773877.263678859] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794773877.263729099] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794773877.763797528] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794773878.263842506] [global_costmap.global_costmap]: Timed out waiting for transform from base_link to R2B4_BOOT_ROBOT_MAP to become available, tf error: Invalid frame ID "R2B4_BOOT_ROBOT_MAP" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1794773878.377108470] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 140 X 127 at 0.050000 m/pix
+[INFO] [1794773878.763866383] [global_costmap.global_costmap]: start
+[INFO] [1794773878.964867386] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794773878.966111886] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794773879.164029163] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 140 X 127 at 0.050000 m/pix
+[INFO] [1794773885.164020360] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 140 X 128 at 0.050000 m/pix
+[INFO] [1794773887.166836981] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 140 X 128 at 0.050000 m/pix
+[INFO] [1794773889.164083595] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 128 at 0.050000 m/pix
+[INFO] [1794773891.164158748] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 149 at 0.050000 m/pix
+[INFO] [1794773893.164022516] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 149 at 0.050000 m/pix
+[INFO] [1794773899.164029765] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 149 at 0.050000 m/pix
+[INFO] [1794773901.166496038] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 162 at 0.050000 m/pix
+[INFO] [1794773903.164595268] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 172 at 0.050000 m/pix
+[INFO] [1794773909.164040568] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 173 at 0.050000 m/pix
+[INFO] [1794773911.164096267] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 173 at 0.050000 m/pix
+[INFO] [1794773913.164063577] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 151 X 173 at 0.050000 m/pix
+[INFO] [1794773949.539856230] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794773949.255 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794774003.491090856] [global_costmap.global_costmap]: Message Filter dropping message: frame 'r2b4_laser' at time 1794774003.201 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[INFO] [1794774013.500152052] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794774013.500250551] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794774013.500340328] [planner_server]: Deactivating
+[INFO] [1794774013.500394549] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794774013.568306203] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794774013.568370573] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794774013.578519997] [planner_server]: Cleaning up
+[INFO] [1794774013.621225227] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794774013.637413770] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794774013.637893709] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794774013.656764740] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794774013.664638764] [global_costmap.global_costmap]: Destroying
+[INFO] [1794774013.682764767] [planner_server]: Destroying
