@@ -85,6 +85,7 @@ def command_entries() -> list[dict[str, object]]:
     from r2b4_voice.openai_oauth import cli_parser as chatgpt_parser
     from tools.mcap_evidence.cli import parser as evidence_parser
     from r2b4_orchestration.learning_cli import parser as learning_parser
+    from tools.navigation_simulator.__main__ import parser as simulator_parser
 
     rows = [{**item, "usage": item["usage"].removeprefix("usage: "), "group": "robot"}
             for item in _robot_catalog()]
@@ -97,6 +98,7 @@ def command_entries() -> list[dict[str, object]]:
         ("er2", [], er2_parser()), ("chatgpt", [], chatgpt_parser()),
         ("evi", [], evidence_parser()), ("cam", ["camera"], launcher_extras.camera_parser()),
         ("learn", [], learning_parser()),
+        ("sim", [], simulator_parser()),
     ):
         rows.append({"name": name, "aliases": aliases, "usage": parser.format_usage().strip().removeprefix("usage: "),
                      "description": parser.description, "group": "launcher"})
@@ -330,7 +332,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         root = project_root()
         from v3.runtime_performance import apply_host_affinity
-        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tune", "tool", "cpu", "cpu2", "diag", "evi", "learn", "maplive"} else "operator"
+        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tune", "tool", "cpu", "cpu2", "diag", "evi", "learn", "maplive", "sim"} else "operator"
         apply_host_affinity(root, role)
 
         # Private, read-only shell completion transport. It is intentionally not
@@ -387,6 +389,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args[0] == "evi":
             from tools.mcap_evidence.cli import main as evidence_main
             return evidence_main(args[1:], project_root=root)
+        if args[0] == "sim":
+            from tools.navigation_simulator.__main__ import main as simulator_main
+            return simulator_main(args[1:], project_root=root)
         if args[0] == "learn":
             from r2b4_orchestration.learning_cli import main as learning_main
             return learning_main(args[1:], project_root=root)
