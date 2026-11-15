@@ -246,13 +246,20 @@ class Plant(DifferentialDriveExperiment):
                 for angle in (i*math.tau/self.lidar_ray_count for i in range(self.lidar_ray_count))]
 
     def _scan(self, sample):
+        from v3.adapters.live_lidar import LidarPointReading
         from v3.contracts import DataField
         from v3.lidar_geometry import body_clearance_m
         samples, raw = super()._scan(sample)
         cfg = self.resolved.lidar.matcher
+        driver=self.resolved.lidar.driver
+        raw.raw_scan=tuple(LidarPointReading(point.angle_deg,point.distance_m,
+            point.quality if driver.minimum_distance_m<=point.distance_m<=driver.maximum_distance_m else 0)
+            for point in raw.raw_scan)
         sectors = {name: [] for name in ("front", "left", "rear", "right")}
         # Same physical LiDAR extrinsics for ROS scan, local geometry and safety.
         for point in raw.raw_scan:
+            if point.quality<=0:
+                continue
             angle = -math.radians(point.angle_deg)
             x = point.distance_m*math.cos(angle)+cfg.lidar_x_offset_m
             y = point.distance_m*math.sin(angle)+cfg.lidar_y_offset_m
@@ -260,7 +267,9 @@ class Plant(DifferentialDriveExperiment):
             sectors[name].append(body_clearance_m(x,y,self.world.body_bounds))
         output = []
         for row in samples:
-            if row.kind == "lidar_local_points":
+            if row.kind=="lidar_health":
+                row=sample("lidar_health",age_ns=0,point_count=sum(point.quality>0 for point in raw.raw_scan))
+            elif row.kind == "lidar_local_points":
                 values = []
                 for field in row.values:
                     offset = cfg.lidar_x_offset_m if field.key.endswith("_x_m") else cfg.lidar_y_offset_m if field.key.endswith("_y_m") else 0.
@@ -275,6 +284,7 @@ class Plant(DifferentialDriveExperiment):
         return tuple(output), raw
 
     def _filter_samples(self, samples):
+        from v3.adapters.process_lidar_port import _slam_matcher_result
         from v3.contracts import DataField, DeviceSample
         # Truth-derived scan odometry belongs to the old modest plant. This
         # path admits only actual SLAM Toolbox localization corrections.
@@ -294,13 +304,14 @@ class Plant(DifferentialDriveExperiment):
             self.receiver.accept(payload, now_ns=self.now_ns, current_generation=quality.get("generation"),
                 odometry_ns=self.status.get("monotonic_ns",0), odometry_valid=quality.get("local_translation") == "GOOD")
         pose = self.receiver.last_pose
-        if pose is not None:
+        matched=_slam_matcher_result(self.receiver,self.now_ns)
+        if pose is not None and matched is not None:
             values = {"frame_id": "R2B4_BOOT_ROBOT_MAP", "x_m": pose.x_m,"y_m":pose.y_m,"yaw_rad":pose.yaw_rad,
-                      "confidence": 1.,"r_scale":1.,"variance_x_m2":pose.variance_x_m2,
+                      "confidence": matched.summary["lidar_pose_confidence"],"r_scale":1.,"variance_x_m2":pose.variance_x_m2,
                       "variance_y_m2":pose.variance_y_m2,"variance_yaw_rad2":pose.variance_yaw_rad2}
             rows.append(DeviceSample("RPLIDAR_C1","lidar_pose",pose.source_sequence,pose.measurement_ns,
                                      tuple(DataField(k,v) for k,v in values.items())))
-        return rows
+        return [replace(row,device_id=self.local_perception_config.device_id) if row.device_id=="RPLIDAR_C1" else row for row in rows]
 
 
 class FaultNavigation:
