@@ -10,6 +10,35 @@ from tools.navigation_simulator.experiments import compare,read_suite
 from tools.tuners.r2b4_motion_tuner import resolve_config,PROJECT_ROOT,run_experiment
 
 
+@pytest.mark.parametrize("translation,heading,continuous,discontinuity", [
+    ("GOOD", "GOOD", True, False), ("DEGRADED", "GOOD", True, False),
+    ("LOST", "GOOD", True, False), ("GOOD", "LOST", True, False),
+    ("GOOD", "GOOD", False, False), ("GOOD", "GOOD", True, True),
+])
+def test_simulator_slam_odometry_matches_production_export(translation, heading, continuous, discontinuity):
+    from collections import deque
+    from v3.adapters.process_lidar_port import ProcessLidarPort
+    from v3.contracts import (GLOBAL_FRAME_ID, LOCAL_FRAME_ID, LocalizationQuality,
+        Pose2D, QualityState, RobotEstimate, TickContext)
+    from tools.navigation_simulator.runtime import slam_odometry
+    quality = LocalizationQuality(local_translation=QualityState(translation),
+        heading=QualityState(heading), local_pose_continuous=continuous,
+        pose_discontinuity=discontinuity, generation=4)
+    estimate = RobotEstimate(TickContext(8, 2_040_000_000), GLOBAL_FRAME_ID,
+        100., 200., 1., 0., 0., (0.,)*25,
+        local_pose=Pose2D(LOCAL_FRAME_ID, 1., 2., .3),
+        global_pose=Pose2D(GLOBAL_FRAME_ID, 100., 200., 1.),
+        map_to_odom=Pose2D(GLOBAL_FRAME_ID, 99., 198., .7), localization_quality=quality)
+    port = ProcessLidarPort.__new__(ProcessLidarPort)
+    port._stopped, port._slam_active, port._slam_enabled = False, True, True
+    port._pending_slam_odometry = deque(maxlen=1)
+    port.publish_slam_odometry(estimate)
+    packet = slam_odometry(estimate, 1, 2)
+    assert (packet.tick_id, packet.monotonic_ns, packet.generation,
+        packet.x_m, packet.y_m, packet.yaw_rad,
+        packet.local_translation_valid, packet.heading_valid) == port._pending_slam_odometry[-1]
+
+
 def test_world_uses_offset_rectangular_body_and_obstacle_motion():
     scene=builtin("moving_obstacle")
     scene["walls"]=[[1.5,-.5,1.6,.5]]

@@ -91,6 +91,19 @@ def test_deferred_completion_cannot_survive_mission_change(channel):
     assert client.poll(TickContext(12, value.context.monotonic_ns+60_000_000)).guidance is None
 
 
+def test_ready_deferred_completion_is_visible_before_newer_post_closure_completion(channel):
+    client, server = channel
+    value = request()
+    address = send_reply(client, server, value, produced_ns=value.context.monotonic_ns+21_000_000)
+    assert client.poll(TickContext(11, value.context.monotonic_ns+20_000_000)).guidance is None
+    server.sendto(encode_packet(reply_for(value, sequence=2,
+        produced_ns=value.context.monotonic_ns+41_000_000)), address)
+    current = client.poll(TickContext(12, value.context.monotonic_ns+40_000_000))
+    assert current.guidance.command_sequence == 1
+    assert current.error is None
+    assert client.poll(TickContext(13, value.context.monotonic_ns+60_000_000)).guidance.command_sequence == 2
+
+
 def test_periodic_pending_cannot_replace_unexpired_active_and_restart_v3_ramp(channel):
     client, server = channel
     value = request()

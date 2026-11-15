@@ -679,6 +679,14 @@ def run(args):
                 recovery.event(now, "native_action_deadline", action_kind=action_kind)
                 recovery_cancel = True
                 begin_cancel(now, stop_frontier=False)
+            # Expiry is independent of fresh pose/feedback. Sensor loss may
+            # hold motion, but must not suspend the recovery attempt's budget.
+            if (current is not None and current[0]["mode"] == "EXPLORE"
+                    and recovery.state == "VERIFY" and now >= recovery.deadline_ns):
+                recovery.verify(None, None, 0, now)
+                if handle is not None or sending is not None:
+                    recovery_cancel = True
+                    begin_cancel(now, stop_frontier=False)
             if (current is not None and current[0]["mode"] == "EXPLORE" and fresh and active
                     and handle is not None and not cancelling and action_kind == "NAVIGATE"
                     and selected_goal is not None and diagnostics.local_pose is not None):

@@ -334,10 +334,21 @@ class FaultNavigation:
         self.client.close()
 
 
+def slam_odometry(estimate, session_id, source_pid):
+    """Match ProcessLidarPort's qualified local-pose export, including DEGRADED."""
+    from v3.adapters.slam_toolbox_transport import SlamOdometryPacket
+    pose, quality = estimate.local_pose, estimate.localization_quality
+    continuous = quality.local_pose_continuous and not quality.pose_discontinuity
+    return SlamOdometryPacket(session_id, source_pid, estimate.context.tick_id,
+        estimate.context.monotonic_ns, quality.generation, pose.x_m, pose.y_m, pose.yaw_rad,
+        continuous and quality.local_translation.value != "LOST",
+        continuous and quality.heading.value != "LOST")
+
+
 def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, startup_s=25., memory_limit_mb=1536):
     from tools.tuners.r2b4_motion_tuner import resolve_config
     from v3.adapters.nav2_navigation import Nav2NavigationClient, Nav2NavigationConfig
-    from v3.adapters.slam_toolbox_transport import SlamToolboxSender, SlamLocalizationReceiver, SlamOdometryPacket
+    from v3.adapters.slam_toolbox_transport import SlamToolboxSender, SlamLocalizationReceiver
     from v3.capture_encoding import encode_value
     from v3.composition.native_control import NativeControlComposition
     from v3.mcap_capture import McapCaptureConfig
@@ -402,12 +413,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
         layers = {layer.layer:layer.output for layer in record.result.trace.layers}
         estimate = layers.get("L3")
         if estimate is not None and "tf_drop" not in plant.faults:
-            pose, quality = estimate.local_pose, estimate.localization_quality
-            continuous = quality.local_pose_continuous and not quality.pose_discontinuity
-            sender.publish_odometry(SlamOdometryPacket(session_id,os.getpid(),plant.tick,plant.now_ns,
-                quality.generation,pose.x_m,pose.y_m,pose.yaw_rad,
-                continuous and quality.local_translation.value != "LOST",
-                continuous and quality.heading.value != "LOST"),now_ns=plant.now_ns)
+            sender.publish_odometry(slam_odometry(estimate, session_id, os.getpid()), now_ns=plant.now_ns)
         exported = getattr(plant,"_publish_scan",None)
         if exported is not None:
             cfg = resolved.lidar
@@ -606,6 +612,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                          "unique_coverage_cells":len(coverage_cells),"coverage_cell_size_m":.25,
                          "minimum_clearance_m":min_clearance if math.isfinite(min_clearance) else None,
                          "collision_count":plant.collision_count if plant else 0,"active_samples":samples,
+                         "max_linear_jerk_mps3":plant.max_jerk if plant else 0.,
                          "active_duration_s":samples*.02,"max_localization_error_m":max_pose_error,
                          "max_tick_wall_ms":tick_max_ns/1e6,"tick_wall_s":tick_wall_ns/1e9,"tick_thread_cpu_s":tick_cpu_ns/1e9,
                          "ticks_over_20ms":tick_overruns,"max_tick_lateness_ms":max_lateness_ns/1e6,**resources},

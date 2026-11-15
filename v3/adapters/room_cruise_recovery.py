@@ -119,13 +119,22 @@ class RoomCruiseRecovery:
         # has a path. It cannot be the baseline for a distance-drop proof.
         # Actual goal arrival is proved separately by the action's result.
         if (self.state == "VERIFY" and self.baseline_remaining is None
+                and now < self.deadline_ns
                 and math.isfinite(remaining) and remaining > 0.):
             self.baseline_remaining, self.feedback_ns = remaining, now
-            self.deadline_ns = now+5_000_000_000
+            self.deadline_ns = min(self.deadline_ns, now+5_000_000_000)
             self.event(now, "verification_started", distance_remaining_m=remaining)
 
     def verify(self, pose, remaining, feedback_ns, now):
-        if self.state != "VERIFY" or pose is None:
+        if self.state != "VERIFY":
+            return None
+        if now >= self.deadline_ns:
+            self.counts["verification_failed"] += 1
+            self.event(now, "verification_failed", translation_m=self.translation_m,
+                remaining_drop_m=self.remaining_drop_m)
+            self.state = "READY"
+            return False
+        if pose is None:
             return None
         self.translation_m = math.hypot(pose[0]-self.anchor[0], pose[1]-self.anchor[1])
         if (self.baseline_remaining is not None and remaining is not None
@@ -134,12 +143,6 @@ class RoomCruiseRecovery:
             if self.translation_m >= .25 and self.remaining_drop_m >= .15:
                 self.resolve(now, "resumed_navigation_progress")
                 return True
-        if now >= self.deadline_ns:
-            self.counts["verification_failed"] += 1
-            self.event(now, "verification_failed", translation_m=self.translation_m,
-                remaining_drop_m=self.remaining_drop_m)
-            self.state = "READY"
-            return False
         return None
 
     def resolve(self, now, reason):
