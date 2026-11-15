@@ -177,7 +177,77 @@ ezek nem választhatók szét. A jelen levő `/dev/ttyUSB0` nem bizonyítja az e
 
 Canonical shutdown után a runtime STOPPED. Az eredeti 5 Hz-es capture-beállítást
 visszaállítottuk. Az AGENTS.md váratlan process-death/health eredmény utáni
-automatikus újrapróba-tilalma miatt második élő futás nem indult.
+automatikus újrapróba-tilalma miatt ekkor nem indult újabb élő futás.
+
+### LiDAR-újraindítás utáni, külön engedélyezett próba
+
+A felhasználó újraindította a LiDAR-t, és kifejezetten új próbát kért.
+Ugyanaz a canonical `./r rc 60 c full c 50` parancs ismét a ready állapot előtt,
+azonos generikus LiDAR-startup hibával állt le. RC-menet és robotmozgás nem indult.
+
+* Log: `tmp/amr_20261115/live_retry_start.log`.
+* Capture: `runtime/captures/v3_20261115_233116_47894_capture.mcap`.
+* Strict inspection: `tmp/amr_20261115/live_retry_inspection.json`, **FAIL**,
+  FAULT, incomplete, **0 tick, 0 raw LiDAR, 0 checkpoint**.
+* Canonical shutdown: STOPPED; az 5 Hz-es capture-beállítás visszaállítva.
+
+A startup forrásának célzott vizsgálata bizonyított diagnosztikai hiányt talált:
+a `NativeLidarPort.start()` három különböző False ága egyetlen gyári hibaüzenetté
+olvadt. A szűk adapterjavítás most megőrzi a matcher-readiness timeoutot és az
+eredeti worker-exitcode-ot, illetve a driver elutasításakor annak legfeljebb
+192 karakteres `last_error` mezőjét. A részletes ok cleanup előtt rögzül, és az
+`open_native_lidar_port` kivételével a meglévő process-startup hibaúton jut ki.
+Egy másodlagos status-olvasási hiba nem fedheti el a driver-start elutasítását.
+A bool start API, timeoutok, retry-policy és fail-closed működés változatlan.
+
+Hardver nélküli ellenőrzés: **19 passed** startup/driver célzott teszt,
+**1 passed** valódi matcher-processz újraindítási teszt, **14 passed** kis
+`./r test` gate; `git diff --check` PASS. A korábbi változatlan navigációs
+szimulációkat nem ismételtük meg. A részletesebb hibajelzéssel még nem történt
+fizikai LiDAR-indítás ebben a fejlesztési körben; a két korábbi hiba konkrét
+hardveres oka nem állapítható meg utólag a generikus üzenetből.
+
+### Egyszeri STOP-állapotú indítás a részletes hibajelzéssel
+
+A felhasználó külön engedélyezett egyetlen canonical runtime-indítást
+mozgásparancs nélkül, majd leállítással. Parancs: `./r runtime start c full c 5`.
+A runtime ismét ready előtt állt le, most ezzel a konkrét hibával:
+
+```text
+driver start rejected: RuntimeError:RPLIDAR_SCAN_START_FAILED_AFTER_RESET:RPLIDAR_SCAN_DESCRIPTOR_TIMEOUT:
+```
+
+A source szerinti matcher-readiness ellenőrzés ekkor már sikerült. A bukás a
+driver SCAN-descriptor olvasásánál történt; a beépített egyszeri RESET utáni
+ismételt SCAN-ra sem olvasott be descriptor-bájtot a határidőig. Ez az adott
+descriptor-olvasás üres válaszát bizonyítja, nem a teljes indítás alatti összes
+USB-forgalom hiányát.
+
+A canonical resolver motor/device I/O nélküli kiértékelése szerint a baud
+460800, a read timeout 0,1 s, a command settle 0,5 s; a feloldott port az egyetlen
+CP2102N by-id eszköz, amely `/dev/ttyUSB0`-ra mutat. A port az ellenőrzéskor
+jelen volt; a `fuser` nem mutatott birtokló folyamatot. A ModemManager naplója
+23:30:44-kor unsupported eszközt jelzett; ez nem bizonyít aktív portfoglalást.
+
+A kernel mindhárom indulás körül (23:16:32, 23:31:29, 23:40:03 helyi idő)
+`cp210x ttyUSB0: failed set request 0x12 status: -110` hibát naplózott.
+A helyi Linux errno fejléc szerint 110 = ETIMEDOUT. Ez külön, alsó szintű
+USB-control timeout evidence, de okozati kapcsolata a descriptor hiányával,
+valamint a fizikai kábel/táp/eszköz-gyökérok továbbra sem bizonyított.
+Tuning-, baud-, timeout- vagy retry-változtatást ez alapján nem végeztünk.
+
+Evidence:
+
+* `tmp/amr_20261115/live_stop_startup.log` — a részletes indulási hiba.
+* `tmp/amr_20261115/live_stop_usb_kernel.log` — a kernel USB/serial eseményei.
+* `tmp/amr_20261115/live_stop_usb_properties.txt` és `live_stop_config.json`.
+* `runtime/captures/v3_20261115_233951_48666_capture.mcap`, strict inspection:
+  `tmp/amr_20261115/live_stop_startup_inspection.json`, **FAIL**, FAULT,
+  incomplete, **0 tick, 0 raw LiDAR, 0 checkpoint**; nincs replayelhető mozgás.
+
+Canonical `./r sd` után STOPPED, capture full @ 5 Hz. Mozgásparancs nem ment ki.
+Source-változtatás nem történt ebben a hardveres diagnosztikai körben; az előző
+20 célzott teszt és 14 tesztes robot-contract gate változatlan kódra érvényes.
 
 A fizikai mozgás simasága, encoder/PI követése, hosszú üzem és az AMR-szerű
 felhasználói élmény **nincs élőben igazolva**. A következő lépés a LiDAR-startup

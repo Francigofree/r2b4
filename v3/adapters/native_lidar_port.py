@@ -455,15 +455,22 @@ class NativeLidarPort:
         self._last_matcher_reason = ""
         self._matcher_error = ""
         self._fatal_error = ""
+        self._startup_error = ""
 
     @property
     def config(self) -> NativeLidarPortConfig:
         return self._config
 
+    @property
+    def startup_error(self) -> str:
+        with self._lock:
+            return self._startup_error
+
     def start(self) -> bool:
         with self._lock:
             if self._running:
                 return True
+            self._startup_error = ""
         context = self._process_context or multiprocessing.get_context(
             self._config.matcher_start_method
         )
@@ -482,9 +489,19 @@ class NativeLidarPort:
                                         strict=self._strict_affinity):
             process.start()
         if not ready_event.wait(timeout=self._config.process_ready_timeout_s):
+            with self._lock:
+                self._startup_error = (
+                    "matcher readiness timeout "
+                    f"after {self._config.process_ready_timeout_s:g}s "
+                    f"(alive={process.is_alive()}, exitcode={process.exitcode})"
+                )
             self._stop_process(process, input_queue, result_queue, stop_event)
             return False
         if not process.is_alive():
+            with self._lock:
+                self._startup_error = (
+                    f"matcher exited before driver start (exitcode={process.exitcode})"
+                )
             self._stop_process(process, input_queue, result_queue, stop_event)
             return False
         try:
@@ -497,6 +514,14 @@ class NativeLidarPort:
             self._stop_process(process, input_queue, result_queue, stop_event)
             raise
         if driver_started is not True:
+            try:
+                detail = str(self._driver.get_runtime_status().get("last_error") or "")
+            except Exception as exc:
+                detail = f"status unavailable: {type(exc).__name__}:{exc}"
+            with self._lock:
+                self._startup_error = (
+                    f"driver start rejected: {detail[:192] or 'no driver error reported'}"
+                )
             try:
                 self._driver.stop()
             finally:
@@ -586,6 +611,7 @@ class NativeLidarPort:
                 "matcher_transport": MATCHER_TRANSPORT,
                 "matcher_process_start_method": MATCHER_START_METHOD,
                 "running": self._running,
+                "startup_error": self._startup_error,
                 "matcher_process_alive": bool(
                     process is not None and process.is_alive()
                 ),
@@ -949,7 +975,7 @@ def open_native_lidar_port(
     )
     try:
         if port.start() is not True:
-            raise RuntimeError("native V3 LiDAR owner did not start")
+            raise RuntimeError(f"native V3 LiDAR owner did not start: {port.startup_error}")
         return port
     except Exception:
         port.stop()
