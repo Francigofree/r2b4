@@ -10,6 +10,28 @@ from tools.navigation_simulator.experiments import compare,read_suite
 from tools.tuners.r2b4_motion_tuner import resolve_config,PROJECT_ROOT,run_experiment
 
 
+def test_shutdown_timeout_still_terminates_other_owned_groups_and_closes_logs(monkeypatch):
+    import signal
+    import subprocess
+    from types import SimpleNamespace
+    from tools.navigation_simulator.runtime import Stack
+    signals, closed = [], []
+    def wait_hung(**kwargs):
+        raise subprocess.TimeoutExpired("unreaped child", kwargs["timeout"])
+    stack = Stack.__new__(Stack)
+    stack.children = {"other": SimpleNamespace(pid=10, wait=lambda **_: 0),
+                      "hung": SimpleNamespace(pid=11, wait=wait_hung)}
+    stack.logs = [SimpleNamespace(close=lambda: closed.append("log"))]
+    stack.lock = SimpleNamespace(close=lambda: closed.append("lock"))
+    monkeypatch.setattr("tools.navigation_simulator.runtime.os.killpg",
+        lambda pid, sig: signals.append((pid, sig)))
+    with pytest.raises(subprocess.TimeoutExpired):
+        stack.close()
+    assert all((pid, signal.SIGTERM) in signals and (pid, signal.SIGKILL) in signals
+               for pid in (10, 11))
+    assert closed == ["log", "lock"]
+
+
 def test_source_snapshot_tracks_ros_edge_goal_policy_and_bridge(tmp_path, monkeypatch):
     import v3.replay
     from tools.navigation_simulator.evidence import source_snapshot

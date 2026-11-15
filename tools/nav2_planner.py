@@ -170,8 +170,14 @@ def _commands(paths, *, full, radius, robot_geometry=None, controller_limits=Non
         servers += (("nav2_controller", "controller_server"),
                     ("nav2_behaviors", "behavior_server"), ("nav2_bt_navigator", "bt_navigator"))
     commands = []
+    # stderr is a file in the supervisor. Native ROS logging runs on the
+    # controller/action threads and can block them on filesystem writeback.
+    # Keep /rosout (already consumed by Nav2Diagnostics) as the log egress;
+    # neither console redirection nor spdlog may write in those threads.
+    log_args = ["--disable-stdout-logs", "--disable-external-lib-logs"] if full else []
     for package, executable in servers:
         command = [str(paths["prefix"] / "lib" / package / executable), "--ros-args",
+                   *log_args,
                    "--params-file", str(paths["params"]), "--params-file", str(paths["geometry"])]
         if executable in ("controller_server", "behavior_server"):
             command += ["-r", "cmd_vel:=/r2b4/nav2/cmd_vel"]
@@ -182,6 +188,7 @@ def _commands(paths, *, full, radius, robot_geometry=None, controller_limits=Non
     managed = [executable for _, executable in servers]
     commands.append(("lifecycle_manager", [str(paths["prefix"] / "lib" /
         "nav2_lifecycle_manager" / "lifecycle_manager"), "--ros-args",
+        *log_args,
         "-r", "__node:=lifecycle_manager_navigation",
         "-p", "autostart:=true", "-p", "node_names:=[" + ",".join(managed) + "]",
         "-p", "bond_timeout:=2.0", "-p", "attempt_respawn_reconnection:=false",

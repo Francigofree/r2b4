@@ -179,6 +179,7 @@ class Stack:
                 except ProcessLookupError:
                     pass
         deadline = time.monotonic() + 3
+        error = None
         for child in reversed(list(self.children.values())):
             try:
                 child.wait(timeout=max(.01, deadline-time.monotonic()))
@@ -188,11 +189,18 @@ class Stack:
                 os.killpg(child.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            child.wait(timeout=3)
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired as exc:
+                # One child stuck in kernel I/O must not skip termination of
+                # the remaining groups or prevent capture finalization.
+                error = error or exc
         for log in self.logs:
             log.close()
         if self.lock:
             self.lock.close()
+        if error is not None:
+            raise error
 
 
 def read_status(path):
@@ -649,8 +657,12 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
         finally:
             backend.close()
             sender.close()
-            stack.close()
-            command_directory.cleanup()
+            try:
+                stack.close()
+            except BaseException as exc:
+                error = error or exc
+            finally:
+                command_directory.cleanup()
         if capture_started:
             try:
                 capture = session.finalize(SimpleNamespace(status=0 if error is None and plant is not None and not plant.fault_layer and not plant.collision_count else 1),error=error)
