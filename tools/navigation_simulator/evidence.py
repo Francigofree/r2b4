@@ -60,9 +60,10 @@ def source_snapshot(root):
 
 def replay(capture, root, output):
     from v3.replay import replay_capture, V3ReplayError, write_replay_result
+    from v3.mcap_replay_bridge import McapReplayBridgeError
     try:
         result = replay_capture(capture, project_root=root)
-    except V3ReplayError as exc:
+    except (V3ReplayError,McapReplayBridgeError) as exc:
         result = {"status": "BLOCKED", "reason": str(exc), "physical_output": False}
         write(output, result)
     else:

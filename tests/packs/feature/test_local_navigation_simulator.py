@@ -69,6 +69,18 @@ def test_real_v3_sensor_edge_preserves_delayed_lineage_without_truth_fix(tmp_pat
         assert sink.write_count==len(records)
     finally:
         composition.close()
+    # Persist a real sampled capture and prove that native replay refuses it.
+    from v3_process_runtime import McapCaptureSession
+    from v3.mcap_capture import McapCaptureConfig
+    from tools.navigation_simulator.evidence import replay
+    session=McapCaptureSession("sampled",tmp_path/"sampled.mcap",configuration={"production_control":config},
+        config=McapCaptureConfig(mode="append_only",tick_sample_hz=5))
+    session.start()
+    for record in records:
+        session.observe(record)
+    capture=session.finalize(SimpleNamespace(status=0))
+    blocked=replay(capture,PROJECT_ROOT,tmp_path/"sampled_replay.json")
+    assert blocked["status"]=="BLOCKED" and "CAPTURE_INCOMPLETE" in blocked["reason"]
 
 
 def test_direct_mcap_analysis_replay_and_corruption_fail_closed(tmp_path):

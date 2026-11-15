@@ -48,6 +48,7 @@ vagy pacing-határ túllépés lezárja a futást. Nincs automatikus hibásprób
 ./r sim simulate --scenario corridor
 ./r sim simulate --scenario explore
 ./r sim simulate --scenario docs/examples/local_navigation_fault.json
+./r sim fault --scenario docs/examples/local_navigation_fault.json
 
 ./r sim analyze capture.mcap
 ./r sim analyze capture.mcap --summary-only
@@ -57,6 +58,7 @@ vagy pacing-határ túllépés lezárja a futást. Nincs automatikus hibásprób
 ./r sim autotune --variants 2 --budget-s 600
 ./r sim autotune --search v3 --variants 2 --suite sajat_suite.json
 ./r sim regression --baseline regi/run/result.json --scenario room
+./r sim watch --baseline regi/run/result.json --max-runs 20
 ./r sim stress --scenario explore --repeat 10
 ```
 
@@ -163,18 +165,26 @@ hangolhatók; topic, plugin, frame, footprint, freshness és frekvencia nem.
 Az `--overlays` ilyen dokumentumok tömbje. Az aktív `conf/` fájlok nem íródnak.
 Érvénytelen interfészt vagy paramétert a futtató elutasít.
 
-A biztonságos PASS, végső STOP és replay MATCH megelőzi a pontozást. A rangsor
+A biztonsági evidence, végső STOP és replay MATCH megelőzi a pontozást. A baseline
+lehet biztonságosan befejezett, de viselkedésileg sikertelen próba; ajánlható
+változat minden szcenárióban csak PASS lehet. A rangsor
 célhibát, futásidőt/utat, clearance-t, megállást és lokalizációs hibát hasonlít
-össze. A legjobb megfelelő változat `best_override.json`; automatikus éles
+össze; RC-ben a független truth coverage számít, a céltalan körözés nem javítja
+a pontszámot. A FAIL→PASS javítás külön állítás a közös PASS-próbák numerikus
+javulásától. A train alapján rögzített egyetlen győztes egyszer fut holdouton;
+sikertelen holdout után nincs másik változat kiválasztása ugyanazon evidence-ből.
+A legjobb megfelelő változat `best_override.json`; automatikus éles
 alkalmazás nincs. A kézi review és független ismétlés továbbra szükséges.
 
 Minden eredmény a jelenlegi production import-closure és releváns konfiguráció
 tartalmi hashét, Git HEAD-et és dirty állapotot tartalmazza. Futás közbeni
 forrásváltozás FAIL. Regressziónál a régi `result.json` és az új futás ugyanazon
 szcenárióját hasonlítja össze, toleranciákkal; hiányzó evidence INCONCLUSIVE.
-Nincs háttérben futó source watcher vagy automatikus kódmódosítás. A forrás
-követését minden új `r sim` hívás végzi; javítás után a mentett szcenárióval
-explicit `regression` fut.
+Minden új `r sim` hívás az aktuális forrást használja. Az explicit `watch`
+indításkor, majd a releváns forrás/config/bináris fájlok megváltozásakor friss
+Python-folyamatban hívja a regressziós parancsot. Változatlan fájloknál csak a
+stat adatokat figyeli, nem futtat újra tesztet. Az első FAIL-nél megáll;
+megszakítása Ctrl-C. Automatikus kódmódosítást nem végez.
 
 ## Eredmények és bizonyítási korlát
 
