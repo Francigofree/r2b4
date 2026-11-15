@@ -9478,3 +9478,178 @@ terminate called without an active exception
 [INFO] [1794775428.970631382] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
 [INFO] [1794775428.978879861] [global_costmap.global_costmap]: Destroying
 [INFO] [1794775428.994328810] [planner_server]: Destroying
+[WARN] [1794775720.469073425] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794775720.475588865] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794775720.689874306] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794775720.691778307] [planner_server]: Creating
+[INFO] [1794775720.763847935] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794775720.764424689] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794775720.769997008] [planner_server]: Configuring
+[INFO] [1794775720.770181432] [global_costmap.global_costmap]: Configuring
+[INFO] [1794775720.836275616] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794775720.846419467] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794775720.850043229] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794775720.862738056] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794775720.862822741] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794775720.867413976] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794775720.874632390] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794775720.874696557] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794775720.875680640] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794775720.986292041] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794775720.986369578] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794775720.988714408] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794775720.991969729] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794775720.992053155] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794775721.173316235] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 115 at 0.050000 m/pix
+[INFO] [1794775721.841318917] [planner_server]: Activating
+[INFO] [1794775721.841399564] [global_costmap.global_costmap]: Activating
+[INFO] [1794775721.841428286] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794775721.841548470] [global_costmap.global_costmap]: start
+[INFO] [1794775722.043889707] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794775722.048282722] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794775727.242565454] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 115 at 0.050000 m/pix
+[INFO] [1794775729.242194097] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 115 at 0.050000 m/pix
+[INFO] [1794775733.241685787] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 116 at 0.050000 m/pix
+[INFO] [1794775735.242264680] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 119 at 0.050000 m/pix
+[INFO] [1794775737.441807396] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 130 at 0.050000 m/pix
+[INFO] [1794775739.242029941] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 132 at 0.050000 m/pix
+[INFO] [1794775741.245898970] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 132 at 0.050000 m/pix
+[INFO] [1794775743.441714258] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 145 at 0.050000 m/pix
+[INFO] [1794775755.241750093] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 151 at 0.050000 m/pix
+[INFO] [1794775761.443962229] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 146 X 152 at 0.050000 m/pix
+[INFO] [1794775772.484993557] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794775772.485055409] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794775772.485330906] [planner_server]: Deactivating
+[INFO] [1794775772.486432970] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794775772.641756327] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794775772.641830623] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794775772.651980436] [planner_server]: Cleaning up
+[INFO] [1794775772.657847975] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794775772.662634116] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794775772.663099111] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794775772.672369285] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794775772.680115880] [global_costmap.global_costmap]: Destroying
+[INFO] [1794775772.688128861] [planner_server]: Destroying
+[WARN] [1794775815.488697344] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794775815.488749622] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794775815.655879629] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794775815.657615316] [planner_server]: Creating
+[INFO] [1794775815.734738954] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794775815.735190487] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794775815.773633612] [planner_server]: Configuring
+[INFO] [1794775815.773740093] [global_costmap.global_costmap]: Configuring
+[INFO] [1794775815.796805971] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794775815.803259560] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794775815.813072525] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794775815.823920165] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794775815.823993497] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794775815.824958970] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794775815.831176579] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794775815.831257986] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794775815.832369586] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794775815.891327855] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794775815.891525576] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794775815.893704852] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794775815.896600732] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794775815.896692379] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794775816.332475176] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 112 at 0.050000 m/pix
+[INFO] [1794775816.380685266] [planner_server]: Activating
+[INFO] [1794775816.380757451] [global_costmap.global_costmap]: Activating
+[INFO] [1794775816.380783469] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794775816.380911931] [global_costmap.global_costmap]: start
+[INFO] [1794775816.634287602] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794775816.639950716] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794775826.582149798] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 136 X 117 at 0.050000 m/pix
+[INFO] [1794775828.382002792] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 138 X 121 at 0.050000 m/pix
+[INFO] [1794775830.583144771] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 133 at 0.050000 m/pix
+[INFO] [1794775834.582090818] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 142 X 145 at 0.050000 m/pix
+[INFO] [1794775838.582107059] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 143 X 145 at 0.050000 m/pix
+[INFO] [1794775856.581953329] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 145 at 0.050000 m/pix
+[INFO] [1794775858.582227151] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 164 at 0.050000 m/pix
+[INFO] [1794775860.582006477] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 144 X 175 at 0.050000 m/pix
+[INFO] [1794775892.015187600] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794775892.015263358] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794775892.015846167] [planner_server]: Deactivating
+[INFO] [1794775892.015926796] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794775892.182054572] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794775892.182132164] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794775892.192285737] [planner_server]: Cleaning up
+[INFO] [1794775892.199312801] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794775892.203678613] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794775892.204054017] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794775892.216800084] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794775892.223421541] [global_costmap.global_costmap]: Destroying
+[INFO] [1794775892.235484262] [planner_server]: Destroying
+[WARN] [1794775913.234414583] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794775913.234486472] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794775913.283078503] [planner_server]: 
+	planner_server lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794775913.285261335] [planner_server]: Creating
+[INFO] [1794775913.294650192] [global_costmap.global_costmap]: 
+	global_costmap lifecycle node launched. 
+	Waiting on external lifecycle transitions to activate
+	See https://design.ros2.org/articles/node_lifecycle.html for more information.
+[INFO] [1794775913.295114984] [global_costmap.global_costmap]: Creating Costmap
+[INFO] [1794775913.522465545] [planner_server]: Configuring
+[INFO] [1794775913.522666080] [global_costmap.global_costmap]: Configuring
+[INFO] [1794775913.546760134] [global_costmap.global_costmap]: Using plugin "static_layer"
+[INFO] [1794775913.556442563] [global_costmap.global_costmap]: Subscribing to the map topic (/map) with transient local durability
+[INFO] [1794775913.560252120] [global_costmap.global_costmap]: Subscribing to updates
+[INFO] [1794775913.565817106] [global_costmap.global_costmap]: Initialized plugin "static_layer"
+[INFO] [1794775913.566356008] [global_costmap.global_costmap]: Using plugin "obstacle_layer"
+[INFO] [1794775913.568414434] [global_costmap.global_costmap]: Subscribed to Topics: scan
+[INFO] [1794775913.575701088] [global_costmap.global_costmap]: Initialized plugin "obstacle_layer"
+[INFO] [1794775913.575776773] [global_costmap.global_costmap]: Using plugin "inflation_layer"
+[INFO] [1794775913.577616311] [global_costmap.global_costmap]: Initialized plugin "inflation_layer"
+[INFO] [1794775913.636796522] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 118 X 135 at 0.050000 m/pix
+[INFO] [1794775913.656295101] [planner_server]: Created global planner plugin GridBased of type nav2_smac_planner::SmacPlanner2D
+[INFO] [1794775913.656377934] [planner_server]: Configuring GridBased of type SmacPlanner2D
+[ERROR] [1794775913.659043890] [planner_server]: Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities. It is HIGHLY recommended to set the inflation radius to be at MINIMUM half of the robot's largest cross-section. See github.com/ros-planning/navigation2/tree/main/nav2_smac_planner#potential-fields for full instructions. This will substantially impact run-time performance.
+[INFO] [1794775913.664967391] [planner_server]: Configured plugin GridBased of type SmacPlanner2D with tolerance 0.10, maximum iterations 100000, max on approach iterations 100, and not allowing unknown traversal.
+[INFO] [1794775913.665147945] [planner_server]: Planner Server has GridBased  planners available.
+[INFO] [1794775914.157201164] [planner_server]: Activating
+[INFO] [1794775914.157279516] [global_costmap.global_costmap]: Activating
+[INFO] [1794775914.157296664] [global_costmap.global_costmap]: Checking transform
+[INFO] [1794775914.157511328] [global_costmap.global_costmap]: start
+[INFO] [1794775914.360743760] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 119 X 137 at 0.050000 m/pix
+[INFO] [1794775914.409269959] [planner_server]: Activating plugin GridBased of type SmacPlanner2D
+[INFO] [1794775914.410518762] [planner_server]: Creating bond (planner_server) to lifecycle manager.
+[INFO] [1794775916.357725149] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 119 X 137 at 0.050000 m/pix
+[INFO] [1794775918.357920564] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 119 X 137 at 0.050000 m/pix
+[INFO] [1794775926.357786547] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 135 X 139 at 0.050000 m/pix
+[INFO] [1794775928.357715317] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 141 X 143 at 0.050000 m/pix
+[INFO] [1794775930.359011647] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 144 at 0.050000 m/pix
+[INFO] [1794775932.357692354] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 147 X 150 at 0.050000 m/pix
+[INFO] [1794775934.557899324] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 150 at 0.050000 m/pix
+[INFO] [1794775936.358203627] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 150 at 0.050000 m/pix
+[INFO] [1794775938.357746678] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 150 at 0.050000 m/pix
+[INFO] [1794775954.557685178] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 148 X 150 at 0.050000 m/pix
+[INFO] [1794775956.558664882] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 150 at 0.050000 m/pix
+[INFO] [1794775980.557849631] [global_costmap.global_costmap]: StaticLayer: Resizing costmap to 149 X 151 at 0.050000 m/pix
+[INFO] [1794775991.483008700] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1794775991.483085051] [planner_server]: Running Nav2 LifecycleNode rcl preshutdown (planner_server)
+[INFO] [1794775991.483185236] [planner_server]: Deactivating
+[INFO] [1794775991.483220161] [global_costmap.global_costmap]: Deactivating
+[INFO] [1794775991.557870581] [planner_server]: Deactivating plugin GridBased of type SmacPlanner2D
+[INFO] [1794775991.557979487] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794775991.568137115] [planner_server]: Cleaning up
+[INFO] [1794775991.589790581] [global_costmap.global_costmap]: Cleaning up
+[INFO] [1794775991.606899552] [planner_server]: Cleaning up plugin GridBased of type SmacPlanner2D
+[INFO] [1794775991.607150606] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+[INFO] [1794775991.639918302] [planner_server]: Destroying bond (planner_server) to lifecycle manager.
+[INFO] [1794775991.647108532] [global_costmap.global_costmap]: Destroying
+[INFO] [1794775991.658484186] [planner_server]: Destroying
