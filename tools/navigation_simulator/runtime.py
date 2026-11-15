@@ -115,7 +115,18 @@ class Stack:
         from tools.nav2_planner import _bridge_ready
         nav = read_status(self.output/"nav_status.json")
         slam = read_status(self.output/"slam_status.json")
-        return (_bridge_ready(nav,time.monotonic_ns(),pid=self.children["bridge"].pid)
+        now=time.monotonic_ns()
+        window=nav.get("nav2_observation",{}).get("global_costmap_window")
+        free_start=False
+        if isinstance(window,dict) and window.get("robot_in_bounds"):
+            pose=window["robot_pose_in_frame"]
+            x=math.floor((pose[0]-window["origin_x_m"])/window["resolution_m"])
+            y=math.floor((pose[1]-window["origin_y_m"])/window["resolution_m"])
+            if 0<=x<window["width"] and 0<=y<window["height"]:
+                free_start=0<=window["cells"][y*window["width"]+x]<99
+        fresh=all(type(nav.get(key)) is int and 0<=now-nav[key]<=250_000_000
+                  for key in ("scan_measurement_ns","odom_measurement_ns","tf_measurement_ns"))
+        return (_bridge_ready(nav,now,pid=self.children["bridge"].pid) and fresh and free_start
                 and slam.get("state") == "ACTIVE" and slam.get("poses_returned", 0) > 0)
 
     def fault(self, fault, active):
@@ -242,7 +253,7 @@ class Plant(DifferentialDriveExperiment):
                     values.append(DataField(field.key, field.value+offset if offset else field.value))
                 row = replace(row, values=tuple(values))
             elif row.kind == "lidar_safety_clearance":
-                row = sample("lidar_safety_clearance", age_ns=0, **{f"{name}_{key}": value
+                row = sample("lidar_safety_clearance", age_ns=0, clearance_basis="BODY_OUTLINE", **{f"{name}_{key}": value
                     for name, distances in sectors.items() for key, value in
                     (("clearance_m", min(distances) if distances else 0.), ("observation_count",len(distances)))})
             output.append(row)
@@ -301,7 +312,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     from v3.capture_encoding import encode_value
     from v3.composition.native_control import NativeControlComposition
     from v3.mcap_capture import McapCaptureConfig
-    from v3_process_runtime import McapCaptureSession
+    from v3.process_sidecars import ProcessMcapCaptureSession
     root, directory = Path(root).resolve(), Path(directory).resolve()
     scenario, overlay = validate(scenario), overlay or {}
     resolved = resolve_config(root, overlay.get("vezerles"))
@@ -323,9 +334,9 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     backend = FaultNavigation(Nav2NavigationClient(Nav2NavigationConfig(str(directory/"nav.sock"))))
     sink = VirtualMotorSink()
     composition = NativeControlComposition(sink,config,navigation_backend=backend)
-    session = McapCaptureSession("local-navigation",directory/"capture.mcap",configuration={"production_control":config},
+    session = ProcessMcapCaptureSession("local-navigation",directory/"capture.mcap",configuration={"production_control":config},
         metadata={"source":"simulation","scenario":scenario,"physical_hardware":False,"source_sha256":snapshot["sha256"]},
-        config=McapCaptureConfig(mode="append_only",tick_sample_hz=50),capacity=2048)
+        config=McapCaptureConfig(mode="append_only",tick_sample_hz=50),capacity=256,project_root=directory)
     timeline = (directory/"timeline.ndjson").open("w")
     plant = None
     active = False
@@ -338,6 +349,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     max_pose_error = 0.
     samples = 0
     resources = {"owned_rss_mb":0.,"owned_cpu_s":0.}
+    phase_max_ms = {name:0. for name in ("resource_check","readiness","command_ingress","sensor_v3_observation")}
     transitions = []
     trace_previous = None
     first_failure = None
@@ -364,8 +376,9 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                 receiver.remember_scan(exported)
             plant._publish_scan = None
         if raw is not None:
-            session.hub.publish(raw,topic="v3.raw_lidar")
+            session.observe_raw_lidar(raw)
         session.observe(record)
+        session.observe_decision(record)
         if session.failed:
             raise RuntimeError("SIMULATION_CAPTURE_INTEGRITY_FAILURE")
         nav, mission = layers.get("L6"),layers.get("L5")
@@ -420,15 +433,21 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                 time.sleep(remaining)
             lateness = max(0,time.monotonic_ns()-deadline)
             max_lateness_ns = max(max_lateness_ns,lateness)
+            if lateness>500_000_000:
+                raise RuntimeError("SIMULATION_PACING_DEADLINE_EXCEEDED")
             if time.monotonic()-last_check>.25:
+                phase_start=time.perf_counter_ns()
                 sample = stack.check(memory_limit_mb)
                 resources = {k:max(resources[k],v) for k,v in sample.items()}
                 last_check = time.monotonic()
+                phase_max_ms["resource_check"]=max(phase_max_ms["resource_check"],(time.perf_counter_ns()-phase_start)/1e6)
             if not active:
+                phase_start=time.perf_counter_ns()
                 if stack.ready() and receiver.accepted_packets>0:
                     active,active_start = True,plant.now_ns
                 elif time.monotonic()-started>startup_s:
                     raise RuntimeError("SIMULATION_STARTUP_TIMEOUT")
+                phase_max_ms["readiness"]=max(phase_max_ms["readiness"],(time.perf_counter_ns()-phase_start)/1e6)
             elapsed = 0 if active_start is None else (plant.now_ns-active_start)/1e9
             plant.faults = {fault["kind"] for fault in scenario["faults"] if fault["start_s"]<=elapsed<fault["start_s"]+fault["duration_s"]} if active else set()
             plant.delay_s = max((fault.get("delay_s",0) for fault in scenario["faults"] if fault["kind"]=="lidar_delay" and fault["start_s"]<=elapsed<fault["start_s"]+fault["duration_s"]),default=0)
@@ -441,6 +460,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             if active and elapsed>=scenario["duration_s"]:
                 break
             if active and "command_loss" not in plant.faults:
+                phase_start=time.perf_counter_ns()
                 if scenario["behavior"]=="roomcruise":
                     profile = resolved.roomcruise
                     plant.client.publish_explore("simulation.cruise",max_v_mps=profile.max_v_mps,
@@ -449,13 +469,19 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                     plant.client.publish_navigate("simulation.navigate",**scenario["goal"],frame_id="R2B4_ODOM_LOCAL",
                         max_v_mps=min(.25,ingress.maximum_linear_speed_mps),
                         max_omega_rad_s=min(1.4,ingress.maximum_angular_speed_rad_s),ttl_ns=200_000_000)
+                phase_max_ms["command_ingress"]=max(phase_max_ms["command_ingress"],(time.perf_counter_ns()-phase_start)/1e6)
             before,cpu = time.perf_counter_ns(),time.thread_time_ns()
             result = plant.step(active=active)
             wall = time.perf_counter_ns()-before
             tick_wall_ns+=wall
             tick_cpu_ns+=time.thread_time_ns()-cpu
             tick_max_ns=max(tick_max_ns,wall)
+            phase_max_ms["sensor_v3_observation"]=max(phase_max_ms["sensor_v3_observation"],wall/1e6)
             tick_overruns+=wall>plant.dt_ns
+            if result.final_actuation.safety_decision.value=="FAULT":
+                plant.fault_layer=plant.fault_layer or "L12"
+                plant.first_boundary=plant.first_boundary or {"tick_id":result.trace.context.tick_id,
+                    "monotonic_ns":result.trace.context.monotonic_ns,"layer":"L12","reason":result.final_actuation.reason}
             if plant.collision_count or plant.fault_layer:
                 termination = "FOOTPRINT_COLLISION" if plant.collision_count else "NATIVE_FAULT"
                 first_failure = plant.first_boundary
@@ -466,6 +492,9 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     except BaseException as exc:
         error = exc
         termination = f"{type(exc).__name__}:{exc}"
+        if first_failure is None:
+            first_failure={"tick_id":plant.tick if plant else None,"monotonic_ns":plant.now_ns if plant else None,
+                           "layer":"simulation_edge","reason":termination}
     finally:
         if plant is not None:
             # STOP uses the same gateway and V3 chain; no direct sink write.
@@ -473,7 +502,12 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
             try:
                 plant.faults=set()
                 backend.drop=False
-                plant.settle()
+                for _ in range(max(1,math.ceil(6*scenario["plant"]["response_tau_s"]/(plant.dt_ns/1e9)))):
+                    remaining=(plant.now_ns+plant.dt_ns-time.monotonic_ns())/1e9
+                    if remaining>0:
+                        time.sleep(remaining)
+                    plant.client.publish_stop("simulation.settle",ttl_ns=200_000_000)
+                    plant.step()
             except BaseException as exc:
                 error = error or exc
         composition.close()
@@ -487,9 +521,11 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
     truth_error = math.hypot(plant.x-scenario["goal"]["x_m"],plant.y-scenario["goal"]["y_m"]) if plant else None
     goal_reached = truth_error is not None and truth_error<=scenario["position_tolerance_m"]
     final_stop = plant is not None and plant.output==(0.,0.)
+    body_stopped=plant is not None and max(abs(plant.left),abs(plant.right))<.005
     failures = []
     if error: failures.append(termination)
     if not final_stop: failures.append("FINAL_STOP_NOT_PROVEN")
+    if not body_stopped: failures.append("VIRTUAL_BODY_NOT_SETTLED")
     if plant and plant.collision_count: failures.append("FOOTPRINT_COLLISION")
     if plant and plant.fault_layer: failures.append("NATIVE_FAULT:"+plant.fault_layer)
     if expected["goal_reached"] and not goal_reached: failures.append("TRUTH_GOAL_NOT_REACHED")
@@ -501,7 +537,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
               "physical_output":False,"backend":"production_v3_slam_nav2","scenario":scenario,
               "scenario_sha256":digest(scenario),"source_sha256":snapshot["sha256"],"overlay":overlay,"overlay_sha256":digest(overlay),
               "config_snapshot_id":resolved.snapshot_id,"termination":termination,"failures":failures,
-              "first_failure":first_failure,"final_stop":final_stop,"capture":str(capture) if capture else None,
+              "first_failure":first_failure,"final_stop":final_stop,"virtual_body_stopped":body_stopped,"capture":str(capture) if capture else None,
               "metrics":{"path_length_m":plant.path_length if plant else 0,"goal_error_m":truth_error,
                          "goal_reached":goal_reached,"longest_stationary_s":longest_stationary,
                          "minimum_clearance_m":min_clearance if math.isfinite(min_clearance) else None,
@@ -509,6 +545,7 @@ def run(root, directory, scenario, *, domain=75, overlay=None, replay=True, star
                          "active_duration_s":samples*.02,"max_localization_error_m":max_pose_error,
                          "max_tick_wall_ms":tick_max_ns/1e6,"tick_wall_s":tick_wall_ns/1e9,"tick_thread_cpu_s":tick_cpu_ns/1e9,
                          "ticks_over_20ms":tick_overruns,"max_tick_lateness_ms":max_lateness_ns/1e6,**resources},
+              "phase_max_wall_ms":phase_max_ms,
               "localization":{"accepted":receiver.accepted_packets,"rejected":receiver.dropped_packets,"last_reason":receiver.last_reason},
               "navigation_reasons":dict(reasons),"transitions":transitions,
               "slam":read_status(directory/"slam_status.json"),"nav2":read_status(directory/"nav_status.json"),
