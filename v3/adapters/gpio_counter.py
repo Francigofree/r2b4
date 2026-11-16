@@ -203,6 +203,11 @@ class _CounterState:
     pending_direction: int = 0
     pending_a_timestamps: list[int] | None = None
     quadrature_rejections: int = 0
+    # Passive parts of the aggregate: repeated B level, ambiguous A/B phase,
+    # and reversal candidates discarded before direction confirmation.
+    b_duplicate_rejections: int = 0
+    a_phase_rejections: int = 0
+    direction_rejections: int = 0
     direction_change_candidates: int = 0
     direction_changes_confirmed: int = 0
     diagnostic_events: deque[QuadratureAlertEvent] | None = None
@@ -493,6 +498,7 @@ class NativeGpioSignedCounterPair:
                     return
                 if level == state.level_b:
                     state.quadrature_rejections += 1
+                    state.b_duplicate_rejections += 1
                     self._record_event(
                         state, channel="B", callback_timestamp_ns=tick,
                         physical_timestamp_ns=tick, level=level, accepted=False,
@@ -554,6 +560,7 @@ class NativeGpioSignedCounterPair:
         assert state.pending_a_timestamps is not None
         if state.pending_a_timestamps:
             state.quadrature_rejections += len(state.pending_a_timestamps)
+            state.direction_rejections += len(state.pending_a_timestamps)
         state.pending_a_timestamps.clear()
         state.pending_direction = 0
 
@@ -654,6 +661,7 @@ class NativeGpioSignedCounterPair:
                 )
                 if level_b is None:
                     state.quadrature_rejections += 1
+                    state.a_phase_rejections += 1
                     state.last_a_timestamp_ns = physical_tick
                     self._record_event(
                         state, channel="A", callback_timestamp_ns=tick,
@@ -747,6 +755,9 @@ class NativeGpioSignedCounterPair:
             invalid_alerts=state.invalid_alerts,
             edge_history=tuple(state.edge_history),
             quadrature_rejections=state.quadrature_rejections,
+            b_duplicate_rejections=state.b_duplicate_rejections,
+            a_phase_rejections=state.a_phase_rejections,
+            direction_rejections=state.direction_rejections,
             direction_change_candidates=state.direction_change_candidates,
             direction_changes_confirmed=state.direction_changes_confirmed,
             confirmed_direction=state.confirmed_direction,

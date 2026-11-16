@@ -72,13 +72,21 @@ def _watchdog(paths, lock_fd, output_lock, heartbeat, tripped, ready, stop, pare
     owned_lock = lock_fd.detach()
     fds = []
     parent_fd = os.pidfd_open(parent_pid)
+    reason = "WATCHDOG_ERROR"
+    heartbeat_age_ns = None
     try:
         for path in paths:
             fds.append(os.open(path, os.O_WRONLY | os.O_CLOEXEC))
         ready.set()
+        reason = None
         while not stop.wait(0.02):
-            if (os.getppid() != parent_pid or (heartbeat.value and
-                    time.monotonic_ns() - heartbeat.value > int(WATCHDOG_S * 1e9))):
+            beat = heartbeat.value
+            heartbeat_age_ns = time.monotonic_ns() - beat if beat else None
+            if os.getppid() != parent_pid:
+                reason = "OWNER_EXITED"
+                break
+            if beat and heartbeat_age_ns > int(WATCHDOG_S * 1e9):
+                reason = "HEARTBEAT_EXPIRED"
                 break
         # Latch before waiting: even a temporarily busy parent cannot start
         # another frame. If the parent died holding its lock, still force LOW.
@@ -95,10 +103,25 @@ def _watchdog(paths, lock_fd, output_lock, heartbeat, tripped, ready, stop, pare
         finally:
             if acquired:
                 output_lock.release()
+    except BaseException:
+        if reason is None:
+            reason = "WATCHDOG_ERROR"
+        raise
     finally:
         tripped.value = True
         try:
             _zero_fds(fds)
+            if reason is not None:
+                # Diagnostics can block or fail only AFTER the physical zero.
+                # One bounded line lets the supervisor distinguish a watchdog
+                # intervention from an unexplained owner disappearance.
+                age = heartbeat_age_ns if heartbeat_age_ns is not None else "disarmed"
+                notice = (f"RP1_PWM_WATCHDOG reason={reason} parent_pid={parent_pid} "
+                          f"heartbeat_age_ns={age}\n").encode("ascii")
+                try:
+                    os.write(2, notice)
+                except OSError:
+                    pass
         finally:
             for fd in fds:
                 os.close(fd)
@@ -200,7 +223,16 @@ class Rp1MotorFrameSink:
             if (not acquired or self._tripped.value or not self._guard.is_alive()
                     or (self._heartbeat.value and time.monotonic_ns() - self._heartbeat.value > int(WATCHDOG_S * 1e9))):
                 raise OSError("RP1 motor watchdog expired or unavailable")
-            self._heartbeat.value = time.monotonic_ns()
+            requested_duties = (frame.left.in1_duty_cycle, frame.left.in2_duty_cycle,
+                                frame.right.in1_duty_cycle, frame.right.in2_duty_cycle)
+            # A slow redundant zero write cannot leave motion behind. Keep
+            # zero -> zero disarmed, but protect activation before its first
+            # write and active -> STOP until all four pins have reached zero.
+            self._heartbeat.value = (
+                time.monotonic_ns() if any(self._last.values()) or (
+                    frame.safety_decision is SafetyDecision.ALLOW and any(requested_duties)
+                ) else 0
+            )
             if frame.safety_decision is SafetyDecision.ALLOW:
                 directions = (
                     GpioMotorFrameSink._channel_direction(frame.left, self._config.left),
@@ -217,9 +249,7 @@ class Rp1MotorFrameSink:
                     # Complete at least one hardware period at zero before
                     # reversing polarity. Ordinary updates/STOP never sleep.
                     time.sleep(self._period / 1e9)
-                duties = (frame.left.in1_duty_cycle, frame.left.in2_duty_cycle,
-                          frame.right.in1_duty_cycle, frame.right.in2_duty_cycle)
-                for pin, duty in zip(self._config.pins, duties):
+                for pin, duty in zip(self._config.pins, requested_duties):
                     value = round(self._period * duty / 100)
                     if value != self._last[pin]:
                         _write_fd(self._fds[pin], value)
@@ -233,7 +263,7 @@ class Rp1MotorFrameSink:
                 raise OSError("RP1 motor watchdog tripped during write")
             # Disarm the deadline only AFTER every requested output is zero.
             # Terminal capture/device cleanup may exceed 250 ms at safe zero.
-            # Arm before the next write so a hang mid-activation stays covered.
+            # Arm before activation so a hang mid-activation stays covered.
             self._heartbeat.value = (time.monotonic_ns() if any(self._last.values()) else 0)
         except BaseException:
             self._failed = True

@@ -164,6 +164,12 @@ class EncoderEdgeDiagnostics:
     right_last_accepted_edge_timestamp_ns: int | None = None
     left_last_accepted_edge_direction: int = 0
     right_last_accepted_edge_direction: int = 0
+    left_b_duplicate_rejections: int = 0
+    right_b_duplicate_rejections: int = 0
+    left_a_phase_rejections: int = 0
+    right_a_phase_rejections: int = 0
+    left_direction_rejections: int = 0
+    right_direction_rejections: int = 0
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -264,6 +270,12 @@ class EncoderEdgeDiagnostics:
         for value, name in (
             (self.left_quadrature_rejections, "left_quadrature_rejections"),
             (self.right_quadrature_rejections, "right_quadrature_rejections"),
+            (self.left_b_duplicate_rejections, "left_b_duplicate_rejections"),
+            (self.right_b_duplicate_rejections, "right_b_duplicate_rejections"),
+            (self.left_a_phase_rejections, "left_a_phase_rejections"),
+            (self.right_a_phase_rejections, "right_a_phase_rejections"),
+            (self.left_direction_rejections, "left_direction_rejections"),
+            (self.right_direction_rejections, "right_direction_rejections"),
             (self.left_direction_change_candidates, "left_direction_change_candidates"),
             (self.right_direction_change_candidates, "right_direction_change_candidates"),
             (self.left_direction_changes_confirmed, "left_direction_changes_confirmed"),
@@ -569,6 +581,12 @@ class NativeEncoderSource:
             ),
             DataField("left_quadrature_rejections", diagnostics.left_quadrature_rejections),
             DataField("right_quadrature_rejections", diagnostics.right_quadrature_rejections),
+            DataField("left_b_duplicate_rejections", diagnostics.left_b_duplicate_rejections),
+            DataField("right_b_duplicate_rejections", diagnostics.right_b_duplicate_rejections),
+            DataField("left_a_phase_rejections", diagnostics.left_a_phase_rejections),
+            DataField("right_a_phase_rejections", diagnostics.right_a_phase_rejections),
+            DataField("left_direction_rejections", diagnostics.left_direction_rejections),
+            DataField("right_direction_rejections", diagnostics.right_direction_rejections),
             DataField("left_quadrature_rejection_delta", diagnostics.left_quadrature_rejection_delta),
             DataField("right_quadrature_rejection_delta", diagnostics.right_quadrature_rejection_delta),
             DataField("left_direction_change_candidates", diagnostics.left_direction_change_candidates),

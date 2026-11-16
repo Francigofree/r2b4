@@ -80,6 +80,84 @@ def test_roomcruise_ack_rejects_unrelated_inactive_faulted_or_old_status(
     )
 
 
+@pytest.fixture
+def acknowledgement_clock(roomcruise_ack_status, monkeypatch):
+    from v3 import operator_controller, resident_status
+
+    controller, status = roomcruise_ack_status
+    clock = SimpleNamespace(now=100.0, reads=0)
+    fake_time = SimpleNamespace(
+        monotonic=lambda: clock.now,
+        monotonic_ns=lambda: int(clock.now * 1e9),
+        sleep=lambda seconds: setattr(clock, "now", clock.now + seconds),
+    )
+    monkeypatch.setattr(operator_controller, "time", fake_time)
+    monkeypatch.setattr(resident_status, "time", fake_time)
+    monkeypatch.setattr(controller, "_transition_sleep",
+                        lambda seconds: OperatorController._transition_sleep(controller, seconds))
+    monkeypatch.setattr(controller, "_failure_report", lambda *args: None)
+
+    def fresh_status():
+        clock.reads += 1
+        status["monotonic_ns"] = fake_time.monotonic_ns()
+        return status
+
+    monkeypatch.setattr(controller, "_read_status_optional", fresh_status)
+    return controller, status, clock, fresh_status
+
+
+def test_motion_ack_accepts_fresh_allow_after_cold_producer_start(acknowledgement_clock, monkeypatch):
+    controller, status, clock, fresh_status = acknowledgement_clock
+
+    def delayed_allow():
+        if clock.now >= 103.4:
+            status.update(safety_decision="ALLOW", enabled=True, left_output=0.15, right_output=0.15)
+        return fresh_status()
+
+    monkeypatch.setattr(controller, "_read_status_optional", delayed_allow)
+    assert controller._wait_allow(456, 1, "forward")
+    assert clock.reads > 50
+    assert clock.now < 110.0
+
+
+@pytest.mark.parametrize("boundary", ["deadline", "producer_death", "runtime_death", "fault", "stale"])
+def test_motion_ack_remains_bounded_and_fails_closed(acknowledgement_clock, monkeypatch, boundary):
+    controller, status, clock, fresh_status = acknowledgement_clock
+    if boundary == "producer_death":
+        monkeypatch.setattr(controller, "_pid_matches", lambda *args: clock.now < 100.2)
+    elif boundary == "runtime_death":
+        monkeypatch.setattr(controller, "_runtime_pid", lambda: 123 if clock.now < 100.2 else None)
+
+    def guarded_status():
+        current = fresh_status()
+        if boundary == "fault" and clock.now >= 100.2:
+            current.update(safety_decision="FAULT", fault_layer="L11")
+        elif boundary == "stale":
+            current.update(safety_decision="ALLOW", enabled=True, left_output=0.15,
+                           right_output=0.15, monotonic_ns=1)
+        return current
+
+    monkeypatch.setattr(controller, "_read_status_optional", guarded_status)
+    assert not controller._wait_allow(456, 1, "forward")
+    assert clock.reads <= 200
+    assert clock.now <= 110.05
+    if boundary in {"producer_death", "runtime_death", "fault"}:
+        assert clock.now < 101.0
+
+
+def test_motion_ack_rejects_allow_when_poll_itself_exhausts_deadline(acknowledgement_clock, monkeypatch):
+    controller, status, clock, fresh_status = acknowledgement_clock
+
+    def slow_poll():
+        clock.now += 11.0
+        status.update(safety_decision="ALLOW", enabled=True, left_output=0.15, right_output=0.15)
+        return fresh_status()
+
+    monkeypatch.setattr(controller, "_read_status_optional", slow_poll)
+    assert not controller._wait_allow(456, 1, "forward")
+    assert clock.reads == 1
+
+
 def test_roomcruise_start_uses_mission_acknowledgement(roomcruise_ack_status, monkeypatch):
     from v3.config import ConfigResolver
     from v3.contracts import ExplorePreferences

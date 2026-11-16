@@ -68,6 +68,11 @@ class SignedPulseCounterSnapshot:
     last_callback_received_ns: int | None = None
     last_callback_latency_ns: int | None = None
     max_callback_latency_ns: int | None = None
+    # Passive decomposition of quadrature_rejections. Legacy serialized
+    # snapshots omit these fields and retain their original aggregate count.
+    b_duplicate_rejections: int = 0
+    a_phase_rejections: int = 0
+    direction_rejections: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.pulse_count, int) or isinstance(self.pulse_count, bool):
@@ -75,6 +80,9 @@ class SignedPulseCounterSnapshot:
         _nonnegative_int(self.read_errors, "read_errors")
         _nonnegative_int(self.invalid_alerts, "invalid_alerts")
         _nonnegative_int(self.quadrature_rejections, "quadrature_rejections")
+        _nonnegative_int(self.b_duplicate_rejections, "b_duplicate_rejections")
+        _nonnegative_int(self.a_phase_rejections, "a_phase_rejections")
+        _nonnegative_int(self.direction_rejections, "direction_rejections")
         _nonnegative_int(self.direction_change_candidates, "direction_change_candidates")
         _nonnegative_int(self.direction_changes_confirmed, "direction_changes_confirmed")
         _nonnegative_int(self.pending_direction_edges, "pending_direction_edges")
@@ -431,6 +439,12 @@ class NativeCounterEncoderBackend:
             rejection_code=rejection_code,
             left_quadrature_rejections=current.left.quadrature_rejections,
             right_quadrature_rejections=current.right.quadrature_rejections,
+            left_b_duplicate_rejections=current.left.b_duplicate_rejections,
+            right_b_duplicate_rejections=current.right.b_duplicate_rejections,
+            left_a_phase_rejections=current.left.a_phase_rejections,
+            right_a_phase_rejections=current.right.a_phase_rejections,
+            left_direction_rejections=current.left.direction_rejections,
+            right_direction_rejections=current.right.direction_rejections,
             left_quadrature_rejection_delta=(
                 None if previous is None else
                 current.left.quadrature_rejections - previous.left.quadrature_rejections

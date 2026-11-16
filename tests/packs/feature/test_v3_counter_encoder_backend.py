@@ -387,3 +387,101 @@ def test_velocity_repair_preserves_scalar_process_mailbox_observation_semantics(
             assert held.samples == actual.samples
         finally:
             mailbox._lock.release()
+
+
+@pytest.mark.parametrize('phase_offset_ns', (-25_000, 0, 25_000))
+def test_quadrature_rejection_parts_preserve_physical_edges_and_scalar_transport(phase_offset_ns):
+    import multiprocessing
+    from dataclasses import replace
+    from v3.adapters.gpio_counter import (
+        GpioCounterChannelConfig, GpioCounterPairConfig, NativeGpioSignedCounterPair,
+    )
+    from v3.adapters.process_encoder_backend import _EncoderMailbox, _MAILBOX_BYTES
+    from v3_test_fixtures import FakeGpio
+
+    config = GpioCounterPairConfig(
+        GpioCounterChannelConfig(1, 2, direction_guard_micros=50, direction_change_confirm_edges=3),
+        GpioCounterChannelConfig(3, 4, direction_guard_micros=50, direction_change_confirm_edges=3),
+    )
+    gpio, clean_gpio = FakeGpio(), FakeGpio()
+    pair = NativeGpioSignedCounterPair(gpio, config)
+    clean = NativeGpioSignedCounterPair(clean_gpio, config)
+    backend = NativeCounterEncoderBackend(pair.left_counter, pair.right_counter, _config(),
+                                         snapshot_pair=pair.snapshot_pair)
+    clean_backend = NativeCounterEncoderBackend(clean.left_counter, clean.right_counter, _config(),
+                                               snapshot_pair=clean.snapshot_pair)
+    try:
+        baseline = TickContext(0, 990_000_000)
+        backend.read(baseline)
+        clean_backend.read(baseline)
+        for channel in (config.left, config.right):
+            # Both streams contain exactly the same three physical signed
+            # edges. Extra callbacks in one stream exercise the three passive
+            # rejection categories, including a rejected reversal candidate.
+            for timestamp in (1_000_000_000, 1_005_000_000, 1_006_000_000):
+                clean_gpio.emit(channel.pin_a, 1, timestamp, chip=0)
+            gpio.emit(channel.pin_a, 1, 1_000_000_000, chip=0)
+            gpio.emit(channel.pin_b, 0, 1_000_100_000, chip=0)  # Duplicate B level.
+            physical_a_ns = 1_001_000_000
+            # A's debounced callback can arrive after this B transition even
+            # when the physical A edge preceded it by less than the guard.
+            gpio.emit(channel.pin_b, 1, physical_a_ns + phase_offset_ns, chip=0)
+            gpio.emit(channel.pin_a, 1, physical_a_ns, chip=0)
+            gpio.emit(channel.pin_a, 1, 1_002_000_000, chip=0)
+            gpio.emit(channel.pin_a, 1, 1_003_000_000, chip=0)
+            gpio.emit(channel.pin_b, 0, 1_004_000_000, chip=0)
+            gpio.emit(channel.pin_a, 1, 1_005_000_000, chip=0)
+            gpio.emit(channel.pin_a, 1, 1_006_000_000, chip=0)
+
+        context = TickContext(1, 1_020_000_000)
+        original = clean.snapshot_pair(context)
+        observed = pair.snapshot_pair(context)
+        for actual, expected in ((observed.left, original.left), (observed.right, original.right)):
+            assert actual.edge_history == expected.edge_history
+            assert actual.pulse_count == expected.pulse_count == -3
+            assert actual.invalid_alerts == expected.invalid_alerts == 0
+            assert (actual.b_duplicate_rejections, actual.a_phase_rejections, actual.direction_rejections) == (1, 1, 2)
+            assert actual.quadrature_rejections == sum((
+                actual.b_duplicate_rejections, actual.a_phase_rejections, actual.direction_rejections)) == 4
+
+        reading = backend.read(context)
+        ideal = clean_backend.read(context)
+        assert replace(reading, diagnostics=None) == replace(ideal, diagnostics=None)
+        assert reading.diagnostics.raw_left_distance_m == ideal.diagnostics.raw_left_distance_m
+        assert reading.diagnostics.raw_right_distance_m == ideal.diagnostics.raw_right_distance_m
+        mailbox = _EncoderMailbox(multiprocessing.get_context('spawn'))
+        assert mailbox.publish(('reading', reading))
+        assert 0 < mailbox._size.value < _MAILBOX_BYTES
+        revision, message = mailbox.latest(0)
+        assert revision == 1 and message == ('reading', reading)
+        source = NativeEncoderSource(type('Reading', (), {'read': lambda self, _: message[1]})(),
+                                     NativeEncoderConfig('ENC', .5))
+        values = _sample_values(source.read(TickContext(11, 1_021_000_000)))
+        for side in ('left', 'right'):
+            assert [values[f'{side}_{part}_rejections'] for part in
+                    ('b_duplicate', 'a_phase', 'direction')] == [1, 1, 2]
+        assert all(isinstance(value, (str, int, float, bool, type(None))) for value in values.values())
+        assert 'edge_history' not in values
+    finally:
+        pair.close()
+        clean.close()
+
+
+def test_legacy_encoder_diagnostics_decode_without_rejection_parts():
+    from v3.adapters.live_encoder import EncoderEdgeDiagnostics
+    from v3.capture_encoding import encode_value
+    from v3.replay import _decode_production_value
+
+    backend, _, _ = _backend((_snapshot(0),), (_snapshot(0),))
+    diagnostics = backend.read(TickContext(0, 1_000_000_000)).diagnostics
+    encoded = encode_value(diagnostics)
+    for side in ('left', 'right'):
+        for part in ('b_duplicate', 'a_phase', 'direction'):
+            del encoded[f'{side}_{part}_rejections']
+    assert _decode_production_value(encoded, EncoderEdgeDiagnostics, 'encoder_diagnostics') == diagnostics
+    snapshot = encode_value(SignedPulseCounterSnapshot(4, quadrature_rejections=12))
+    for part in ('b_duplicate', 'a_phase', 'direction'):
+        del snapshot[f'{part}_rejections']
+    restored = _decode_production_value(snapshot, SignedPulseCounterSnapshot, 'encoder_counter')
+    assert restored.quadrature_rejections == 12
+    assert restored.b_duplicate_rejections == restored.a_phase_rejections == restored.direction_rejections == 0

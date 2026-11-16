@@ -1403,7 +1403,13 @@ class OperatorController:
         mission_mode: str | None = None,
     ) -> bool:
         last: Mapping[str, object] | None = None
-        for _ in range(50):
+        # A cold command interpreter can spend several seconds importing and
+        # resolving config before its first publication. Keep that startup
+        # inside a bounded host wait, without changing the command's own TTL.
+        deadline = time.monotonic() + 10.0
+        for _ in range(200):
+            if time.monotonic() >= deadline:
+                break
             if not self._pid_matches(pid, ("v3.control_cli",)):
                 self._failure_report(label, last)
                 return False
@@ -1411,6 +1417,8 @@ class OperatorController:
                 self._failure_report(label, last)
                 return False
             last = self.live_runtime_status()
+            if time.monotonic() >= deadline:
+                break
             if last is None:
                 self._transition_sleep(0.05)
                 continue
