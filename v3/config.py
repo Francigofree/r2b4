@@ -505,12 +505,13 @@ class ConfigResolver:
         navigation = V3NavigationConfig(_typed(float,local["min_range_m"],"local.min_range_m"),
             _typed(float,local["max_range_m"],"local.max_range_m"),_typed(int,local["max_points"],"local.max_points"),
             resolved_control.world_model, resolved_control.navigation, resolved_control.async_l6)
-        motor = _keys(c["motor"], {"pwm_frequency_hz", "pwm_decay_mode"}, "motor")
+        motor = _keys({"pwm_backend": "lgpio", **c["motor"]},
+                      {"pwm_frequency_hz", "pwm_decay_mode", "pwm_backend"}, "motor")
         _keys(c["encoder"], {"a_debounce_micros", "direction_guard_micros", "direction_change_confirm_edges", "direction_change_confirm_window_micros", "edge_history_capacity", "diagnostic_event_capacity"}, "encoder")
         _keys(c["imu"], {"operation_mode", "startup_timeout_ns", "startup_poll_interval_ns"}, "imu")
         encoder = _encoder_runtime_config(h, p, gpio_chip=h["gpio_chip"], policy=c["encoder"])
         motor_output = GpioMotorFrameSinkConfig(_motor_channel(h["motorok"],"bal_oldal",motor["pwm_decay_mode"]),
-            _motor_channel(h["motorok"],"jobb_oldal",motor["pwm_decay_mode"]),h["gpio_chip"],motor["pwm_frequency_hz"])
+            _motor_channel(h["motorok"],"jobb_oldal",motor["pwm_decay_mode"]),h["gpio_chip"],motor["pwm_frequency_hz"],motor.get("pwm_backend", "lgpio"))
         if set(motor_output.pins) & set(encoder.counter_gpio.pins):
             raise ValueError("motor and encoder GPIO pins must be unique")
         sensors = _sensor_hardware_config(h, encoder, policy, navigation, p, c["imu"], resolved_control.lidar_safety.minimum_clearance_m)

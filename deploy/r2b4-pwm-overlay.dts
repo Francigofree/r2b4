@@ -1,0 +1,24 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2712";
+    fragment@0 {
+        target = <&rp1_gpio>;
+        __overlay__ {
+            r2b4_pwm_pins: r2b4_pwm_pins {
+                function = "pwm0";
+                pins = "gpio12", "gpio13", "gpio18", "gpio19";
+                bias-pull-down;
+            };
+        };
+    };
+    fragment@1 {
+        target = <&rp1_pwm0>;
+        __overlay__ {
+            status = "okay";
+            pinctrl-names = "default";
+            pinctrl-0 = <&r2b4_pwm_pins>;
+        };
+    };
+};

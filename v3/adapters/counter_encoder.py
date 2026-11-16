@@ -610,7 +610,12 @@ class NativeCounterEncoderBackend:
             else None
         )
         time_coverage = window_ns / self._config.minimum_estimation_window_ns
-        trust = min(1.0, time_coverage)
+        # At low speed two widely separated edges can cover the entire time
+        # window without supplying the configured minimum pulse evidence.
+        # Preserve the measured interval/displacement, but do not label that
+        # sparse fit fully trusted merely because enough time has elapsed.
+        pulse_coverage = abs(pulse_delta) / self._config.minimum_estimation_pulses
+        trust = min(1.0, time_coverage, pulse_coverage)
 
         return _WheelVelocityEstimate(
             velocity_mps=velocity,

@@ -30,7 +30,11 @@ class NativeMotorOutputComposition:
     ) -> None:
         if not isinstance(config, GpioMotorFrameSinkConfig):
             raise TypeError("config must be GpioMotorFrameSinkConfig")
-        sink = GpioMotorFrameSink(backend, config)
+        if config.pwm_backend == "rp1":
+            from v3.adapters.rp1_motor import Rp1MotorFrameSink
+            sink = Rp1MotorFrameSink(config)
+        else:
+            sink = GpioMotorFrameSink(backend, config)
         try:
             writer = NativeMotorWriter(config.left, config.right, sink)
         except Exception:

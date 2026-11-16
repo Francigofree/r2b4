@@ -61,6 +61,7 @@ class GpioMotorFrameSinkConfig:
     right: MotorChannelPhysicalConfig
     gpio_chip: int = 0
     pwm_frequency_hz: int = 8_000
+    pwm_backend: str = "lgpio"
 
     def __post_init__(self) -> None:
         if not isinstance(self.left, MotorChannelPhysicalConfig):
@@ -71,6 +72,8 @@ class GpioMotorFrameSinkConfig:
         _require_nonnegative_int(self.pwm_frequency_hz, "pwm_frequency_hz")
         if self.pwm_frequency_hz == 0:
             raise ValueError("pwm_frequency_hz must be positive")
+        if self.pwm_backend not in {"lgpio", "rp1"}:
+            raise ValueError("pwm_backend must be lgpio or rp1")
         if len(set(self.pins)) != len(self.pins):
             raise ValueError("left and right motor GPIO pins must be unique")
 

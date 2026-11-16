@@ -234,9 +234,12 @@ def test_stale_interval_is_untrusted_zero_and_reanchors_for_recovery():
     assert stale.diagnostics.sample_interval_ns == 300000000
     assert stale.diagnostics.computed_left_mps == pytest.approx(0.0666666667)
     assert stale.diagnostics.computed_right_mps == pytest.approx(0.0666666667)
-    assert recovered.trust == 1.0
+    # The right wheel has only two of the four required physical pulses.
+    # Long time coverage alone cannot restore full fit confidence.
+    assert recovered.trust == 0.5
     assert recovered.left_mps == pytest.approx(0.05)
-    assert recovered.right_mps == pytest.approx(0.04)
+    assert recovered.right_mps == 0.0
+    assert recovered.diagnostics.computed_right_mps == pytest.approx(0.04)
 
 def test_stopped_counter_is_timing_invalid_untrusted_and_zero():
     backend, left, _ = _backend((_snapshot(0), _snapshot(10)), (_snapshot(0), _snapshot(10)))
