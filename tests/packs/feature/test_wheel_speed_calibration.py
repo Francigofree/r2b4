@@ -4,20 +4,21 @@ from tools.wheel_speed_calibration import _run_step, fit_rows, sweep_plan
 from rig import resolved_config
 
 
-def measurements(*, bad_direction=False, drift=False, settles=False):
+def measurements(*, bad_direction=False, drift=False, settles=False, noisy=False):
     now = 1_000_000_000
     distance = {"left": 0., "right": 0.}
     for sign in (1, -1):
         for speed in (.15, .3):
-            for tick in range(125):
+            for tick in range(150):
                 now += 20_000_000
                 for side in ("left", "right"):
                     actual = speed * (1 + tick / 200 if drift else
-                                      1.4 if settles and tick < 65 else 1.)
+                                      1.4 if settles and tick < 85 else 1.)
                     distance[side] += sign * actual * .02
                     yield {"side": side, "valid": True, "time_ns": now,
                            "measured_ns": now, "sequence": now, "target": sign * speed,
                            "output": sign * speed * 1.3, "distance": distance[side],
+                           "quadrature_rejections": now if noisy and side == "left" else 0,
                            "edge_ns": now - 1_000_000,
                            "edge_direction": -sign if bad_direction else sign}
 
@@ -26,6 +27,7 @@ def test_four_physical_curves_use_displacement_and_final_duty():
     baseline = resolved_config().runtime.composition.live_control.control.speed_map
     speed_map, report = fit_rows(measurements(), baseline=baseline, required_maximum_mps=.29)
     assert report["status"] == "PASS"
+    assert report["settle_s"] == 1.25
     assert len(speed_map["curves"]) == 4
     for curve in speed_map["curves"].values():
         assert curve["points"][0]["speed_mps"] == pytest.approx(.15)
@@ -52,6 +54,16 @@ def test_missing_range_is_not_extrapolated_to_requested_top_speed():
     assert len(report["problems"]) == 4
 
 
+def test_quadrature_noise_cannot_produce_an_activatable_map():
+    baseline = resolved_config().runtime.composition.live_control.control.speed_map
+    speed_map, report = fit_rows(measurements(noisy=True), baseline=baseline, required_maximum_mps=.29)
+    assert speed_map is None
+    assert not report["plateaus"]["left_forward"]
+    assert not report["plateaus"]["left_reverse"]
+    assert report["plateaus"]["right_forward"]
+    assert report["rejected_measurements"]["left: QUADRATURE_REJECTION"] > 0
+
+
 def test_late_settling_uses_proven_suffix_instead_of_transient_average():
     baseline = resolved_config().runtime.composition.live_control.control.speed_map
     speed_map, report = fit_rows(measurements(settles=True), baseline=baseline, required_maximum_mps=.29)
@@ -72,9 +84,14 @@ def test_sweep_preserves_canonical_commands_and_rejects_short_track():
         sweep_plan([1.5], 3., 20., resolved)
     with pytest.raises(ValueError, match="free track"):
         sweep_plan([.15, .26, .35], 3.5, 2., resolved, direction="forward")
+    with pytest.raises(ValueError, match="caster settling"):
+        sweep_plan([.19], 2., 2., resolved)
+    with pytest.raises(ValueError, match="settling time"):
+        sweep_plan([.19], 3., 2., resolved, settle_s=float("nan"))
 
 
-def test_sweep_aborts_at_first_safety_stop_without_retry(monkeypatch):
+@pytest.mark.parametrize("shutdown_fails", (False, True))
+def test_sweep_aborts_at_first_safety_stop_without_retry(monkeypatch, shutdown_fails):
     class Process:
         returncode = None
         terminated = False
@@ -91,6 +108,8 @@ def test_sweep_aborts_at_first_safety_stop_without_retry(monkeypatch):
         def execute(self, action):
             assert action == "operator.runtime.stop"
             self.stops += 1
+            if shutdown_fails:
+                raise RuntimeError("runtime already stopped")
     process, interface = Process(), Interface()
     calls = []
     def start(*args, **kwargs):

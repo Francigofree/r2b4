@@ -19,6 +19,9 @@ from v3.config import ConfigResolver
 from v3.layers.l11_actuator_control import WHEEL_CURVE_NAMES, WheelSpeedMap
 
 ROOT = Path(__file__).resolve().parents[1]
+# The front passive caster takes about 1 s to turn through 180 degrees after
+# reversal (operator observation). Keep that transient out of the steady map.
+DEFAULT_SETTLE_S = 1.25
 
 
 def physical_binding(path):
@@ -80,6 +83,7 @@ def capture_rows(path):
                    "output": final_output.get(side + "_output", 0.),
                    "distance": values.get("raw_" + side + "_distance_m"),
                    "valid": bool(valid and values.get(side + "_counter_running") is True),
+                   "quadrature_rejections": values.get(side + "_quadrature_rejections"),
                    "edge_ns": values.get(side + "_last_accepted_edge_timestamp_ns"),
                    "edge_direction": values.get(side + "_last_accepted_edge_direction")}
 
@@ -92,7 +96,7 @@ def _integrated_output(rows, start, end):
     return total / (end - start)
 
 
-def plateau_point(rows, *, settle_s=.5, minimum_s=1.):
+def plateau_point(rows, *, settle_s=DEFAULT_SETTLE_S, minimum_s=1.):
     start = rows[0]["time_ns"] + int(settle_s * 1e9)
     measurements = []
     last_sequence = None
@@ -103,7 +107,7 @@ def plateau_point(rows, *, settle_s=.5, minimum_s=1.):
         measurements.append(row)
     if len(measurements) < 40 or (measurements[-1]["measured_ns"] - measurements[0]["measured_ns"]) < minimum_s * 1e9:
         return None, "SHORT_PLATEAU"
-    # A fixed 0.5 s delay is only a lower bound. Discard the PI settling tail
+    # The caster/PI settling delay is only a lower bound. Discard a later tail
     # in 0.25 s steps, retaining at least the SAME duration/sample evidence.
     original_start = measurements[0]["measured_ns"]
     while True:
@@ -136,16 +140,21 @@ def plateau_point(rows, *, settle_s=.5, minimum_s=1.):
             "first_measurement_ns": first["measured_ns"], "last_measurement_ns": last["measured_ns"]}, None
 
 
-def fit_rows(rows, *, baseline: WheelSpeedMap, required_maximum_mps=.45):
+def fit_rows(rows, *, baseline: WheelSpeedMap, required_maximum_mps=.45,
+             settle_s=DEFAULT_SETTLE_S):
+    if not .5 <= settle_s <= 10:
+        raise ValueError("settling time must be finite and inside 0.5..10 s")
     minimum_mps = baseline.minimum_continuous_speed_mps
     segments = {side: [] for side in ("left", "right")}
     points = {name: [] for name in WHEEL_CURVE_NAMES}
     rejected = Counter()
+    previous_rejections = {side: None for side in segments}
+    rejected_measurements = Counter()
 
     def finish(side):
         segment = segments[side]
         if segment:
-            point, reason = plateau_point(segment)
+            point, reason = plateau_point(segment, settle_s=settle_s)
             if point:
                 name = side + ("_forward" if segment[0]["target"] > 0 else "_reverse")
                 points[name].append(point)
@@ -156,7 +165,17 @@ def fit_rows(rows, *, baseline: WheelSpeedMap, required_maximum_mps=.45):
     for row in rows:
         side = row["side"]
         segment = segments[side]
+        count = row.get("quadrature_rejections")
+        previous = previous_rejections[side]
+        # Use the cumulative counter: a control tick may skip acquisition
+        # samples, so a per-sample zero delta alone cannot prove a clean span.
+        clean_quadrature = (type(count) is int and count >= 0
+                            and (previous is None or count == previous))
+        previous_rejections[side] = count
+        if row["valid"] and not clean_quadrature:
+            rejected_measurements[side + ": QUADRATURE_REJECTION"] += 1
         valid = (row["valid"] and row["distance"] is not None
+                 and clean_quadrature
                  and all(math.isfinite(row[key]) for key in ("target", "output", "distance"))
                  and abs(row["target"]) > 1e-9 and row["target"] * row["output"] > 0
                  and row["edge_direction"] == (1 if row["target"] > 0 else -1)
@@ -198,6 +217,8 @@ def fit_rows(rows, *, baseline: WheelSpeedMap, required_maximum_mps=.45):
                         "startup_pwm": original.startup_output}
     report = {"schema": "R2B4_SPEED_CALIBRATION_V1", "status": "INSUFFICIENT_EVIDENCE" if problems else "PASS",
               "plateaus": points, "rejected_segments": dict(rejected), "problems": problems,
+              "rejected_measurements": dict(rejected_measurements),
+              "settle_s": settle_s,
               "required_maximum_mps": required_maximum_mps,
               "limitations": ["Encoder displacement is not independent ground truth or slip validation.",
                               "No extrapolation; no automatic activation; PI gains require dynamic plant evidence."]}
@@ -210,7 +231,8 @@ def fit_rows(rows, *, baseline: WheelSpeedMap, required_maximum_mps=.45):
     return speed_map, report
 
 
-def sweep_plan(speeds, duration_s, track_length_m, resolved, direction="both"):
+def sweep_plan(speeds, duration_s, track_length_m, resolved, direction="both",
+               settle_s=DEFAULT_SETTLE_S):
     control = resolved.runtime.composition.live_control.control
     limits = control.operational_constraints
     maximum = min(limits.max_v_mps, limits.wheel_limits.maximum_mps,
@@ -219,6 +241,10 @@ def sweep_plan(speeds, duration_s, track_length_m, resolved, direction="both"):
         raise ValueError("sweep needs finite duration 1.6..20 s and a measured positive free track length")
     if not speeds or any(not math.isfinite(v) or not limits.wheel_limits.minimum_mps <= v <= maximum for v in speeds):
         raise ValueError(f"sweep speeds must be inside the currently executable calibrated range {limits.wheel_limits.minimum_mps}..{maximum} m/s")
+    if not .5 <= settle_s <= 10:
+        raise ValueError("settling time must be finite and inside 0.5..10 s")
+    if duration_s < settle_s + 1. + max(speeds) / limits.max_acceleration_mps2:
+        raise ValueError("sweep duration must cover the L9 ramp, caster settling and at least 1 s of measurement")
     commands = []
     if direction not in {"both", "forward", "backward"}:
         raise ValueError("invalid sweep direction")
@@ -240,6 +266,7 @@ def _run_step(command, duration_s, interface, log):
     """Host-side supervision may revoke motion, never bypass final safety."""
     process = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
     deadline = time.monotonic() + duration_s + 30
+    failure = None
     try:
         while process.poll() is None:
             status = interface.read("operator.status")
@@ -254,12 +281,19 @@ def _run_step(command, duration_s, interface, log):
             time.sleep(.05)
         if process.returncode:
             raise subprocess.CalledProcessError(process.returncode, command)
+    except BaseException as exc:
+        failure = exc
+        raise
     finally:
         if process.poll() is None:
             # A FAULT cannot confirm ready IDLE. Close the sweep-owned runtime
             # through its canonical STOP/shutdown, preserving the first error.
             try:
                 interface.execute("operator.runtime.stop")
+            except Exception as exc:
+                if failure is None:
+                    raise
+                failure.add_note(f"Canonical runtime shutdown also failed: {exc}")
             finally:
                 process.terminate()
                 process.wait(timeout=5)
@@ -280,6 +314,8 @@ def main(argv=None):
                            help="both requires this free length in EACH direction from the starting pose")
     for command in sub.choices.values():
         command.add_argument("--output", type=Path, required=True)
+        command.add_argument("--settle-s", type=float, default=DEFAULT_SETTLE_S,
+                             help="minimum steady-segment settling time; includes passive caster alignment")
     args = parser.parse_args(argv)
     args.output.mkdir(parents=True, exist_ok=False)
     if args.mode == "generate":
@@ -298,15 +334,18 @@ def main(argv=None):
             for side in ("left", "right"):
                 all_points.append({"side": side, "valid": False, "distance": None,
                                    "time_ns": 0, "target": 0})
-        speed_map, report = fit_rows(all_points, baseline=baseline, required_maximum_mps=args.required_maximum)
+        speed_map, report = fit_rows(all_points, baseline=baseline,
+                                    required_maximum_mps=args.required_maximum, settle_s=args.settle_s)
         report["captures"] = [str(path.resolve()) for path in args.captures]
         report["physical_binding"] = bindings[0]
         if speed_map:
             (args.output / "speed_map.json").write_text(json.dumps(speed_map, indent=2) + "\n")
     else:
         resolved = ConfigResolver.for_project(ROOT).resolve()
-        commands = sweep_plan(args.speeds, args.duration_s, args.track_length_m, resolved, args.direction)
-        report = {"status": "PLANNED", "commands": commands, "physical_motion": args.mode == "run"}
+        commands = sweep_plan(args.speeds, args.duration_s, args.track_length_m, resolved,
+                              args.direction, args.settle_s)
+        report = {"status": "PLANNED", "commands": commands, "physical_motion": args.mode == "run",
+                  "settle_s": args.settle_s}
         if args.mode == "run":
             from v3.robot_interface import RobotInterface
             interface = RobotInterface()
@@ -335,7 +374,7 @@ def main(argv=None):
                     raise RuntimeError("sweep runtime shutdown failed")
             speed_map, fit_report = fit_rows(capture_rows(report["capture"]),
                 baseline=resolved.runtime.composition.live_control.control.speed_map,
-                required_maximum_mps=max(args.speeds))
+                required_maximum_mps=max(args.speeds), settle_s=args.settle_s)
             (args.output / "fit_report.json").write_text(json.dumps(fit_report, indent=2) + "\n")
             if speed_map:
                 (args.output / "speed_map.json").write_text(json.dumps(speed_map, indent=2) + "\n")
