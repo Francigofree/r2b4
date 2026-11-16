@@ -189,11 +189,16 @@ class MotionRealizer:
             else:
                 requested_v_mps *= max(0.0, math.cos(heading_error))
 
-        requested_v_mps, requested_omega_rad_s = self._config.wheel_limits.constrain(
-            requested_v_mps, requested_omega_rad_s,
-            max_v_mps=objective.constraints.max_v_mps,
-            max_omega_rad_s=objective.constraints.max_omega_rad_s,
-        )
+        if not (objective.kind is MotionObjectiveKind.VELOCITY
+                and objective.velocity_source is VelocitySource.NAV2):
+            requested_v_mps, requested_omega_rad_s = self._config.wheel_limits.constrain(
+                requested_v_mps, requested_omega_rad_s,
+                max_v_mps=objective.constraints.max_v_mps,
+                max_omega_rad_s=objective.constraints.max_omega_rad_s,
+            )
+        # The wheel-aware Nav2 adapter has already projected its proposal.
+        # Preserve it at L8; L9 owns the independent physical/mission envelope
+        # and the sole executed acceleration ramp, including invalid proposals.
         proof = objective.geometry_proof
         if (proof is not None and proof.maneuver_bounds is not None
                 and proof.usable_at(objective.context, objective.validity)):

@@ -25,6 +25,14 @@
       "contract": "STOP/FAULT cancels PWM and verifies physical outputs low without ownership handoff."
     },
     {
+      "id": "tests/packs/feature/test_v3_rp1_motor.py::test_hardware_stop_is_zero_enabled_and_restarts_from_zero",
+      "contract": "RP1 STOP/FAULT programs every hardware PWM channel to inactive zero duty before a restart."
+    },
+    {
+      "id": "tests/packs/feature/test_v3_rp1_motor.py::test_zero_only_watchdog_covers_owner_death_and_hang",
+      "contract": "Persistent hardware PWM is zeroed when its sole positive writer dies or hangs, including while holding the output lock."
+    },
+    {
       "id": "tests/packs/core/test_v3_temporal_contract.py::test_source_freshness_boundary_and_unknown_age",
       "contract": "Unknown/stale source time is never treated as fresh."
     },

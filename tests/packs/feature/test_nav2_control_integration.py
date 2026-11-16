@@ -76,6 +76,23 @@ def _zero(result):
     assert result.final_actuation.left_output == result.final_actuation.right_output == 0.
 
 
+@pytest.mark.parametrize("v,omega", [(1.2, 1.8), (.08, 0.), (.25, .3)])
+def test_nav2_l8_preserves_proposal_and_l9_owns_physical_constraints(v, omega):
+    config = _config()
+    control = NativeControlComposition(OfflineMotorSink(), config)
+    control.run_tick(_inputs(config, 0))
+    proposal = _guidance(control._navigation.pending_navigation_request, v_mps=v, omega_rad_s=omega)
+    result = control.run_tick(_inputs(config, 1, proposal))
+    layers = _layers(result)
+    assert layers["L8"].requested_v_mps == v
+    assert layers["L8"].requested_omega_rad_s == omega
+    wheels = layers["L10"]
+    budget = config.operational_constraints.max_acceleration_mps2 * .02
+    assert max(abs(wheels.left_mps), abs(wheels.right_mps)) <= budget + 1e-12
+    assert abs(layers["L9"].allowed_v_mps) <= config.operational_constraints.max_v_mps
+    control.close()
+
+
 @pytest.mark.parametrize("mode", [CommandMode.NAVIGATE, CommandMode.EXPLORE])
 def test_nav2_native_chain_expiry_safety_no_local_compute_and_persisted_replay(tmp_path, monkeypatch, mode):
     config = _config()
