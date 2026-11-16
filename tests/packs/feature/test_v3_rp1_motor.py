@@ -89,10 +89,13 @@ def test_hardware_waveform_updates_do_not_restart_other_wheel(sink):
 def test_hardware_stop_is_zero_enabled_and_restarts_from_zero(sink, decision):
     motor, calls, chip = sink
     motor.write(frame(.3, .3))
+    assert motor._heartbeat.value > 0
     motor.write(frame(decision=decision))
+    assert motor._heartbeat.value == 0
     assert all((chip / f"pwm{i}/duty_cycle").read_text() == "0" for i in range(4))
     assert all((chip / f"pwm{i}/enable").read_text() == "1" for i in range(4))
     motor.write(frame(.2, .2))
+    assert motor._heartbeat.value > 0
     assert any(int((chip / f"pwm{i}/duty_cycle").read_text()) for i in range(4))
 
 
@@ -109,12 +112,12 @@ def test_watchdog_loss_latches_zero_and_rejects_later_motion(sink):
     assert all((chip / f"pwm{i}/duty_cycle").read_text() == "0" for i in range(4))
 
 
-def _owner_for_crash_test(directory, ready):
+def _owner_for_crash_test(directory, ready, armed=True):
     from multiprocessing.reduction import DupFd
     context = mp.get_context("spawn")
     paths = [str(Path(directory) / str(i)) for i in range(4)]
     lock_fd = os.open(str(Path(directory) / "lock"), os.O_CREAT | os.O_RDWR, 0o600)
-    heartbeat = context.RawValue("Q", time.monotonic_ns())
+    heartbeat = context.RawValue("Q", time.monotonic_ns() if armed else 0)
     tripped = context.RawValue("b", False)
     started, stop = context.Event(), context.Event()
     lock = context.Lock()
@@ -124,7 +127,7 @@ def _owner_for_crash_test(directory, ready):
     assert started.wait(3)
     # Simulate death in the middle of a motor write, holding the semaphore.
     lock.acquire()
-    heartbeat.value = time.monotonic_ns()
+    heartbeat.value = time.monotonic_ns() if armed else 0
     ready.set()
     time.sleep(10)
 
@@ -152,6 +155,24 @@ def test_zero_only_watchdog_covers_owner_death_and_hang(tmp_path, failure):
         if owner.is_alive():
             owner.kill()
             owner.join(2)
+
+
+def test_zero_idle_does_not_kill_owner_during_slow_terminal_cleanup(tmp_path):
+    for index in range(4):
+        (tmp_path / str(index)).write_text("0")
+    context = mp.get_context("spawn")
+    ready = context.Event()
+    owner = context.Process(target=_owner_for_crash_test, args=(str(tmp_path), ready, False))
+    owner.start()
+    try:
+        assert ready.wait(5)
+        time.sleep(rp1.WATCHDOG_S * 2)
+        assert owner.is_alive()
+        assert all((tmp_path / str(i)).read_text() == "0" for i in range(4))
+    finally:
+        if owner.is_alive():
+            owner.kill()
+        owner.join(2)
 
 
 def test_pwm_identity_excludes_the_fan_and_chip_number(tmp_path):

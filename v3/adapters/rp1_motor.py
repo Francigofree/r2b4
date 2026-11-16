@@ -231,7 +231,10 @@ class Rp1MotorFrameSink:
                 self._directions = (0, 0)
             if self._tripped.value:
                 raise OSError("RP1 motor watchdog tripped during write")
-            self._heartbeat.value = time.monotonic_ns()
+            # Disarm the deadline only AFTER every requested output is zero.
+            # Terminal capture/device cleanup may exceed 250 ms at safe zero.
+            # Arm before the next write so a hang mid-activation stays covered.
+            self._heartbeat.value = (time.monotonic_ns() if any(self._last.values()) else 0)
         except BaseException:
             self._failed = True
             self._tripped.value = True

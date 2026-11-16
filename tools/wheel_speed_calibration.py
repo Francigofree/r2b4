@@ -103,14 +103,22 @@ def plateau_point(rows, *, settle_s=.5, minimum_s=1.):
         measurements.append(row)
     if len(measurements) < 40 or (measurements[-1]["measured_ns"] - measurements[0]["measured_ns"]) < minimum_s * 1e9:
         return None, "SHORT_PLATEAU"
-    first, last = measurements[0], measurements[-1]
-    span = (last["measured_ns"] - first["measured_ns"]) / 1e9
-    velocity = (last["distance"] - first["distance"]) / span
-    middle = measurements[len(measurements) // 2]
-    speeds = [(b["distance"] - a["distance"]) / ((b["measured_ns"] - a["measured_ns"]) / 1e9)
-              for a, b in ((first, middle), (middle, last))]
-    if abs(speeds[0] - speeds[1]) > max(.01, .10 * abs(velocity)):
-        return None, "NOT_SETTLED"
+    # A fixed 0.5 s delay is only a lower bound. Discard the PI settling tail
+    # in 0.25 s steps, retaining at least the SAME duration/sample evidence.
+    original_start = measurements[0]["measured_ns"]
+    while True:
+        if len(measurements) < 40 or measurements[-1]["measured_ns"] - measurements[0]["measured_ns"] < minimum_s * 1e9:
+            return None, "NOT_SETTLED"
+        first, last = measurements[0], measurements[-1]
+        span = (last["measured_ns"] - first["measured_ns"]) / 1e9
+        velocity = (last["distance"] - first["distance"]) / span
+        middle = measurements[len(measurements) // 2]
+        speeds = [(b["distance"] - a["distance"]) / ((b["measured_ns"] - a["measured_ns"]) / 1e9)
+                  for a, b in ((first, middle), (middle, last))]
+        if abs(speeds[0] - speeds[1]) <= max(.005, .05 * abs(velocity)):
+            break
+        cutoff = first["measured_ns"] + 250_000_000
+        measurements = [row for row in measurements if row["measured_ns"] >= cutoff]
     if abs(last["distance"] - first["distance"]) < .01:
         return None, "INSUFFICIENT_DISPLACEMENT"
     target = statistics.mean(row["target"] for row in measurements)
@@ -123,11 +131,13 @@ def plateau_point(rows, *, settle_s=.5, minimum_s=1.):
         return None, "INVALID_DUTY"
     return {"speed_mps": abs(velocity), "pwm": output, "duration_s": span,
             "tracking_error_mps": velocity - target, "half_window_speeds_mps": speeds,
+            "extra_settle_s": (first["measured_ns"] - original_start) / 1e9,
             "speed_spread_mps": abs(speeds[0] - speeds[1]),
             "first_measurement_ns": first["measured_ns"], "last_measurement_ns": last["measured_ns"]}, None
 
 
-def fit_rows(rows, *, minimum_mps=.15, required_maximum_mps=.45):
+def fit_rows(rows, *, baseline: WheelSpeedMap, required_maximum_mps=.45):
+    minimum_mps = baseline.minimum_continuous_speed_mps
     segments = {side: [] for side in ("left", "right")}
     points = {name: [] for name in WHEEL_CURVE_NAMES}
     rejected = Counter()
@@ -180,9 +190,12 @@ def fit_rows(rows, *, minimum_mps=.15, required_maximum_mps=.45):
         if any(b["pwm"] < a["pwm"] for a, b in zip(fitted, fitted[1:])):
             problems.append(name + ": NON_MONOTONIC_MEASUREMENTS")
             continue
-        # Threshold metadata is bounded by the lowest proven steady duty.
-        floor = fitted[0]["pwm"]
-        curves[name] = {"points": fitted, "maintenance_pwm": floor, "startup_pwm": floor}
+        # A measured steady-speed point is NOT a measured stiction threshold.
+        # Preserve the separately owned thresholds; setting them to the first
+        # point would turn every subfloor ramp into an immediate full-floor FF.
+        original = next(curve for curve in baseline.curves if curve.name == name)
+        curves[name] = {"points": fitted, "maintenance_pwm": original.maintenance_output,
+                        "startup_pwm": original.startup_output}
     report = {"schema": "R2B4_SPEED_CALIBRATION_V1", "status": "INSUFFICIENT_EVIDENCE" if problems else "PASS",
               "plateaus": points, "rejected_segments": dict(rejected), "problems": problems,
               "required_maximum_mps": required_maximum_mps,
@@ -235,20 +248,18 @@ def _run_step(command, duration_s, interface, log):
             if (not status.get("runtime_running") or state.get("fault_layer")
                     or state.get("safety_decision") == "FAULT"
                     or (mission.get("mode") == "TELEOP" and state.get("safety_decision") == "STOP")):
-                interface.stop()
                 raise RuntimeError(f"sweep revoked at tick {state.get('tick_id')}: {state.get('safety_reason')}; no retry")
             if time.monotonic() > deadline:
-                interface.stop()
                 raise RuntimeError("sweep command deadline exceeded; no retry")
             time.sleep(.05)
         if process.returncode:
             raise subprocess.CalledProcessError(process.returncode, command)
     finally:
         if process.poll() is None:
-            # Canonical STOP also preempts the command producer. Reap its CLI
-            # without allowing a later heartbeat to reactivate the command.
+            # A FAULT cannot confirm ready IDLE. Close the sweep-owned runtime
+            # through its canonical STOP/shutdown, preserving the first error.
             try:
-                interface.stop()
+                interface.execute("operator.runtime.stop")
             finally:
                 process.terminate()
                 process.wait(timeout=5)
@@ -275,7 +286,7 @@ def main(argv=None):
         if not math.isfinite(args.required_maximum) or not 0 < args.required_maximum <= 1.5:
             raise ValueError("required maximum must be 0..1.5 m/s")
         resolved = ConfigResolver.for_project(ROOT).resolve()
-        minimum = resolved.runtime.composition.live_control.control.speed_map.minimum_continuous_speed_mps
+        baseline = resolved.runtime.composition.live_control.control.speed_map
         all_points = []
         bindings = [physical_binding(path) for path in args.captures]
         if any(binding != bindings[0] for binding in bindings[1:]):
@@ -287,7 +298,7 @@ def main(argv=None):
             for side in ("left", "right"):
                 all_points.append({"side": side, "valid": False, "distance": None,
                                    "time_ns": 0, "target": 0})
-        speed_map, report = fit_rows(all_points, minimum_mps=minimum, required_maximum_mps=args.required_maximum)
+        speed_map, report = fit_rows(all_points, baseline=baseline, required_maximum_mps=args.required_maximum)
         report["captures"] = [str(path.resolve()) for path in args.captures]
         report["physical_binding"] = bindings[0]
         if speed_map:
@@ -323,7 +334,7 @@ def main(argv=None):
                 if shutdown.returncode and report["status"] != "FAILED":
                     raise RuntimeError("sweep runtime shutdown failed")
             speed_map, fit_report = fit_rows(capture_rows(report["capture"]),
-                minimum_mps=resolved.runtime.composition.live_control.control.speed_map.minimum_continuous_speed_mps,
+                baseline=resolved.runtime.composition.live_control.control.speed_map,
                 required_maximum_mps=max(args.speeds))
             (args.output / "fit_report.json").write_text(json.dumps(fit_report, indent=2) + "\n")
             if speed_map:

@@ -4,7 +4,7 @@ from tools.wheel_speed_calibration import _run_step, fit_rows, sweep_plan
 from rig import resolved_config
 
 
-def measurements(*, bad_direction=False, drift=False):
+def measurements(*, bad_direction=False, drift=False, settles=False):
     now = 1_000_000_000
     distance = {"left": 0., "right": 0.}
     for sign in (1, -1):
@@ -12,7 +12,8 @@ def measurements(*, bad_direction=False, drift=False):
             for tick in range(125):
                 now += 20_000_000
                 for side in ("left", "right"):
-                    actual = speed * (1.4 if drift and tick > 70 else 1.)
+                    actual = speed * (1 + tick / 200 if drift else
+                                      1.4 if settles and tick < 65 else 1.)
                     distance[side] += sign * actual * .02
                     yield {"side": side, "valid": True, "time_ns": now,
                            "measured_ns": now, "sequence": now, "target": sign * speed,
@@ -22,7 +23,8 @@ def measurements(*, bad_direction=False, drift=False):
 
 
 def test_four_physical_curves_use_displacement_and_final_duty():
-    speed_map, report = fit_rows(measurements(), required_maximum_mps=.29)
+    baseline = resolved_config().runtime.composition.live_control.control.speed_map
+    speed_map, report = fit_rows(measurements(), baseline=baseline, required_maximum_mps=.29)
     assert report["status"] == "PASS"
     assert len(speed_map["curves"]) == 4
     for curve in speed_map["curves"].values():
@@ -30,19 +32,33 @@ def test_four_physical_curves_use_displacement_and_final_duty():
         assert curve["points"][0]["pwm"] == pytest.approx(.195)
         assert curve["points"][-1]["speed_mps"] == pytest.approx(.3)
     assert report["common_maximum_mps"] == pytest.approx(.3)
+    for original in baseline.curves:
+        assert speed_map["curves"][original.name]["maintenance_pwm"] == original.maintenance_output
+        assert speed_map["curves"][original.name]["startup_pwm"] == original.startup_output
 
 
 @pytest.mark.parametrize("options", [{"bad_direction": True}, {"drift": True}])
 def test_bad_direction_and_unsettled_motion_never_calibrate(options):
-    speed_map, report = fit_rows(measurements(**options), required_maximum_mps=.29)
+    baseline = resolved_config().runtime.composition.live_control.control.speed_map
+    speed_map, report = fit_rows(measurements(**options), baseline=baseline, required_maximum_mps=.29)
     assert speed_map is None
     assert report["status"] == "INSUFFICIENT_EVIDENCE"
 
 
 def test_missing_range_is_not_extrapolated_to_requested_top_speed():
-    speed_map, report = fit_rows(measurements(), required_maximum_mps=1.5)
+    baseline = resolved_config().runtime.composition.live_control.control.speed_map
+    speed_map, report = fit_rows(measurements(), baseline=baseline, required_maximum_mps=1.5)
     assert speed_map is None
     assert len(report["problems"]) == 4
+
+
+def test_late_settling_uses_proven_suffix_instead_of_transient_average():
+    baseline = resolved_config().runtime.composition.live_control.control.speed_map
+    speed_map, report = fit_rows(measurements(settles=True), baseline=baseline, required_maximum_mps=.29)
+    assert report["status"] == "PASS"
+    for plateaus in report["plateaus"].values():
+        assert all(point["extra_settle_s"] > 0 and point["duration_s"] >= 1 for point in plateaus)
+        assert plateaus[0]["speed_mps"] == pytest.approx(.15)
 
 
 def test_sweep_preserves_canonical_commands_and_rejects_short_track():
@@ -72,7 +88,9 @@ def test_sweep_aborts_at_first_safety_stop_without_retry(monkeypatch):
         def read(self, resource):
             return {"runtime_running": True, "status": {"mission": {"mode": "TELEOP"},
                 "safety_decision": "STOP", "safety_reason": "LIDAR_CLEARANCE_LOW", "tick_id": 1034}}
-        def stop(self): self.stops += 1
+        def execute(self, action):
+            assert action == "operator.runtime.stop"
+            self.stops += 1
     process, interface = Process(), Interface()
     calls = []
     def start(*args, **kwargs):
