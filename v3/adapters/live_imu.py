@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Protocol
 
-from v3.async_capability import SensorIntegritySnapshot, TransportSemantics, latest_state_snapshot
+from v3.async_capability import SensorIntegritySnapshot, SensorUnavailable, TransportSemantics, latest_state_snapshot
 
 from v3.contracts import (
     DataField,
@@ -187,6 +187,13 @@ class NativeImuSource:
             raise TypeError("context must be TickContext")
         try:
             reading = self._backend.read(context)
+        except SensorUnavailable:
+            self._latest = None
+            self._error = None
+            return LiveDeviceSnapshot(
+                context, DeviceHealth(self.device_id, DeviceHealthState.DEGRADED,
+                                      "IMU_RESTARTING"),
+            )
         except Exception as exc:
             self._read_errors += 1
             self._error = f"{type(exc).__name__}:{exc}"[:256]

@@ -405,14 +405,20 @@ def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path,
         expired_ns = reading.captured_monotonic_ns + 250_000_001
         assert source.capability_snapshot(expired_ns).state.value == 'STALE'
         os.kill(edge.pid, signal.SIGKILL)
-        def failed():
+        old_pid, old_sequence = edge.pid, reading.sequence
+        def holding():
+            snapshot = source.read(TickContext(100, time.monotonic_ns()))
+            return snapshot.health.state is DeviceHealthState.DEGRADED and snapshot.samples == ()
+        _wait_until(holding)
+        def recovered():
             try:
-                source.read(TickContext(100, time.monotonic_ns()))
-            except RuntimeError as exc:
-                assert 'ENCODER_PROCESS_EXITED' in str(exc)
-                return True
-            return False
-        _wait_until(failed)
+                snapshot = source.read(TickContext(101, time.monotonic_ns()))
+            except RuntimeError:
+                return False
+            return (edge.pid != old_pid and bool(snapshot.samples)
+                    and snapshot.samples[0].sequence > old_sequence
+                    and snapshot.samples[0].captured_monotonic_ns > observed_ns)
+        _wait_until(recovered, timeout_s=5.)
     finally:
         started_ns = time.monotonic_ns()
         edge.stop()

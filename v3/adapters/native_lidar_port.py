@@ -414,6 +414,7 @@ class NativeLidarPort:
         strict_affinity: bool = False,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
         sleep: Callable[[float], None] = time.sleep,
+        source_sequence_base: int = 0,
     ) -> None:
         if not isinstance(config, NativeLidarPortConfig):
             raise TypeError("config must be NativeLidarPortConfig")
@@ -448,7 +449,8 @@ class NativeLidarPort:
         self._last_relative_scan_revision = 0
         self._last_queued_scan_revision = 0
         self._last_matched_scan_revision = 0
-        self._matcher_result_revision = 0
+        self._source_sequence_base = source_sequence_base
+        self._matcher_result_revision = source_sequence_base
         self._queue_drops = 0
         self._result_drops = 0
         self._matcher_errors = 0
@@ -540,7 +542,7 @@ class NativeLidarPort:
             self._last_queued_scan_revision = 0
             self._last_matched_scan_revision = 0
             self._last_relative_scan_revision = 0
-            self._matcher_result_revision = 0
+            self._matcher_result_revision = self._source_sequence_base
             self._matcher_error = ""
             self._fatal_error = ""
             self._running = True
@@ -963,15 +965,18 @@ def open_native_lidar_port(
     *,
     matcher_cpus: CpuSet | None = None,
     strict_affinity: bool = False,
+    source_sequence_base: int = 0,
 ) -> NativeLidarPort:
     """Create and start the production native owner or fail closed."""
 
     port = NativeLidarPort(
         config,
         pose_provider,
-        driver=NativeRplidarC1(config.driver, serial_factory=serial_factory),
+        driver=NativeRplidarC1(config.driver, serial_factory=serial_factory,
+                               source_sequence_base=source_sequence_base),
         matcher_cpus=matcher_cpus,
         strict_affinity=strict_affinity,
+        source_sequence_base=source_sequence_base,
     )
     try:
         if port.start() is not True:

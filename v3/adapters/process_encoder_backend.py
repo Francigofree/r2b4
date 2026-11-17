@@ -7,13 +7,16 @@ NativeEncoderSource; no GPIO callback executes in the control interpreter.
 from __future__ import annotations
 
 import multiprocessing as mp
+import errno
 import pickle
 import time
+import threading
+from dataclasses import replace
 from typing import Any
 
 from v3.contracts import TickContext
 from v3.config_types import EncoderProcessConfig
-from v3.async_capability import TransportSemantics
+from v3.async_capability import SensorUnavailable, TransportSemantics
 from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 
 from .counter_encoder import CounterEncoderBackendConfig, NativeCounterEncoderBackend
@@ -21,6 +24,8 @@ from .gpio_counter import GpioCounterPairConfig, NativeGpioSignedCounterPair
 from .live_encoder import EncoderVelocityReading, NativeEncoderConfig, NativeEncoderSource
 
 _START_METHOD = "spawn"
+_MAX_RESTARTS = 3
+_RESTART_BACKOFF_S = .25
 _MAILBOX_BYTES = 16_384  # Scalar reading/diagnostics only; never raw edge history.
 
 
@@ -76,8 +81,11 @@ def _encoder_process_main(
     worker_cpus: int | CpuSet | None,
     strict_affinity: bool,
     process_config: EncoderProcessConfig,
+    sequence_base: int = 0,
+    generation: int = 0,
 ) -> None:
     counter_pair: NativeGpioSignedCounterPair | None = None
+    failed = False
     try:
         if worker_cpus is not None:
             apply_process_cpuset(
@@ -96,7 +104,7 @@ def _encoder_process_main(
             backend_config,
             snapshot_pair=counter_pair.snapshot_pair,
         )
-        sequence = 0
+        sequence = sequence_base
         next_deadline_ns = time.monotonic_ns()
         while not stop_flag.value:
             now_ns = time.monotonic_ns()
@@ -107,7 +115,8 @@ def _encoder_process_main(
             reading = backend.read(context)
             if not isinstance(reading, EncoderVelocityReading):
                 raise TypeError("encoder backend returned invalid reading")
-            mailbox.publish(("reading", reading))
+            if sequence_base == 0 or (reading.timing_valid and not reading.stale and reading.trust == 1.0):
+                mailbox.publish(("reading", replace(reading, counter_generation=generation)))
             sequence += 1
             next_deadline_ns += process_config.sample_period_ns
             completed_ns = time.monotonic_ns()
@@ -115,13 +124,16 @@ def _encoder_process_main(
                 missed = (completed_ns - next_deadline_ns) // process_config.sample_period_ns + 1
                 next_deadline_ns += missed * process_config.sample_period_ns
     except BaseException as exc:
-        mailbox.publish(("error", type(exc).__name__, str(exc)[:256]))
+        failed = True
+        mailbox.publish(("error", type(exc).__name__, str(exc)[:256],
+                         isinstance(exc, OSError) and exc.errno not in (errno.EACCES, errno.EPERM, errno.EINVAL)))
     finally:
         if counter_pair is not None:
             try:
                 counter_pair.close()
             except BaseException as exc:
-                mailbox.publish(("error", type(exc).__name__, str(exc)[:256]))
+                if not failed:
+                    mailbox.publish(("error", type(exc).__name__, str(exc)[:256], False))
 
 
 class ProcessEncoderBackend:
@@ -130,7 +142,9 @@ class ProcessEncoderBackend:
     transport_semantics = TransportSemantics.LATEST_STATE
 
     __slots__ = (
-        "_process_config",
+        "_process_config", "_spawn_args", "_recovering", "_terminal_error",
+        "_restarts", "_supervisor_stop", "_supervisor", "_sequence_base",
+        "_restart_requested", "_recoverable_error", "_access_lock",
         "_closed",
         "_fatal_error",
         "_latest",
@@ -164,48 +178,107 @@ class ProcessEncoderBackend:
         if not isinstance(ready_timeout_s, (int, float)) or ready_timeout_s <= 0:
             raise ValueError("ready_timeout_s must be positive")
 
-        context = mp.get_context(_START_METHOD)
-        # queue_capacity remains decodable in historical runtime configs. This
-        # latest-state edge now has one fixed scalar slot and no feeder thread.
-        self._mailbox = _EncoderMailbox(context)
-        self._transport_revision = 0
-        self._stop_flag = context.RawValue("b", False)
-        self._process = context.Process(
-            target=_encoder_process_main,
-            args=(
-                counter_config,
-                backend_config,
-                self._mailbox,
-                self._stop_flag,
-                worker_cpus,
-                strict_affinity,
-                process_config,
-            ),
-            name="v3-encoder-owner-process",
-            daemon=False,
-        )
+        self._spawn_args = (counter_config, backend_config, worker_cpus, strict_affinity)
         self._latest: EncoderVelocityReading | None = None
         self._fatal_error = ""
-        self._closed = False
-        with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
-            self._process.start()
+        self._terminal_error = ""
+        self._recoverable_error = False
+        self._closed = self._recovering = False
+        self._sequence_base = self._restarts = 0
+        self._access_lock = threading.Lock()
+        self._supervisor_stop = threading.Event()
+        self._restart_requested = threading.Event()
+        self._start_owner()
         try:
-            deadline = time.monotonic() + ready_timeout_s
-            while True:
-                self._drain()
-                if self._fatal_error:
-                    raise RuntimeError(f"process-isolated encoder startup failed: {self._fatal_error}")
-                if not self._process.is_alive():
-                    raise RuntimeError("process-isolated encoder exited during startup")
-                if self._latest is not None:
-                    break
-                remaining = deadline - time.monotonic()
-                if remaining <= 0.0:
-                    raise RuntimeError("process-isolated encoder did not become ready")
-                time.sleep(min(0.005, remaining))
+            self._await_ready()
         except BaseException:
             self.stop()
             raise
+        self._supervisor = threading.Thread(target=self._supervise, name="encoder-recovery", daemon=True)
+        with temporary_current_affinity(worker_cpus, role="encoder-recovery", strict=strict_affinity):
+            self._supervisor.start()
+
+    def _start_owner(self) -> None:
+        counter_config, backend_config, worker_cpus, strict_affinity = self._spawn_args
+        context = mp.get_context(_START_METHOD)
+        self._mailbox = _EncoderMailbox(context)
+        self._transport_revision = 0
+        self._stop_flag = context.RawValue("b", False)
+        self._process = context.Process(target=_encoder_process_main,
+            args=(counter_config, backend_config, self._mailbox, self._stop_flag,
+                  worker_cpus, strict_affinity, self._process_config, self._sequence_base, self._restarts),
+            name="v3-encoder-owner-process", daemon=False)
+        with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
+            self._process.start()
+
+    def _await_ready(self) -> None:
+        deadline = time.monotonic() + self._process_config.ready_timeout_s
+        while not self._supervisor_stop.is_set():
+            self._drain()
+            if self._fatal_error:
+                raise RuntimeError(f"process-isolated encoder startup failed: {self._fatal_error}")
+            if not self._process.is_alive():
+                raise RuntimeError("process-isolated encoder exited during startup")
+            if self._latest is not None:
+                return
+            if time.monotonic() >= deadline:
+                raise RuntimeError("process-isolated encoder did not become ready")
+            self._supervisor_stop.wait(.005)
+        raise RuntimeError("encoder startup cancelled")
+
+    def _stop_owner(self) -> None:
+        self._stop_flag.value = True
+        if self._process.pid is None:
+            return
+        self._process.join(timeout=self._process_config.stop_timeout_s)
+        if self._process.is_alive():
+            self._process.terminate()
+            self._process.join(timeout=self._process_config.stop_timeout_s)
+        if self._process.is_alive():
+            self._process.kill()
+            self._process.join(timeout=self._process_config.stop_timeout_s)
+        if self._process.is_alive():
+            raise RuntimeError("process-isolated encoder did not stop")
+
+    def _supervise(self) -> None:
+        while not self._supervisor_stop.wait(.02):
+            if not (self._restart_requested.is_set() or not self._process.is_alive()):
+                continue
+            try:
+                with self._access_lock:
+                    self._drain()
+                    if self._fatal_error and not self._recoverable_error:
+                        self._terminal_error = self._fatal_error
+                        return
+                    self._recovering = True
+                # Stop before replacing the scalar mailbox. Never reuse a lock
+                # potentially abandoned by a killed GPIO owner.
+                self._stop_owner()
+                self._sequence_base = (self._sequence_base if self._latest is None
+                                       else self._latest.sequence + 1)
+                self._latest = None
+                while True:
+                    if self._restarts >= _MAX_RESTARTS:
+                        raise RuntimeError("ENCODER_RECOVERY_EXHAUSTED:" + self._fatal_error)
+                    self._restarts += 1
+                    if self._supervisor_stop.wait(_RESTART_BACKOFF_S * self._restarts):
+                        return
+                    self._fatal_error = ""
+                    self._recoverable_error = False
+                    self._start_owner()
+                    try:
+                        self._await_ready()
+                        break
+                    except RuntimeError:
+                        self._stop_owner()
+                        self._latest = None
+                        if self._fatal_error and not self._recoverable_error:
+                            raise
+                self._restart_requested.clear()
+                self._recovering = False
+            except Exception as exc:
+                self._terminal_error = str(exc)[:256]
+                return
 
     @property
     def pid(self) -> int | None:
@@ -224,6 +297,7 @@ class ProcessEncoderBackend:
                 self._fatal_error = "ENCODER_READING_INVALID"
         elif message[0] == "error" and len(message) >= 3:
             self._fatal_error = f"{message[1]}:{message[2]}"[:256]
+            self._recoverable_error = len(message) == 4 and message[3] is True
         else:
             self._fatal_error = "ENCODER_TRANSPORT_INVALID"
 
@@ -236,33 +310,43 @@ class ProcessEncoderBackend:
     def read(self, context: TickContext) -> EncoderVelocityReading:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
-        if self._closed:
-            raise RuntimeError("process-isolated encoder is closed")
-        self._drain()
-        if self._fatal_error:
-            raise RuntimeError(f"ENCODER_PROCESS_FAILED:{self._fatal_error}")
-        if not self._process.is_alive():
-            raise RuntimeError("ENCODER_PROCESS_EXITED")
-        if self._latest is None:
-            raise RuntimeError("ENCODER_PROCESS_NO_READING")
-        return self._latest
+        if not self._access_lock.acquire(False):
+            raise SensorUnavailable("ENCODER_RESTARTING")
+        try:
+            if self._closed or self._terminal_error:
+                raise RuntimeError("ENCODER_PROCESS_FAILED:" + (self._terminal_error or "closed"))
+            if self._recovering or self._restart_requested.is_set():
+                raise SensorUnavailable("ENCODER_RESTARTING")
+            self._drain()
+            if self._fatal_error and not self._recoverable_error:
+                raise RuntimeError(f"ENCODER_PROCESS_FAILED:{self._fatal_error}")
+            latest = self._latest
+            expired = (latest is not None and context.monotonic_ns - latest.captured_monotonic_ns
+                       > int(self._process_config.ready_timeout_s * 1e9))
+            if (self._fatal_error or not self._process.is_alive() or expired or
+                    (latest is not None and latest.diagnostics is not None and
+                     latest.diagnostics.rejection_code.value == "COUNTER_NOT_RUNNING")):
+                self._recovering = True
+                self._restart_requested.set()
+                raise SensorUnavailable("ENCODER_RESTARTING")
+            if latest is None:
+                raise SensorUnavailable("ENCODER_RESTARTING")
+            # The producer timestamp and sequence remain untouched in transport.
+            return latest
+        finally:
+            self._access_lock.release()
 
     def stop(self) -> None:
         if self._closed:
             return
         self._closed = True
-        # No shared Condition/Event mutex: even a suspended or crashed owner
-        # must reach the bounded join/terminate path.
-        self._stop_flag.value = True
-        self._process.join(timeout=self._process_config.stop_timeout_s)
-        if self._process.is_alive():
-            self._process.terminate()
-            self._process.join(timeout=self._process_config.stop_timeout_s)
-        if self._process.is_alive():
-            self._process.kill()
-            self._process.join(timeout=self._process_config.stop_timeout_s)
-        if self._process.is_alive():
-            raise RuntimeError("process-isolated encoder did not stop")
+        self._supervisor_stop.set()
+        supervisor = getattr(self, "_supervisor", None)
+        if supervisor is not None:
+            supervisor.join(timeout=self._process_config.ready_timeout_s + 3 * self._process_config.stop_timeout_s + 1)
+            if supervisor.is_alive():
+                raise RuntimeError("encoder recovery supervisor did not stop")
+        self._stop_owner()
 
 
 class ProcessEncoderSource(NativeEncoderSource):

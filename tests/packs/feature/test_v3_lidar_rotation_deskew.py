@@ -230,6 +230,10 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     collector._process_config = resolved.edges.lidar_process
     collector._process = SimpleNamespace(is_alive=lambda: True)
     collector._stopped, collector._fatal_error = False, None
+    collector._terminal_error = ""
+    collector._recovering = False
+    collector._resume_after_ns = 0
+    collector._last_state_ns = __import__("time").monotonic_ns()
     collector._raw_snapshot = collector._matcher_result = collector._relative_result = None
     collector._status, collector._raw_queue = {}, None
     collector._slam_sender = SimpleNamespace(sent_packets=0, dropped_packets=0)
@@ -282,4 +286,6 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     collector._state_queue.put((ready[0], tuple(changed_time), *ready[2:]))
     collector._drain_state()
     assert collector._fatal_error == "LIDAR_PHYSICAL_SCAN_IDENTITY_REWRITTEN"
-    assert collector.get_raw_scan_snapshot().measurement_monotonic_ns == MID
+    with pytest.raises(RuntimeError, match="LIDAR_PHYSICAL_SCAN_IDENTITY_REWRITTEN"):
+        collector.get_raw_scan_snapshot()
+    assert collector._raw_snapshot.measurement_monotonic_ns == MID

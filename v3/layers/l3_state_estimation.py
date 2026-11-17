@@ -382,6 +382,7 @@ class EncoderAnchor:
     captured_ns: int
     left_m: float
     right_m: float
+    counter_generation: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -559,6 +560,13 @@ class _PoseFilter:
                 previous_ns = measured_ns
 
 
+        if (wheel is None and self._encoder_anchor is not None
+                and self._encoder_anchor.source_id in frame.degraded_sources):
+            # Explicit sensor outage is not an ordinary multi-rate duplicate.
+            # No count interval or prediction history can bridge that outage.
+            self._encoder_rebase_pending = True
+            self._odometry_predictions = []
+
         left_mps = 0.0
         right_mps = 0.0
         encoder_trust = 0.0
@@ -698,7 +706,7 @@ class _PoseFilter:
                     wheel_distance_delta,
                     stationary=stationary_prediction,
                 )
-                if self._encoder_anchor is not None:
+                if self._encoder_anchor is not None and not self._encoder_rebase_pending:
                     self._odometry_predictions.append(OdometryPrediction(
                         self._last_context.monotonic_ns, frame.context.monotonic_ns,
                         before_yaw, self._state[self._X] - before_x, self._state[self._Y] - before_y,
@@ -805,13 +813,19 @@ class _PoseFilter:
             if self._encoder_anchor is not None:
                 raise ValueError("L3 cumulative encoder measurement disappeared")
             return
-        current = EncoderAnchor(wheel.source_device_id, wheel.captured_monotonic_ns, *totals)
+        generation = next((field.value for field in wheel.values if field.key == "counter_generation"), 0)
+        if type(generation) is not int or generation < 0:
+            raise ValueError("wheel_velocity.counter_generation must be non-negative integer")
+        current = EncoderAnchor(wheel.source_device_id, wheel.captured_monotonic_ns, *totals, generation)
         previous = self._encoder_anchor
         if previous is not None and (
             current.source_id != previous.source_id or current.captured_ns <= previous.captured_ns
         ):
             raise ValueError("L3 cumulative encoder source/time changed")
-        if previous is None or self._encoder_rebase_pending:
+        if previous is not None and current.counter_generation < previous.counter_generation:
+            raise ValueError("L3 encoder generation moved backwards")
+        if (previous is None or self._encoder_rebase_pending
+                or current.counter_generation != previous.counter_generation):
             self._encoder_anchor = current
             self._encoder_rebase_pending = False
             self._odometry_predictions = []
@@ -1469,6 +1483,15 @@ class NativeStateEstimator:
             global_pose_age_ns if o.kind == "lidar_pose" else self._config.max_measurement_age_ns))
         frame = replace(frame, accepted=fresh)
         local = self._local(replace(frame, accepted=tuple(o for o in fresh if o.kind != "lidar_pose")))
+        current_encoder = self._local._encoder_anchor
+        if (previous_encoder is not None and current_encoder is not None
+                and current_encoder.counter_generation != previous_encoder.counter_generation):
+            self._unverified_sigma_m = max(self._unverified_sigma_m, cfg.local_lost_sigma_m)
+            self._local_loss_relative_ns = now
+            self._local_translation_state = QualityState.LOST
+            # Relative evidence spanning the lost count interval cannot revalidate it.
+            self._history.clear()
+            self._last_relative_ns = self._last_relative_start_ns = None
         pose = Pose2D(LOCAL_FRAME_ID, local.x_m, local.y_m, local.yaw_rad)
         self._history.append(LocalPoseSample(now, pose))
         self._history = self._history[-256:]

@@ -29,6 +29,14 @@ class CapabilityState(str, Enum):
     STOPPED = "STOPPED"
 
 
+class SensorUnavailable(RuntimeError):
+    """Expected edge recovery; sources close it as DEGRADED with no samples.
+
+    Only an adapter with a bounded recovery budget may raise this. Exhaustion
+    and malformed data must use the ordinary failure path instead.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class SensorIntegritySnapshot:
     """Passive raw integrity, separate from age and semantic measurement validity.

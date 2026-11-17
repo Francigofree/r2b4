@@ -208,8 +208,10 @@ class NativeLatestLidarBackend:
         self,
         context: TickContext,
         status: Mapping[str, object],
+        *, snapshot=None, closed_snapshot: bool = False,
     ) -> LidarScanReading:
-        snapshot = self._port.get_raw_scan_snapshot()
+        if not closed_snapshot:
+            snapshot = self._port.get_raw_scan_snapshot()
         physical_runtime_valid = (
             type(status.get("running")) is bool
             and status.get("running") is True
@@ -371,16 +373,22 @@ class NativeLatestLidarBackend:
     def read(self, context: TickContext) -> LidarHealthReading:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
-        result = self._port.get_matcher_result()
-        status = self._port.get_runtime_status()
+        close_snapshot = getattr(self._port, "get_control_snapshot", None)
+        closed = close_snapshot() if callable(close_snapshot) else None
+        if closed is None:
+            result = self._port.get_matcher_result()
+            status = self._port.get_runtime_status()
+        else:
+            raw_snapshot, result, closed_relative, status = closed
         if not isinstance(status, Mapping):
             raise TypeError("get_runtime_status must return a mapping")
-        scan = self._read_raw_snapshot(context, status)
+        scan = (self._read_raw_snapshot(context, status) if closed is None else
+                self._read_raw_snapshot(context, status, snapshot=raw_snapshot, closed_snapshot=True))
         runtime_contract_valid = self._runtime_contract_valid(status)
         independent_relative = None
         relative_getter = getattr(self._port, "get_relative_result", None)
-        if callable(relative_getter):
-            relative = relative_getter()
+        if closed is not None or callable(relative_getter):
+            relative = closed_relative if closed is not None else relative_getter()
             if relative is not None:
                 if not isinstance(relative, LidarRelativeMotionReading) or relative.end_ns is None:
                     raise TypeError("relative result requires immutable source identity")

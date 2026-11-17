@@ -234,7 +234,7 @@ def status(root):
     running = _owned(state, root)
     result = {**state, "running": running, "motor_authority": False,
               "state": state.get("state", "STOPPED"), "bridge": _read_json(paths["status"])}
-    if not running and result["state"] in ("RUNNING", "STARTING"):
+    if not running and result["state"] in ("RUNNING", "STARTING", "RESTARTING"):
         result["state"] = "PROCESS_LOST"
     now = time.monotonic_ns()
     children = _child_process_status(state, root)
@@ -376,7 +376,7 @@ def stop(root):
         state = _read_json(paths["state"])
         if _owned(state, root):
             _stop_owned(paths, state, root)
-        elif state.get("state") in ("RUNNING", "STARTING"):
+        elif state.get("state") in ("RUNNING", "STARTING", "RESTARTING"):
             raise RuntimeError("Nav2 process identity lost; refusing to signal unverified process")
         else:
             _remove_owned_socket(paths, state, root)
@@ -439,30 +439,64 @@ def _supervise(root, ros_domain_id):
                                          resolved.lidar.matcher.lidar_y_offset_m]}
         limits = control.operational_constraints
         controller_limits = (limits.max_v_mps, -min(.20, limits.max_v_mps), limits.max_omega_rad_s)
-        for name, command in _commands(paths, full=full, radius=radius, robot_geometry=robot_geometry,
-                                       controller_limits=controller_limits):
-            log = (paths["work"] / f"{name}.log").open("a")
-            logs.append(log)
-            children.append(subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,
-                stdout=log, stderr=subprocess.STDOUT,
-                preexec_fn=partial(_terminate_with_parent, os.getpid())))
-            child = children[-1]
-            state["children"].append(child.pid)
-            state["child_process_starts"][str(child.pid)] = _process_start(child.pid)
-            if name == "bridge":
-                state["bridge_pid"] = child.pid
-        _write_json(paths["state"], state)
+        commands = _commands(paths, full=full, radius=radius, robot_geometry=robot_geometry,
+                             controller_limits=controller_limits)
+        restarts = 0
         while not stopped:
-            if any(child.poll() is not None for child in children):
-                raise RuntimeError("NAV2_CHILD_EXITED")
-            if "socket_identity" not in state and paths["socket"].exists():
-                state["socket_identity"] = _socket_identity(paths["socket"])
-                _write_json(paths["state"], state)
-            if (_bridge_ready(_read_json(paths["status"]), time.monotonic_ns(), pid=state["bridge_pid"])
-                    and state["state"] != "RUNNING"):
-                state["state"] = "RUNNING"
-                _write_json(paths["state"], state)
-            time.sleep(.1)
+            state.update(state="STARTING" if restarts == 0 else "RESTARTING",
+                         restarts=restarts, children=[], child_process_starts={})
+            state.pop("socket_identity", None)
+            # Old bridge status/endpoint cannot satisfy the new group's readiness.
+            paths["socket"].unlink(missing_ok=True)
+            paths["status"].unlink(missing_ok=True)
+            for name, command in commands:
+                log = (paths["work"] / f"{name}.log").open("a")
+                logs.append(log)
+                children.append(subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,
+                    stdout=log, stderr=subprocess.STDOUT,
+                    preexec_fn=partial(_terminate_with_parent, os.getpid())))
+                child = children[-1]
+                state["children"].append(child.pid)
+                state["child_process_starts"][str(child.pid)] = _process_start(child.pid)
+                if name == "bridge":
+                    state["bridge_pid"] = child.pid
+            _write_json(paths["state"], state)
+            ready_deadline = time.monotonic() + 30
+            reason = ""
+            while not stopped:
+                if any(child.poll() is not None for child in children):
+                    reason = "NAV2_CHILD_EXITED"
+                    break
+                if "socket_identity" not in state and paths["socket"].exists():
+                    state["socket_identity"] = _socket_identity(paths["socket"])
+                    _write_json(paths["state"], state)
+                if _bridge_ready(_read_json(paths["status"]), time.monotonic_ns(), pid=state["bridge_pid"]):
+                    if state["state"] != "RUNNING":
+                        state["state"] = "RUNNING"
+                        _write_json(paths["state"], state)
+                elif state["state"] != "RUNNING" and time.monotonic() >= ready_deadline:
+                    reason = "NAV2_GROUP_READINESS_TIMEOUT"
+                    break
+                time.sleep(.1)
+            if stopped:
+                break
+            # One technical lifecycle owner reaps every old server and bridge
+            # before rebuilding the group. SLAM/map authority remains alive.
+            pending = _stop_children(children)
+            if pending:
+                raise RuntimeError(f"NAV2_CHILD_SHUTDOWN_TIMEOUT:{pending}")
+            children.clear()
+            for log in logs:
+                log.close()
+            logs.clear()
+            if restarts >= 3:
+                raise RuntimeError("NAV2_RECOVERY_EXHAUSTED:" + reason)
+            restarts += 1
+            state.update(state="RESTARTING", restarts=restarts, recovery_reason=reason)
+            _write_json(paths["state"], state)
+            deadline = time.monotonic() + .5 * restarts
+            while not stopped and time.monotonic() < deadline:
+                time.sleep(min(.1, max(0., deadline - time.monotonic())))
     except BaseException as exc:
         state["state"], state["error"] = "FAILED", f"{type(exc).__name__}:{exc}"[:256]
         raise

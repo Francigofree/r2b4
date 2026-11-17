@@ -351,6 +351,12 @@ def test_velocity_repair_preserves_scalar_process_mailbox_observation_semantics(
     process._latest = None
     process._fatal_error = ''
     process._closed = False
+    process._recovering = False
+    process._terminal_error = ''
+    process._recoverable_error = False
+    process._restart_requested = __import__('threading').Event()
+    process._access_lock = __import__('threading').Lock()
+    process._process_config = resolved_config().edges.encoder_process
     process._process = SimpleNamespace(is_alive=lambda: True)
     direct_values = SimpleNamespace(read=lambda context: direct_values.latest)
     direct = NativeEncoderSource(direct_values, inputs.encoder_source)

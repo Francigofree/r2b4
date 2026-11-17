@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from v3.async_capability import SensorIntegritySnapshot, TransportSemantics, latest_state_snapshot
+from v3.async_capability import SensorIntegritySnapshot, SensorUnavailable, TransportSemantics, latest_state_snapshot
 
 from v3.contracts import (
     DataField,
@@ -333,8 +333,10 @@ class EncoderVelocityReading:
     stale: bool
     timing_valid: bool
     diagnostics: EncoderEdgeDiagnostics | None = None
+    counter_generation: int = 0
 
     def __post_init__(self) -> None:
+        _nonnegative_integer(self.counter_generation, "counter_generation")
         _nonnegative_integer(self.sequence, "sequence")
         _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
         _finite(self.left_mps, "left_mps")
@@ -420,6 +422,13 @@ class NativeEncoderSource:
             raise TypeError("context must be TickContext")
         try:
             reading = self._backend.read(context)
+        except SensorUnavailable:
+            self._latest = None
+            self._error = None
+            return LiveDeviceSnapshot(
+                context, DeviceHealth(self.device_id, DeviceHealthState.DEGRADED,
+                                      "ENCODER_RESTARTING"),
+            )
         except Exception as exc:
             self._read_errors += 1
             self._error = f"{type(exc).__name__}:{exc}"[:256]
@@ -463,6 +472,7 @@ class NativeEncoderSource:
             sequence=reading.sequence,
             captured_monotonic_ns=reading.captured_monotonic_ns,
             values=(
+                DataField("counter_generation", reading.counter_generation),
                 DataField("left_mps", reading.left_mps),
                 DataField("right_mps", reading.right_mps),
                 DataField("trust", reading.trust),

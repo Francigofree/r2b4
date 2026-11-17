@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from v3.adapters.nav2_navigation import (HEARTBEAT_MAX_AGE_NS, Nav2NavigationClient, Nav2NavigationConfig,
+from v3.adapters.nav2_navigation import (COMMAND_TTL_NS, SENSOR_MAX_AGE_NS, HEARTBEAT_MAX_AGE_NS, Nav2NavigationClient, Nav2NavigationConfig,
     decode_packet, encode_packet, request_packet)
 from v3.contracts import CommandMode, GLOBAL_FRAME_ID, LOCAL_FRAME_ID, TickContext, Waypoint
 from v3.contracts.navigation import Nav2NavigationRequest, Nav2NavigationStatus
@@ -256,8 +256,10 @@ def test_velocity_ttl_cannot_renew_delayed_sensor_or_previous_goal():
     args = dict(now_ns=1_050_000_000, produced_ns=1_040_000_000,
                 accepted_ns=1_010_000_000, scan_ns=950_000_000,
                 odom_ns=1_030_000_000, tf_ns=1_020_000_000)
-    assert velocity_lifetime(packet, **args) == 1_200_000_000
-    for changes in (dict(scan_ns=750_000_000), dict(odom_ns=1_060_000_000),
+    assert velocity_lifetime(packet, **args) == min(
+        args['produced_ns'] + COMMAND_TTL_NS, packet['source_ns'] + HEARTBEAT_MAX_AGE_NS,
+        *(args[key] + SENSOR_MAX_AGE_NS for key in ('scan_ns', 'odom_ns', 'tf_ns')))
+    for changes in (dict(scan_ns=args['now_ns']-SENSOR_MAX_AGE_NS-1), dict(odom_ns=1_060_000_000),
                     dict(accepted_ns=1_050_000_000), dict(produced_ns=1_060_000_000),
                     dict(tf_ns=0), dict(now_ns=1_400_000_000)):
         assert velocity_lifetime(packet, **{**args, **changes}) is None

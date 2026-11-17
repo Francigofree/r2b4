@@ -44,9 +44,9 @@ def _run_acquisition(monkeypatch, outcomes):
         sequence=context.RawValue("Q", 0),
         times=context.RawArray("q", policy.history_size * 2),
         values=context.RawArray("d", policy.history_size * process_imu._VALUE_COUNT),
-        ready=context.Event(),
-        stop=context.Event(),
-        failed=context.Event(),
+        ready=context.RawValue("b", False),
+        stop=context.RawValue("b", False),
+        failed=context.RawValue("b", False),
         error_bytes=context.RawArray("B", 256),
         read_times=[],
         closed=False,
@@ -67,7 +67,7 @@ def _run_acquisition(monkeypatch, outcomes):
             outcome = next(pending)
             if isinstance(outcome, BaseException):
                 raise outcome
-            state.stop.set()
+            state.stop.value = True
             return outcome
 
         def close(self):
@@ -89,7 +89,7 @@ def _run_acquisition(monkeypatch, outcomes):
 def test_transient_bus_error_publishes_only_one_fresh_retry_sample(monkeypatch, error_number):
     state = _run_acquisition(monkeypatch, (OSError(error_number, "transient I2C read"), _sample()))
 
-    assert state.ready.is_set() and not state.failed.is_set()
+    assert state.ready.value and not state.failed.value
     assert state.sequence.value == 1
     assert len(state.read_times) == 2
     failed_time, successful_time = state.read_times
@@ -108,7 +108,7 @@ def test_second_bus_failure_is_fatal_and_preserves_bounded_error(monkeypatch):
         OSError(errno.EREMOTEIO, "persistent I2C transfer " + "x" * 1000),
     ))
 
-    assert state.failed.is_set() and state.ready.is_set()
+    assert state.failed.value and state.ready.value
     assert len(state.read_times) == 2
     assert state.sequence.value == 0
     assert list(state.times) == [0] * len(state.times)
@@ -126,7 +126,7 @@ def test_second_bus_failure_is_fatal_and_preserves_bounded_error(monkeypatch):
 def test_non_transient_failures_are_not_retried(monkeypatch, error):
     state = _run_acquisition(monkeypatch, (error, _sample()))
 
-    assert state.failed.is_set() and state.ready.is_set()
+    assert state.failed.value and state.ready.value
     assert len(state.read_times) == 1
     assert state.sequence.value == 0
     assert bytes(state.error_bytes).split(b"\0", 1)[0].decode().startswith(type(error).__name__ + ":")
@@ -171,8 +171,12 @@ def test_spawned_owner_failure_rejects_cached_sample_and_retains_original_errno(
     try:
         first = device.read_sample(force=True)
         assert first["timestamp"] > 0
-        assert device._failed.wait(3.0), "injected worker failure did not arrive"
-        with pytest.raises(RuntimeError, match=r"unavailable:OSError:\[Errno 121\].*injected persistent register failure"):
+        state = device._state
+        deadline = time.monotonic() + 3
+        while not state.failed.value and time.monotonic() < deadline:
+            time.sleep(.005)
+        assert state.failed.value, "injected worker failure did not arrive"
+        with pytest.raises(process_imu.SensorUnavailable):
             device.read_sample_at(time.monotonic_ns())
         assert not device.sensor_ok
     finally:

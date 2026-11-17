@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import multiprocessing
 import os
+import pickle
 import queue
 import threading
 import time
@@ -22,7 +23,7 @@ from typing import Any, Callable
 
 from v3.config_types import LidarProcessConfig
 from v3.contracts import QualityState, RobotEstimate
-from v3.async_capability import TransportSemantics, latest_state_snapshot
+from v3.async_capability import SensorUnavailable, TransportSemantics, latest_state_snapshot
 from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 from v3.navigation_map_capture import navigation_map_observation
 
@@ -42,9 +43,89 @@ from .slam_toolbox_transport import (
 )
 
 _PROCESS_START_METHOD = "spawn"
+_MAX_RESTARTS = 3
+_RESTART_BACKOFF_S = .25
 
 
-def _slam_matcher_result(receiver: SlamLocalizationReceiver, now_ns: int) -> NativeMatcherResult | None:
+class _LidarSignal:
+    """Crash-safe stop/readiness bit; no dead child can own its mutex."""
+    def __init__(self, context):
+        self._value = context.RawValue("b", False)
+
+    def set(self):
+        self._value.value = True
+
+    def is_set(self):
+        return bool(self._value.value)
+
+    def wait(self, timeout):
+        deadline = time.monotonic() + timeout
+        while not self.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(.005, remaining))
+        return True
+
+
+class _LidarStateMailbox:
+    """One compact state; a killed feeder cannot strand the collector in recv.
+
+    Full raw scans never enter this slot. A dead writer's lock is abandoned
+    with the generation, and both reads and writes acquire it without waiting.
+    """
+    _CAPACITY = 131_072
+
+    def __init__(self, context):
+        self._bytes = context.RawArray("B", self._CAPACITY)
+        self._size = context.RawValue("I", 0)
+        self._revision = context.RawValue("Q", 0)
+        self._lock = context.Lock()
+        self._seen = 0
+
+    def put_nowait(self, value):
+        encoded = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(encoded) > self._CAPACITY:
+            raise ValueError("LIDAR_COMPACT_STATE_EXCEEDS_BOUND")
+        if not self._lock.acquire(False):
+            return
+        try:
+            memoryview(self._bytes).cast("B")[:len(encoded)] = encoded
+            self._size.value = len(encoded)
+            self._revision.value += 1
+        finally:
+            self._lock.release()
+
+    def get_nowait(self):
+        if not self._lock.acquire(False):
+            raise queue.Empty
+        try:
+            revision, size = self._revision.value, self._size.value
+            if revision <= self._seen:
+                raise queue.Empty
+            if not 0 < size <= self._CAPACITY:
+                raise ValueError("LIDAR_COMPACT_STATE_SIZE_INVALID")
+            encoded = memoryview(self._bytes).cast("B")[:size].tobytes()
+            self._seen = revision
+        finally:
+            self._lock.release()
+        return pickle.loads(encoded)
+
+    def get(self, timeout):
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                return self.get_nowait()
+            except queue.Empty:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(.005)
+
+    def close(self):
+        pass
+
+
+def _slam_matcher_result(receiver: SlamLocalizationReceiver, now_ns: int, source_sequence_base: int = 0) -> NativeMatcherResult | None:
     """Adapt an accepted scan-bound pose to the existing compact L1 input."""
     from .latest_lidar import (
         POSE_FRAME_ID, POSE_FRAME_OWNER, POSE_FRAME_YAW,
@@ -81,7 +162,7 @@ def _slam_matcher_result(receiver: SlamLocalizationReceiver, now_ns: int) -> Nat
         "scan_pose_alignment_delta_ns": 0,
     })
     return NativeMatcherResult(
-        receiver.accepted_packets, receiver.accepted_packets, pose.source_sequence,
+        source_sequence_base + receiver.accepted_packets, source_sequence_base + receiver.accepted_packets, pose.source_sequence,
         end / 1_000_000_000.0, start, end, measured, measured,
         now_ns / 1_000_000_000.0, summary,
     )
@@ -432,6 +513,7 @@ def _lidar_owner_process_main(
     slam_socket_path: str | None = None,
     slam_session_id: int = 0,
     slam_odometry_state: Any | None = None,
+    source_sequence_base: int = 0,
 ) -> None:
     port = None
     raw_produced_count = 0
@@ -516,7 +598,7 @@ def _lidar_owner_process_main(
                 odometry_ns=odometry_ns, odometry_valid=bool(valid) and coherent,
             )
             if pose is not None or slam_receiver.error:
-                slam_result = _slam_matcher_result(slam_receiver, now_ns)
+                slam_result = _slam_matcher_result(slam_receiver, now_ns, source_sequence_base)
 
     def runtime_status():
         status = dict(port.get_runtime_status())
@@ -576,6 +658,7 @@ def _lidar_owner_process_main(
         port = open_native_lidar_port(
             config, pose_history.lookup, serial.Serial,
             matcher_cpus=matcher_cpus, strict_affinity=strict_affinity,
+            source_sequence_base=source_sequence_base,
         )
         initial_raw = port.get_raw_scan_snapshot()
         initial_geometry, geometry_pending = derived_scan(initial_raw)
@@ -666,7 +749,7 @@ def _lidar_owner_process_main(
                 last_status_ns = now_ns
             stop_event.wait(0.005)
     except BaseException as exc:
-        _put_latest(state_queue, ("error", type(exc).__name__, str(exc)))
+        _put_latest(state_queue, ("error", type(exc).__name__, str(exc)[:256]))
         ready_event.set()
     finally:
         slam_sender.close()
@@ -688,7 +771,7 @@ def _lidar_owner_process_main(
                 try:
                     port.stop()
                 except BaseException as exc:
-                    _put_latest(state_queue, ("error", type(exc).__name__, str(exc)))
+                    _put_latest(state_queue, ("error", type(exc).__name__, str(exc)[:256]))
 
 
 class ProcessLidarPort:
@@ -705,6 +788,8 @@ class ProcessLidarPort:
         "_slam_sender", "_slam_session_id", "_slam_source_pid", "_slam_active",
         "_pending_slam_odometry",
         "_slam_enabled", "_slam_odometry_state",
+        "_launch_args", "_restarts", "_recovering", "_terminal_error", "_last_state_ns",
+        "_unhealthy_since_ns", "_resume_after_ns", "_control_state",
     )
 
     def __init__(
@@ -751,12 +836,12 @@ class ProcessLidarPort:
         self._pose_history = _SharedPoseHistory(process_config.pose_history_capacity, pose_lock, pose_sequence, pose_times, pose_values, process_config.pose_lock_timeout_s)
         self._config = config
         self._process_config = process_config
-        self._state_queue = context.Queue(maxsize=process_config.state_queue_capacity)
+        self._state_queue = _LidarStateMailbox(context)
         # No fallback raw mailbox: without an explicit sidecar consumer there
         # is no raw encoding, queue feeder, drain or capture work at all.
         self._raw_queue = capture_raw_queue
-        self._ready_event = context.Event()
-        self._stop_event = context.Event()
+        self._ready_event = _LidarSignal(context)
+        self._stop_event = _LidarSignal(context)
         # One shared lifetime identity ties child scans to parent local odometry.
         # A replacement port receives a new identity even within the same PID.
         self._slam_session_id = time.monotonic_ns()
@@ -768,9 +853,7 @@ class ProcessLidarPort:
         self._slam_sender = SlamToolboxSender(slam_socket_path)
         self._slam_active = False
         self._pending_slam_odometry: deque[tuple] = deque(maxlen=1)
-        self._process = context.Process(
-            target=_lidar_owner_process_main,
-            args=(
+        self._launch_args = (
                 config, pose_lock, pose_sequence, pose_times, pose_values,
                 self._state_queue, self._raw_queue, self._ready_event, self._stop_event,
                 worker_cpus, matcher_cpus, strict_affinity,
@@ -779,7 +862,9 @@ class ProcessLidarPort:
                 None if slam_socket_path is None else os.fspath(slam_socket_path),
                 self._slam_session_id,
                 self._slam_odometry_state,
-            ),
+            )
+        self._process = context.Process(
+            target=_lidar_owner_process_main, args=self._launch_args,
             name="v3-lidar-owner-process",
             daemon=False,
         )
@@ -797,18 +882,19 @@ class ProcessLidarPort:
             "process_isolated": True,
             "compact_control_transport": True,
         }
+        self._control_state = None
         self._fatal_error = ""
+        self._restarts = 0
+        self._recovering = False
+        self._terminal_error = ""
+        self._last_state_ns = time.monotonic_ns()
+        self._unhealthy_since_ns = self._resume_after_ns = 0
         self._stopped = False
         self._collector_stop = threading.Event()
         self._pending_poses: deque[TimedPoseReference] = deque(maxlen=process_config.pose_history_capacity)
         self._collector: threading.Thread | None = None
         with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
             self._process.start()
-        # Parent receives only compact state when evidence is sent to a sidecar.
-        try:
-            self._state_queue._writer.close()
-        except (AttributeError, OSError):
-            pass
         ready_timeout = max(process_config.ready_timeout_s, config.process_ready_timeout_s)
         if not self._ready_event.wait(ready_timeout):
             self.stop()
@@ -837,6 +923,7 @@ class ProcessLidarPort:
         if not self._process.is_alive():
             self.stop()
             raise RuntimeError("process-isolated LiDAR owner exited during startup")
+        self._control_state = (self._raw_snapshot, self._matcher_result, self._relative_result, dict(self._status))
         self._collector = threading.Thread(target=self._collect_state, name="r2b4-lidar-ipc", daemon=True)
         with temporary_current_affinity(worker_cpus, role="lidar-ipc", strict=strict_affinity):
             self._collector.start()
@@ -867,6 +954,69 @@ class ProcessLidarPort:
             continuous and quality.heading is not QualityState.LOST,
         ))
 
+    def _recover_owner(self) -> None:
+        # A raw Queue can contain a partial frame after an abrupt writer death.
+        # Do not reuse that evidence lane or claim loss-free recovery.
+        if self._raw_queue is not None:
+            self._terminal_error = "LIDAR_RECOVERY_REQUIRES_NEW_CAPTURE_SESSION"
+            return
+        if not self._slam_enabled:
+            self._terminal_error = "LIDAR_LOCAL_MAP_RECOVERY_REQUIRES_REINITIALIZATION"
+            return
+        self._recovering = True
+        self._raw_snapshot = self._matcher_result = self._relative_result = None
+        while not self._collector_stop.is_set():
+            self._stop_event.set()
+            self._process.join(timeout=self._process_config.stop_timeout_s)
+            if self._process.is_alive():
+                self._process.terminate()
+                self._process.join(timeout=self._process_config.stop_timeout_s)
+            if self._process.is_alive():
+                self._process.kill()
+                self._process.join(timeout=self._process_config.stop_timeout_s)
+            if self._process.is_alive():
+                raise RuntimeError("LiDAR recovery could not stop owner")
+            self._state_queue.close()
+            if self._restarts >= _MAX_RESTARTS:
+                self._terminal_error = "LIDAR_RECOVERY_EXHAUSTED:" + self._fatal_error
+                return
+            self._restarts += 1
+            if self._collector_stop.wait(_RESTART_BACKOFF_S * self._restarts):
+                return
+            context = multiprocessing.get_context(_PROCESS_START_METHOD)
+            pose_lock = context.Lock()
+            pose_sequence = context.RawValue("Q", 0)
+            pose_times = context.RawArray("q", self._process_config.pose_history_capacity)
+            pose_values = context.RawArray("d", self._process_config.pose_history_capacity * 3)
+            self._pose_history = _SharedPoseHistory(self._process_config.pose_history_capacity,
+                pose_lock, pose_sequence, pose_times, pose_values, self._process_config.pose_lock_timeout_s)
+            self._state_queue = _LidarStateMailbox(context)
+            self._ready_event, self._stop_event = _LidarSignal(context), _LidarSignal(context)
+            args = list(self._launch_args)
+            args[1:5] = [pose_lock, pose_sequence, pose_times, pose_values]
+            args[5], args[7], args[8] = self._state_queue, self._ready_event, self._stop_event
+            # Producer identity is assigned before acquisition. New scans and
+            # results never collide with a previous owner's source sequence.
+            args.append(self._restarts << 48)
+            self._process = context.Process(target=_lidar_owner_process_main, args=tuple(args),
+                                           name="v3-lidar-owner-process", daemon=False)
+            self._fatal_error = ""
+            self._last_state_ns = time.monotonic_ns()
+            with temporary_current_affinity(args[9], role="lidar-restart", strict=args[11]):
+                self._process.start()
+            deadline = time.monotonic() + max(self._process_config.ready_timeout_s, self._config.process_ready_timeout_s)
+            while not self._collector_stop.wait(.005):
+                self._drain_state()
+                raw = self._raw_snapshot
+                if (not self._fatal_error and self._process.is_alive() and raw is not None
+                        and raw.health == "OK" and self._status.get("driver_connected")
+                        and 0 <= time.monotonic_ns() - raw.measurement_monotonic_ns <= self._config.maximum_result_age_ns):
+                    self._recovering = False
+                    return
+                if self._fatal_error or not self._process.is_alive() or time.monotonic() >= deadline:
+                    break
+            self._raw_snapshot = self._matcher_result = self._relative_result = None
+
     def _collect_state(self) -> None:
         try:
             while not self._collector_stop.is_set():
@@ -875,8 +1025,37 @@ class ProcessLidarPort:
                         pose = self._pending_poses.popleft()
                     except IndexError:
                         break
-                    self._pose_history.publish(pose)
+                    try:
+                        self._pose_history.publish(pose)
+                    except RuntimeError:
+                        if self._process.is_alive():
+                            raise
+                        self._fatal_error = "LIDAR_OWNER_PROCESS_EXITED"
+                        break
                 self._drain_state()
+                now_ns = time.monotonic_ns()
+                raw = self._raw_snapshot
+                deadline_ns = int(self._process_config.ready_timeout_s * 1e9)
+                transport_failed = (not self._process.is_alive()
+                    or now_ns - self._last_state_ns > deadline_ns)
+                device_failed = (self._status.get("health") == "ERROR"
+                    or (raw is not None and now_ns - raw.measurement_monotonic_ns > deadline_ns))
+                if self._fatal_error or transport_failed or device_failed:
+                    if not self._unhealthy_since_ns:
+                        self._unhealthy_since_ns = self._resume_after_ns = now_ns
+                    # Let the existing serial reconnect finish locally first.
+                    # Control remains DEGRADED until a new physical scan arrives.
+                    if (self._fatal_error or transport_failed
+                            or now_ns - self._unhealthy_since_ns >= deadline_ns):
+                        if self._fatal_error.startswith(("LIDAR_PHYSICAL_SCAN_IDENTITY", "UNKNOWN_LIDAR",
+                                                         "ValueError:", "TypeError:", "AssertionError:")):
+                            self._terminal_error = self._fatal_error
+                        else:
+                            self._recover_owner()
+                        if self._terminal_error:
+                            return
+                elif raw is not None and raw.measurement_monotonic_ns > self._resume_after_ns:
+                    self._unhealthy_since_ns = 0
                 # Reuse this existing collector. Without a consumer the probe
                 # is at most 1 Hz and no scan or odometry payload is created.
                 now_ns = time.monotonic_ns()
@@ -900,7 +1079,7 @@ class ProcessLidarPort:
                     self._slam_active = self._slam_sender.active
                 self._collector_stop.wait(0.005)
         except Exception as exc:
-            self._fatal_error = f"LIDAR_COLLECTOR_FAILED:{type(exc).__name__}:{exc}"
+            self._terminal_error = self._fatal_error = f"LIDAR_COLLECTOR_FAILED:{type(exc).__name__}:{exc}"
         finally:
             self._slam_active = False
             self._slam_sender.close()
@@ -922,6 +1101,7 @@ class ProcessLidarPort:
             if not self._process.is_alive() and not self._stopped:
                 self._fatal_error = self._fatal_error or "LIDAR_OWNER_PROCESS_EXITED"
             return
+        self._last_state_ns = time.monotonic_ns()
         wire = newest[1]  # type: ignore[index]
         if wire is not None:
             previous = self._raw_snapshot
@@ -930,7 +1110,7 @@ class ProcessLidarPort:
                 previous.raw_scan_timestamp, previous.scan_start_monotonic_ns,
                 previous.scan_end_monotonic_ns, previous.measurement_monotonic_ns,
             ):
-                self._fatal_error = "LIDAR_PHYSICAL_SCAN_IDENTITY_REWRITTEN"
+                self._terminal_error = self._fatal_error = "LIDAR_PHYSICAL_SCAN_IDENTITY_REWRITTEN"
                 return
             geometry_completed = (same_scan
                 and previous.summary.get("local_geometry_pending", False)
@@ -947,9 +1127,27 @@ class ProcessLidarPort:
         status["compact_control_transport"] = True
         status["owner_process_alive"] = self._process.is_alive()
         self._status = status
+        self._control_state = (self._raw_snapshot, self._matcher_result, self._relative_result, status)
+
+    def get_control_snapshot(self):
+        self._check_available()
+        return self._control_state
+
+    def _check_available(self) -> None:
+        if self._terminal_error:
+            raise RuntimeError(self._terminal_error)
+        if self._stopped:
+            raise RuntimeError("LIDAR_STOPPED")
+        if (self._recovering or self._fatal_error or not self._process.is_alive()
+                or self._status.get("health") == "ERROR"
+                or (self._resume_after_ns and (self._raw_snapshot is None
+                    or self._raw_snapshot.measurement_monotonic_ns <= self._resume_after_ns))
+                or time.monotonic_ns() - self._last_state_ns > int(self._process_config.ready_timeout_s * 1e9)):
+            raise SensorUnavailable("LIDAR_RESTARTING")
 
     def get_raw_scan_snapshot(self) -> NativeRawLidarSnapshot | None:
         """Compact physical scan used by control/local perception only."""
+        self._check_available()
         return self._raw_snapshot
 
     def get_capture_raw_scan_snapshot(self) -> NativeRawLidarSnapshot | None:
@@ -957,6 +1155,7 @@ class ProcessLidarPort:
         return None
 
     def get_matcher_result(self) -> NativeMatcherResult | None:
+        self._check_available()
         return self._matcher_result
 
     def get_relative_result(self) -> LidarRelativeMotionReading | None:
@@ -1008,6 +1207,11 @@ class ProcessLidarPort:
         alive = self._process.is_alive() and not self._stopped
         status["owner_process_alive"] = alive
         status["capture_raw_enabled"] = self._raw_queue is not None
+        status["recovery_attempts"] = self._restarts
+        status["recovery_state"] = ("FAILED" if self._terminal_error else
+                                    "RESTARTING" if self._recovering or self._unhealthy_since_ns else "FRESH")
+        if self._terminal_error:
+            status["recovery_error"] = self._terminal_error
         if not alive:
             status["running"] = False
             status["matcher_process_alive"] = False
@@ -1022,14 +1226,22 @@ class ProcessLidarPort:
         if self._stopped:
             return
         self._stopped = True
+        self._collector_stop.set()
+        if self._collector is not None:
+            self._collector.join(timeout=max(self._process_config.ready_timeout_s, self._config.process_ready_timeout_s) + 3 * self._process_config.stop_timeout_s + 1)
+            if self._collector.is_alive():
+                raise RuntimeError("LiDAR recovery collector did not stop")
         self._stop_event.set()
-        # Keep draining compact state while the child flushes its queue feeders.
-        # Stopping the reader first can strand the child in Queue finalization.
+        if self._process.pid is None:
+            self._slam_sender.close()
+            return
         self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             self._process.terminate()
             self._process.join(timeout=self._process_config.stop_timeout_s)
-        self._collector_stop.set()
+        if self._process.is_alive():
+            self._process.kill()
+            self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             raise RuntimeError("process-isolated LiDAR owner did not stop")
         if self._collector is not None:

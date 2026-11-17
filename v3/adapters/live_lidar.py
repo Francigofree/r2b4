@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 from typing import Protocol
 
-from v3.async_capability import TransportSemantics, latest_state_snapshot
+from v3.async_capability import SensorUnavailable, TransportSemantics, latest_state_snapshot
 from v3.lidar_geometry import lidar_point_xy
 
 from v3.contracts import (
@@ -491,6 +491,13 @@ class NativeLidarSource:
             raise TypeError("context must be TickContext")
         try:
             reading = self._backend.read(context)
+        except SensorUnavailable:
+            self._latest = None
+            self._error = None
+            return LiveDeviceSnapshot(
+                context, DeviceHealth(self.device_id, DeviceHealthState.DEGRADED,
+                                      "LIDAR_RESTARTING"),
+            )
         except Exception as exc:
             self._error = f"{type(exc).__name__}:{exc}"[:256]
             raise

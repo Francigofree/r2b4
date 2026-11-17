@@ -220,6 +220,7 @@ class NativeRplidarC1:
         *,
         serial_factory: RplidarSerialFactory,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
+        source_sequence_base: int = 0,
     ) -> None:
         if not isinstance(config, RplidarC1Config):
             raise TypeError("config must be RplidarC1Config")
@@ -241,7 +242,9 @@ class NativeRplidarC1:
         self._building: list[RplidarPoint] = []
         self._building_start_ns: int | None = None
         self._rx_buffer = bytearray()
-        self._revision = 0
+        if type(source_sequence_base) is not int or source_sequence_base < 0:
+            raise ValueError("source_sequence_base must be non-negative integer")
+        self._revision = source_sequence_base
         self._last_byte_ns = 0
         self._started_ns = 0
         self._stream_seen = False
