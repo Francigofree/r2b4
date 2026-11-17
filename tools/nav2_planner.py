@@ -20,6 +20,8 @@ from tools.slam_toolbox import (_read_json, _write_json, _process_start, _ros_en
 from v3.adapters.nav2_lifecycle import Nav2LifecycleMonitor
 
 
+_RECOVERY_STABLE_S = 60.0
+
 def _bridge_ready(bridge, now_ns, *, pid):
     lifecycle = bridge.get("lifecycle_status", {})
     checked = lifecycle.get("last_response_checked_ns")
@@ -441,7 +443,7 @@ def _supervise(root, ros_domain_id):
         controller_limits = (limits.max_v_mps, -min(.20, limits.max_v_mps), limits.max_omega_rad_s)
         commands = _commands(paths, full=full, radius=radius, robot_geometry=robot_geometry,
                              controller_limits=controller_limits)
-        restarts = 0
+        restarts = attempts = 0
         while not stopped:
             state.update(state="STARTING" if restarts == 0 else "RESTARTING",
                          restarts=restarts, children=[], child_process_starts={})
@@ -462,6 +464,7 @@ def _supervise(root, ros_domain_id):
                     state["bridge_pid"] = child.pid
             _write_json(paths["state"], state)
             ready_deadline = time.monotonic() + 30
+            stable_since = None
             reason = ""
             while not stopped:
                 if any(child.poll() is not None for child in children):
@@ -471,12 +474,17 @@ def _supervise(root, ros_domain_id):
                     state["socket_identity"] = _socket_identity(paths["socket"])
                     _write_json(paths["state"], state)
                 if _bridge_ready(_read_json(paths["status"]), time.monotonic_ns(), pid=state["bridge_pid"]):
+                    stable_since = time.monotonic() if stable_since is None else stable_since
+                    if time.monotonic() - stable_since >= _RECOVERY_STABLE_S:
+                        attempts = 0
                     if state["state"] != "RUNNING":
                         state["state"] = "RUNNING"
                         _write_json(paths["state"], state)
-                elif state["state"] != "RUNNING" and time.monotonic() >= ready_deadline:
-                    reason = "NAV2_GROUP_READINESS_TIMEOUT"
-                    break
+                else:
+                    stable_since = None
+                    if state["state"] != "RUNNING" and time.monotonic() >= ready_deadline:
+                        reason = "NAV2_GROUP_READINESS_TIMEOUT"
+                        break
                 time.sleep(.1)
             if stopped:
                 break
@@ -489,12 +497,13 @@ def _supervise(root, ros_domain_id):
             for log in logs:
                 log.close()
             logs.clear()
-            if restarts >= 3:
+            if attempts >= 3:
                 raise RuntimeError("NAV2_RECOVERY_EXHAUSTED:" + reason)
             restarts += 1
+            attempts += 1
             state.update(state="RESTARTING", restarts=restarts, recovery_reason=reason)
             _write_json(paths["state"], state)
-            deadline = time.monotonic() + .5 * restarts
+            deadline = time.monotonic() + .5 * attempts
             while not stopped and time.monotonic() < deadline:
                 time.sleep(min(.1, max(0., deadline - time.monotonic())))
     except BaseException as exc:

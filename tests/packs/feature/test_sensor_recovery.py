@@ -336,3 +336,30 @@ def test_resident_keeps_active_mission_during_sensor_recovery():
             assert result.final_actuation.safety_decision is SafetyDecision.STOP
             assert not result.final_actuation.enabled
     assert len(writer.writes) == 9
+
+
+def test_stable_imu_operation_rearms_budget_without_reusing_source_sequence(tmp_path, monkeypatch):
+    monkeypatch.setattr(imu, '_MAX_RESTARTS', 1)
+    monkeypatch.setattr(imu, '_RECOVERY_STABLE_NS', 100_000_000)
+    device = imu.ProcessBno055Device(NativeBno055DeviceConfig(),
+        open_bus=partial(_open_bus, str(tmp_path/'opened')),
+        process_config=replace(resolved_config().edges.imu_process, stop_timeout_s=.1))
+    try:
+        first_pid = device._process.pid
+        _wait(lambda: device._process.pid != first_pid and not device._recovering)
+        _wait(lambda: device._attempts == 0)
+        previous = device.read_sample(force=True)
+        pid = device._process.pid
+        device._process.kill()
+        def fresh_after_crash():
+            try:
+                sample = device.read_sample(force=True)
+            except SensorUnavailable:
+                return None
+            return sample if device._process.pid != pid else None
+        current = _wait(fresh_after_crash)
+        assert device._restarts == 2 and not device._terminal_error
+        assert current['sequence'] > previous['sequence']
+        assert current['timestamp'] > previous['timestamp']
+    finally:
+        device.close()

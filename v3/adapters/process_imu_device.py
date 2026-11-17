@@ -25,6 +25,7 @@ _VALUE_COUNT = 11
 _ERROR_BYTES = 256
 _MAX_RESTARTS = 3
 _RESTART_BACKOFF_S = 0.25
+_RECOVERY_STABLE_NS = 60_000_000_000
 
 
 def _acquire_imu(config, open_bus, lock, sequence, times, values,
@@ -113,7 +114,8 @@ class ProcessBno055Device:
         self._closed = False
         self._recovering = False
         self._terminal_error = ""
-        self._restarts = 0
+        self._restarts = self._attempts = 0
+        self._stable_since_ns = 0
         self._sequence_base = 0
         self._access_lock = threading.Lock()
         self._supervisor_stop = threading.Event()
@@ -180,11 +182,16 @@ class ProcessBno055Device:
             published_ns = state.times[((latest - 1) % self._process_config.history_size) * 2 + 1] if latest else 0
             expired = published_ns > 0 and time.monotonic_ns() - published_ns > int(self._process_config.ready_timeout_s * 1e9)
             if not (state.failed.value or not state.process.is_alive() or expired):
+                if published_ns:
+                    if not self._stable_since_ns:
+                        self._stable_since_ns = published_ns
+                    if published_ns - self._stable_since_ns >= _RECOVERY_STABLE_NS:
+                        self._attempts = 0
                 continue
+            self._stable_since_ns = 0
             with self._access_lock:
                 self._recovering = True
                 # Allocate a new transport too: a dead child may have held its lock.
-                self._sequence_base = state.sequence_base + int(state.sequence.value)
                 self._cached = None
             try:
                 detail = self._error_detail(state)
@@ -193,10 +200,13 @@ class ProcessBno055Device:
                     raise RuntimeError(detail)
                 while True:
                     self._stop_owner()
-                    if self._restarts >= _MAX_RESTARTS:
+                    stopped_state = self._state
+                    self._sequence_base = stopped_state.sequence_base + int(stopped_state.sequence.value)
+                    if self._attempts >= _MAX_RESTARTS:
                         raise RuntimeError("IMU_RECOVERY_EXHAUSTED:" + detail)
                     self._restarts += 1
-                    if self._supervisor_stop.wait(_RESTART_BACKOFF_S * self._restarts):
+                    self._attempts += 1
+                    if self._supervisor_stop.wait(_RESTART_BACKOFF_S * self._attempts):
                         return
                     self._start_owner()
                     try:

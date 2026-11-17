@@ -26,6 +26,7 @@ from .live_encoder import EncoderVelocityReading, NativeEncoderConfig, NativeEnc
 _START_METHOD = "spawn"
 _MAX_RESTARTS = 3
 _RESTART_BACKOFF_S = .25
+_RECOVERY_STABLE_NS = 60_000_000_000
 _MAILBOX_BYTES = 16_384  # Scalar reading/diagnostics only; never raw edge history.
 
 
@@ -144,7 +145,7 @@ class ProcessEncoderBackend:
     __slots__ = (
         "_process_config", "_spawn_args", "_recovering", "_terminal_error",
         "_restarts", "_supervisor_stop", "_supervisor", "_sequence_base",
-        "_restart_requested", "_recoverable_error", "_access_lock",
+        "_restart_requested", "_recoverable_error", "_access_lock", "_attempts", "_stable_since_ns",
         "_closed",
         "_fatal_error",
         "_latest",
@@ -184,7 +185,8 @@ class ProcessEncoderBackend:
         self._terminal_error = ""
         self._recoverable_error = False
         self._closed = self._recovering = False
-        self._sequence_base = self._restarts = 0
+        self._sequence_base = self._restarts = self._attempts = 0
+        self._stable_since_ns = 0
         self._access_lock = threading.Lock()
         self._supervisor_stop = threading.Event()
         self._restart_requested = threading.Event()
@@ -243,7 +245,14 @@ class ProcessEncoderBackend:
     def _supervise(self) -> None:
         while not self._supervisor_stop.wait(.02):
             if not (self._restart_requested.is_set() or not self._process.is_alive()):
+                latest = self._latest
+                if latest is not None and time.monotonic_ns() - latest.captured_monotonic_ns <= int(self._process_config.ready_timeout_s * 1e9):
+                    if not self._stable_since_ns:
+                        self._stable_since_ns = latest.captured_monotonic_ns
+                    if latest.captured_monotonic_ns - self._stable_since_ns >= _RECOVERY_STABLE_NS:
+                        self._attempts = 0
                 continue
+            self._stable_since_ns = 0
             try:
                 with self._access_lock:
                     self._drain()
@@ -258,10 +267,11 @@ class ProcessEncoderBackend:
                                        else self._latest.sequence + 1)
                 self._latest = None
                 while True:
-                    if self._restarts >= _MAX_RESTARTS:
+                    if self._attempts >= _MAX_RESTARTS:
                         raise RuntimeError("ENCODER_RECOVERY_EXHAUSTED:" + self._fatal_error)
                     self._restarts += 1
-                    if self._supervisor_stop.wait(_RESTART_BACKOFF_S * self._restarts):
+                    self._attempts += 1
+                    if self._supervisor_stop.wait(_RESTART_BACKOFF_S * self._attempts):
                         return
                     self._fatal_error = ""
                     self._recoverable_error = False

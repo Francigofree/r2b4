@@ -228,6 +228,7 @@ __all__ = [
     "CompletionTiming",
     "TransportSemantics",
     "SensorIntegritySnapshot",
+    "SensorUnavailable",
     "WorkerIdentity",
     "latest_state_snapshot",
     "request_result_snapshot",

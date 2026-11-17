@@ -45,6 +45,7 @@ from .slam_toolbox_transport import (
 _PROCESS_START_METHOD = "spawn"
 _MAX_RESTARTS = 3
 _RESTART_BACKOFF_S = .25
+_RECOVERY_STABLE_NS = 60_000_000_000
 
 
 class _LidarSignal:
@@ -789,7 +790,7 @@ class ProcessLidarPort:
         "_pending_slam_odometry",
         "_slam_enabled", "_slam_odometry_state",
         "_launch_args", "_restarts", "_recovering", "_terminal_error", "_last_state_ns",
-        "_unhealthy_since_ns", "_resume_after_ns", "_control_state",
+        "_unhealthy_since_ns", "_resume_after_ns", "_control_state", "_attempts", "_stable_since_ns",
     )
 
     def __init__(
@@ -884,7 +885,8 @@ class ProcessLidarPort:
         }
         self._control_state = None
         self._fatal_error = ""
-        self._restarts = 0
+        self._restarts = self._attempts = 0
+        self._stable_since_ns = 0
         self._recovering = False
         self._terminal_error = ""
         self._last_state_ns = time.monotonic_ns()
@@ -977,11 +979,12 @@ class ProcessLidarPort:
             if self._process.is_alive():
                 raise RuntimeError("LiDAR recovery could not stop owner")
             self._state_queue.close()
-            if self._restarts >= _MAX_RESTARTS:
+            if self._attempts >= _MAX_RESTARTS:
                 self._terminal_error = "LIDAR_RECOVERY_EXHAUSTED:" + self._fatal_error
                 return
             self._restarts += 1
-            if self._collector_stop.wait(_RESTART_BACKOFF_S * self._restarts):
+            self._attempts += 1
+            if self._collector_stop.wait(_RESTART_BACKOFF_S * self._attempts):
                 return
             context = multiprocessing.get_context(_PROCESS_START_METHOD)
             pose_lock = context.Lock()
@@ -1041,6 +1044,7 @@ class ProcessLidarPort:
                 device_failed = (self._status.get("health") == "ERROR"
                     or (raw is not None and now_ns - raw.measurement_monotonic_ns > deadline_ns))
                 if self._fatal_error or transport_failed or device_failed:
+                    self._stable_since_ns = 0
                     if not self._unhealthy_since_ns:
                         self._unhealthy_since_ns = self._resume_after_ns = now_ns
                     # Let the existing serial reconnect finish locally first.
@@ -1056,6 +1060,10 @@ class ProcessLidarPort:
                             return
                 elif raw is not None and raw.measurement_monotonic_ns > self._resume_after_ns:
                     self._unhealthy_since_ns = 0
+                    if not self._stable_since_ns:
+                        self._stable_since_ns = raw.measurement_monotonic_ns
+                    if raw.measurement_monotonic_ns - self._stable_since_ns >= _RECOVERY_STABLE_NS:
+                        self._attempts = 0
                 # Reuse this existing collector. Without a consumer the probe
                 # is at most 1 Hz and no scan or odometry payload is created.
                 now_ns = time.monotonic_ns()
@@ -1207,7 +1215,8 @@ class ProcessLidarPort:
         alive = self._process.is_alive() and not self._stopped
         status["owner_process_alive"] = alive
         status["capture_raw_enabled"] = self._raw_queue is not None
-        status["recovery_attempts"] = self._restarts
+        status["recovery_attempts"] = self._attempts
+        status["owner_restarts"] = self._restarts
         status["recovery_state"] = ("FAILED" if self._terminal_error else
                                     "RESTARTING" if self._recovering or self._unhealthy_since_ns else "FRESH")
         if self._terminal_error:
