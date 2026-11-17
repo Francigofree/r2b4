@@ -9907,3 +9907,22 @@ terminate called without an active exception
 [WARN] [1794860019.262443981] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
 [INFO] [1794860025.055737651] [global_costmap.global_costmap]: Destroying
 [INFO] [1794860025.074112439] [planner_server]: Destroying
+[WARN] [1794939564.032884144] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794939564.039517621] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794939595.816734111] [global_costmap.global_costmap]: Destroying
+[INFO] [1794939595.855244411] [planner_server]: Destroying
+[WARN] [1794939645.432769045] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794939645.437044321] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794939671.223405534] [global_costmap.global_costmap]: start
+[ERROR] [1794939671.233907465] [global_costmap.global_costmap]: Caught exception in callback for transition 13
+[ERROR] [1794939671.233959650] [global_costmap.global_costmap]: Original error: could not create subscription: rcl node's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/node.c:404
+[ERROR] [1794939671.233991299] [global_costmap.global_costmap]: Failed to finish transition 3. Current state is now: errorprocessing (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[ERROR] [1794939671.234008576] [planner_server]: Failed to finish transition 3. Current state is now: inactive (Could not publish transition: publisher's context is invalid, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/publisher.c:423, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl-lifecycle_1791449383/work/ros2-rcl-lifecycle/src/work/src/rcl_lifecycle.c:368)
+[INFO] [1794939671.234426171] [planner_server]: Destroying plugin GridBased of type SmacPlanner2D
+Warning: class_loader.ClassLoader: SEVERE WARNING!!! Attempting to unload library while objects created by this loader exist in the heap! You should delete your objects before attempting to unload the library or destroying the ClassLoader. The library will NOT be unloaded.
+         at line 127 in /home/runner/conda-bld/bld/rattler-build_ros2-class-loader_1791447710/work/ros2-class-loader/src/work/src/class_loader.cpp
+terminate called without an active exception
+[WARN] [1794939750.546853894] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1794939750.546948486] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1794939825.487852610] [global_costmap.global_costmap]: Destroying
+[INFO] [1794939825.492394113] [planner_server]: Destroying
