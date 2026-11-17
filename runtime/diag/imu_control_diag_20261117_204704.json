@@ -1,0 +1,483 @@
+{
+  "baseline_post": {
+    "context_work": {
+      "count": 100,
+      "max_ms": 0.013445,
+      "max_ns": 13445,
+      "mean_ms": 0.002804,
+      "mean_ns": 2804,
+      "p50_ms": 0.001852,
+      "p50_ns": 1852,
+      "p95_ms": 0.006963,
+      "p95_ns": 6963,
+      "p99_ms": 0.012537,
+      "p99_ns": 12537
+    },
+    "effective_hz": 49.998689302036254,
+    "period": {
+      "count": 99,
+      "max_ms": 20.056876,
+      "max_ns": 20056876,
+      "mean_ms": 20.000524,
+      "mean_ns": 20000524,
+      "p50_ms": 19.999709,
+      "p50_ns": 19999709,
+      "p95_ms": 20.005783,
+      "p95_ns": 20005783,
+      "p99_ms": 20.056876,
+      "p99_ns": 20056876
+    },
+    "samples": 100,
+    "wake_lateness": {
+      "count": 100,
+      "max_ms": 0.08177,
+      "max_ns": 81770,
+      "mean_ms": 0.056037,
+      "mean_ns": 56037,
+      "p50_ms": 0.055761,
+      "p50_ns": 55761,
+      "p95_ms": 0.06118,
+      "p95_ns": 61180,
+      "p99_ms": 0.068121,
+      "p99_ns": 68121
+    }
+  },
+  "baseline_pre": {
+    "context_work": {
+      "count": 100,
+      "max_ms": 0.011797,
+      "max_ns": 11797,
+      "mean_ms": 0.003058,
+      "mean_ns": 3058,
+      "p50_ms": 0.002074,
+      "p50_ns": 2074,
+      "p95_ms": 0.008481,
+      "p95_ns": 8481,
+      "p99_ms": 0.011778,
+      "p99_ns": 11778
+    },
+    "effective_hz": 49.998703442712994,
+    "period": {
+      "count": 99,
+      "max_ms": 20.115117,
+      "max_ns": 20115117,
+      "mean_ms": 20.000519,
+      "mean_ns": 20000519,
+      "p50_ms": 19.999617,
+      "p50_ns": 19999617,
+      "p95_ms": 20.006839,
+      "p95_ns": 20006839,
+      "p99_ms": 20.115117,
+      "p99_ns": 20115117
+    },
+    "samples": 100,
+    "wake_lateness": {
+      "count": 100,
+      "max_ms": 0.169264,
+      "max_ns": 169264,
+      "mean_ms": 0.05744,
+      "mean_ns": 57440,
+      "p50_ms": 0.055956,
+      "p50_ns": 55956,
+      "p95_ms": 0.062649,
+      "p95_ns": 62649,
+      "p99_ms": 0.106801,
+      "p99_ns": 106801
+    }
+  },
+  "generated_local": "2026-11-17T20:47:04.854045+01:00",
+  "i2c_transaction_contract": {
+    "actual_counts": {
+      "IMU_BURST_32": 650,
+      "IMU_CALIB": 650,
+      "IMU_SYS_ERROR": 650,
+      "IMU_SYS_STATUS": 650
+    },
+    "expected_counts": {
+      "IMU_BURST_32": 650,
+      "IMU_CALIB": 650,
+      "IMU_SYS_ERROR": 650,
+      "IMU_SYS_STATUS": 650
+    },
+    "expected_per_completed_tick": [
+      "1x 32-byte fused burst",
+      "1x calibration byte",
+      "1x system-status byte",
+      "1x system-error byte"
+    ],
+    "pass": true
+  },
+  "imu": {
+    "adapter_non_bus_wall_per_tick": {
+      "count": 650,
+      "max_ms": 1.450805,
+      "max_ns": 1450805,
+      "mean_ms": 0.108676,
+      "mean_ns": 108676,
+      "p50_ms": 0.103575,
+      "p50_ns": 103575,
+      "p95_ms": 0.16015,
+      "p95_ns": 160150,
+      "p99_ms": 0.237242,
+      "p99_ns": 237242
+    },
+    "bus_thread_cpu_per_tick": {
+      "count": 650,
+      "max_ms": 0.277723,
+      "max_ns": 277723,
+      "mean_ms": 0.096143,
+      "mean_ns": 96143,
+      "p50_ms": 0.094925,
+      "p50_ns": 94925,
+      "p95_ms": 0.123036,
+      "p95_ns": 123036,
+      "p99_ms": 0.16463,
+      "p99_ns": 164630
+    },
+    "bus_wall_per_tick": {
+      "count": 650,
+      "max_ms": 7.808028,
+      "max_ns": 7808028,
+      "mean_ms": 6.221296,
+      "mean_ns": 6221296,
+      "p50_ms": 6.219852,
+      "p50_ns": 6219852,
+      "p95_ms": 7.533711,
+      "p95_ns": 7533711,
+      "p99_ms": 7.623767,
+      "p99_ns": 7623767
+    },
+    "effective_hz": 49.999796942273036,
+    "errors": [],
+    "health_states": {
+      "OK": 650
+    },
+    "i2c_operation_counts": {
+      "IMU_BURST_32": 650,
+      "IMU_CALIB": 650,
+      "IMU_SYS_ERROR": 650,
+      "IMU_SYS_STATUS": 650
+    },
+    "i2c_operations": {
+      "IMU_BURST_32": {
+        "count": 650,
+        "thread_cpu": {
+          "count": 650,
+          "max_ms": 0.113278,
+          "max_ns": 113278,
+          "mean_ms": 0.034182,
+          "mean_ns": 34182,
+          "p50_ms": 0.032018,
+          "p50_ns": 32018,
+          "p95_ms": 0.050832,
+          "p95_ns": 50832,
+          "p99_ms": 0.077111,
+          "p99_ns": 77111
+        },
+        "wall": {
+          "count": 650,
+          "max_ms": 6.370463,
+          "max_ns": 6370463,
+          "mean_ms": 4.561509,
+          "mean_ns": 4561509,
+          "p50_ms": 4.506045,
+          "p50_ns": 4506045,
+          "p95_ms": 6.179017,
+          "p95_ns": 6179017,
+          "p99_ms": 6.28,
+          "p99_ns": 6280000
+        }
+      },
+      "IMU_CALIB": {
+        "count": 650,
+        "thread_cpu": {
+          "count": 650,
+          "max_ms": 0.082555,
+          "max_ns": 82555,
+          "mean_ms": 0.02274,
+          "mean_ns": 22740,
+          "p50_ms": 0.021647,
+          "p50_ns": 21647,
+          "p95_ms": 0.031389,
+          "p95_ns": 31389,
+          "p99_ms": 0.041426,
+          "p99_ns": 41426
+        },
+        "wall": {
+          "count": 650,
+          "max_ms": 1.218377,
+          "max_ns": 1218377,
+          "mean_ms": 0.564094,
+          "mean_ns": 564094,
+          "p50_ms": 0.447873,
+          "p50_ns": 447873,
+          "p95_ms": 0.922931,
+          "p95_ns": 922931,
+          "p99_ms": 1.040395,
+          "p99_ns": 1040395
+        }
+      },
+      "IMU_SYS_ERROR": {
+        "count": 650,
+        "thread_cpu": {
+          "count": 650,
+          "max_ms": 0.043351,
+          "max_ns": 43351,
+          "mean_ms": 0.019422,
+          "mean_ns": 19422,
+          "p50_ms": 0.01963,
+          "p50_ns": 19630,
+          "p95_ms": 0.021778,
+          "p95_ns": 21778,
+          "p99_ms": 0.029296,
+          "p99_ns": 29296
+        },
+        "wall": {
+          "count": 650,
+          "max_ms": 1.199711,
+          "max_ns": 1199711,
+          "mean_ms": 0.542656,
+          "mean_ns": 542656,
+          "p50_ms": 0.445447,
+          "p50_ns": 445447,
+          "p95_ms": 0.916486,
+          "p95_ns": 916486,
+          "p99_ms": 1.020914,
+          "p99_ns": 1020914
+        }
+      },
+      "IMU_SYS_STATUS": {
+        "count": 650,
+        "thread_cpu": {
+          "count": 650,
+          "max_ms": 0.056889,
+          "max_ns": 56889,
+          "mean_ms": 0.019799,
+          "mean_ns": 19799,
+          "p50_ms": 0.019927,
+          "p50_ns": 19927,
+          "p95_ms": 0.022351,
+          "p95_ns": 22351,
+          "p99_ms": 0.030519,
+          "p99_ns": 30519
+        },
+        "wall": {
+          "count": 650,
+          "max_ms": 1.650158,
+          "max_ns": 1650158,
+          "mean_ms": 0.553037,
+          "mean_ns": 553037,
+          "p50_ms": 0.445798,
+          "p50_ns": 445798,
+          "p95_ms": 0.917617,
+          "p95_ns": 917617,
+          "p99_ms": 1.029636,
+          "p99_ns": 1029636
+        }
+      }
+    },
+    "over_10ms_count": 0,
+    "over_20ms_count": 0,
+    "over_5ms_count": 540,
+    "period": {
+      "count": 649,
+      "max_ms": 20.074302,
+      "max_ns": 20074302,
+      "mean_ms": 20.000081,
+      "mean_ns": 20000081,
+      "p50_ms": 19.999876,
+      "p50_ns": 19999876,
+      "p95_ms": 20.005246,
+      "p95_ns": 20005246,
+      "p99_ms": 20.02482,
+      "p99_ns": 20024820
+    },
+    "sample_kinds": {
+      "ekf_heading": 650
+    },
+    "samples_completed": 650,
+    "samples_requested": 650,
+    "source_read_non_cpu_elapsed": {
+      "count": 650,
+      "max_ms": 7.646954,
+      "max_ns": 7646954,
+      "mean_ms": 6.127785,
+      "mean_ns": 6127785,
+      "p50_ms": 6.122222,
+      "p50_ns": 6122222,
+      "p95_ms": 7.442803,
+      "p95_ns": 7442803,
+      "p99_ms": 7.525823,
+      "p99_ns": 7525823
+    },
+    "source_read_thread_cpu": {
+      "count": 650,
+      "max_ms": 1.54898,
+      "max_ns": 1548980,
+      "mean_ms": 0.202186,
+      "mean_ns": 202186,
+      "p50_ms": 0.195648,
+      "p50_ns": 195648,
+      "p95_ms": 0.283072,
+      "p95_ns": 283072,
+      "p99_ms": 0.399815,
+      "p99_ns": 399815
+    },
+    "source_read_wall": {
+      "count": 650,
+      "max_ms": 8.046769,
+      "max_ns": 8046769,
+      "mean_ms": 6.329972,
+      "mean_ns": 6329972,
+      "p50_ms": 6.345259,
+      "p50_ns": 6345259,
+      "p95_ms": 7.632766,
+      "p95_ns": 7632766,
+      "p99_ms": 7.790008,
+      "p99_ns": 7790008
+    },
+    "wake_lateness": {
+      "count": 650,
+      "max_ms": 0.132711,
+      "max_ns": 132711,
+      "mean_ms": 0.0584,
+      "mean_ns": 58400,
+      "p50_ms": 0.057552,
+      "p50_ns": 57552,
+      "p95_ms": 0.063509,
+      "p95_ns": 63509,
+      "p99_ms": 0.083633,
+      "p99_ns": 83633
+    }
+  },
+  "method": {
+    "baseline_design": "baseline -> IMU -> baseline",
+    "camera_opened": false,
+    "clock_thread_cpu": "time.thread_time_ns",
+    "clock_wall": "time.perf_counter_ns",
+    "lidar_opened": false,
+    "motors_opened": false,
+    "non_cpu_elapsed_definition": "wall - thread_cpu; includes I/O wait and scheduler preemption",
+    "production_path": [
+      "smbus2.SMBus",
+      "NativeBno055Device",
+      "NativeBno055ImuBackend",
+      "NativeImuSource",
+      "TickContext"
+    ],
+    "resident_runtime_started": false,
+    "scheduler_policy": "next_deadline=max(previous_deadline+period,tick_start+1)"
+  },
+  "production_configuration": {
+    "affinity": {
+      "capture_cpus": [
+        1,
+        2
+      ],
+      "command_cpus": [
+        1,
+        2
+      ],
+      "control_cpus": [
+        3
+      ],
+      "diagnostics_cpus": [
+        1,
+        2
+      ],
+      "enabled": false,
+      "encoder_cpus": [
+        0
+      ],
+      "er2_cpus": [
+        1,
+        2
+      ],
+      "imu_cpus": [
+        0
+      ],
+      "l0_aux_cpus": [
+        1,
+        2
+      ],
+      "l0_encoder_cpus": [
+        0
+      ],
+      "l0_imu_cpus": [
+        0
+      ],
+      "l0_lidar_cpus": [
+        2
+      ],
+      "lidar_matcher_cpus": [
+        2
+      ],
+      "lidar_owner_cpus": [
+        2
+      ],
+      "operator_cpus": [
+        1,
+        2
+      ],
+      "planner_cpus": [
+        1
+      ],
+      "runtime_background_cpus": [
+        1,
+        2
+      ],
+      "status_cpus": [
+        1,
+        2
+      ],
+      "strict": false,
+      "vision_cpus": [
+        1
+      ],
+      "voice_cpus": [
+        1,
+        2
+      ]
+    },
+    "affinity_evidence": [],
+    "imu_address": 40,
+    "imu_allow_rate_only": true,
+    "imu_bus": 1,
+    "imu_maximum_sample_age_ns": 100000000,
+    "imu_minimum_calibration": 2,
+    "imu_minimum_confidence": 0.5,
+    "imu_operation_mode": "NDOF",
+    "imu_use_external_crystal": false,
+    "target_hz": 50.0,
+    "tick_period_ns": 20000000
+  },
+  "repo": "/home/alba/project_r2b4",
+  "runtime_was_active": false,
+  "schema": "R2B4_V3_IMU_CONTROL_DIAG_V1",
+  "verdict": {
+    "comparison": {
+      "baseline_effective_hz_mean": 49.998696372374624,
+      "imu_effective_hz": 49.999796942273036,
+      "imu_mean_budget_fraction": 0.3164986,
+      "imu_p95_budget_fraction": 0.3816383,
+      "imu_p99_budget_fraction": 0.3895004,
+      "target_hz": 50.0,
+      "target_period_ms": 20.0
+    },
+    "findings": [
+      {
+        "claim": "V3_IMU_DIRECT_COST",
+        "statement": "The exact production V3 IMU source path consumed 6.330 ms mean, 7.633 ms p95, 7.790 ms p99 per read in this standalone test.",
+        "status": "PROVEN"
+      },
+      {
+        "claim": "IMU_READS_STAY_BELOW_FULL_50HZ_BUDGET",
+        "statement": "No measured IMU read exceeded the full 20.000 ms control-period budget.",
+        "status": "PROVEN"
+      }
+    ],
+    "interpretation_limit": "This is direct causal evidence for the standalone production IMU path. It does not measure interaction-only delays that require the full runtime (for example contention from other processes/threads).",
+    "primary": "PROVEN_IMU_DOES_NOT_BY_ITSELF_BREAK_50HZ_IN_THIS_TEST",
+    "reason": "The production IMU path stayed inside the 20 ms work budget and the V3-shaped IMU loop maintained at least 98% of nominal 50 Hz."
+  }
+}
