@@ -407,6 +407,7 @@ class PoseFilterStateCheckpoint:
     stationary_until_ns: int | None = None
     last_velocity_evidence_ns: tuple[int, int] | None = None
     encoder_rebase_pending: bool = False
+    provisional_position_jacobian: tuple[float, ...] = (0.0, 0.0, 0.0, 0.0)
 
     def __post_init__(self) -> None:
         if len(self.state) != 5 or any(not math.isfinite(value) for value in self.state):
@@ -437,6 +438,9 @@ class PoseFilterStateCheckpoint:
             raise ValueError("last_velocity_evidence_ns must be two non-negative times or None")
         if type(self.encoder_rebase_pending) is not bool:
             raise TypeError("encoder_rebase_pending must be bool")
+        if (len(self.provisional_position_jacobian) != 4
+                or any(not math.isfinite(value) for value in self.provisional_position_jacobian)):
+            raise ValueError("provisional_position_jacobian must contain four finite values")
 
 
 class _PoseFilter:
@@ -468,6 +472,7 @@ class _PoseFilter:
         "_last_velocity_evidence_ns",
         "_state",
         "_state_transition",
+        "_provisional_position_jacobian",
     )
 
     def __init__(self, config: NativeStateEstimatorConfig) -> None:
@@ -476,6 +481,7 @@ class _PoseFilter:
         self._config = config
         self._state = [0.0] * self._SIZE
         self._state_transition = _identity(self._SIZE)
+        self._provisional_position_jacobian = (0.0, 0.0, 0.0, 0.0)
         self._covariance = [
             [
                 float(config.initial_covariance[row]) if row == column else 0.0
@@ -511,6 +517,7 @@ class _PoseFilter:
             self._stationary_until_ns,
             self._last_velocity_evidence_ns,
             self._encoder_rebase_pending,
+            self._provisional_position_jacobian,
         )
 
     def restore(self, checkpoint: PoseFilterStateCheckpoint) -> None:
@@ -518,6 +525,7 @@ class _PoseFilter:
             raise TypeError("checkpoint must be PoseFilterStateCheckpoint")
         self._state = list(checkpoint.state)
         self._state_transition = _identity(self._SIZE)
+        self._provisional_position_jacobian = checkpoint.provisional_position_jacobian
         self._covariance = [list(row) for row in checkpoint.covariance]
         self._last_context = checkpoint.last_context
         self._last_omega = checkpoint.last_omega
@@ -534,6 +542,13 @@ class _PoseFilter:
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
         self._last_update_evidence = []
         self._state_transition = _identity(self._SIZE)
+        # Cumulative counts own the measured displacement. Remove the previous
+        # provisional tail before propagating the next measured interval; the
+        # new, still-unmeasured tail is projected once at the end of this tick.
+        if any(self._provisional_position_jacobian):
+            self._position_covariance_jacobian(
+                tuple(-value for value in self._provisional_position_jacobian))
+            self._provisional_position_jacobian = (0.0, 0.0, 0.0, 0.0)
         wheel = _optional_observation(frame, "wheel_velocity")
         heading = _optional_observation(frame, "ekf_heading")
 
@@ -572,6 +587,7 @@ class _PoseFilter:
         velocity_feedback_valid = False
         speed_quality = 1.0
         wheel_distance_delta: tuple[float, float] | None = None
+        cumulative_counts = self._encoder_anchor is not None
         measured_velocity: float | None = None
         wheel_omega: float | None = None
         still = False
@@ -628,6 +644,7 @@ class _PoseFilter:
                 speed_quality = 1.0
             wheel_distance_delta = _optional_wheel_distance_delta(wheel)
             if self._encoder_totals(wheel) is not None:
+                cumulative_counts = True
                 wheel_distance_delta = None
             if not 0.0 <= encoder_trust <= 1.0:
                 raise ValueError("wheel_velocity.trust must be in [0, 1]")
@@ -709,6 +726,7 @@ class _PoseFilter:
                     dt_s,
                     wheel_distance_delta,
                     stationary=stationary_prediction,
+                    cumulative_counts=cumulative_counts,
                 )
                 if self._encoder_anchor is not None and not self._encoder_rebase_pending:
                     self._odometry_predictions.append(OdometryPrediction(
@@ -757,6 +775,17 @@ class _PoseFilter:
 
         if wheel is not None:
             self._reconcile_encoder(wheel, frame.context)
+        if self._encoder_anchor is not None and not stationary_prediction:
+            pending_dx = pending_dy = velocity_dx = velocity_dy = 0.0
+            for segment in self._odometry_predictions:
+                pending_dx += segment.dx_m
+                pending_dy += segment.dy_m
+                dt_s = (segment.end_ns - segment.start_ns) / 1e9
+                velocity_dx += dt_s * math.cos(segment.yaw_rad)
+                velocity_dy += dt_s * math.sin(segment.yaw_rad)
+            self._provisional_position_jacobian = (
+                -pending_dy, pending_dx, velocity_dx, velocity_dy)
+            self._position_covariance_jacobian(self._provisional_position_jacobian)
 
         # Preserve the established R2B4 output semantics: trusted gyro rate is
         # bias-corrected after every local measurement correction. A fresh wheel
@@ -851,7 +880,7 @@ class _PoseFilter:
                 f"from_ns={previous.captured_ns} dt_ns={span_ns} "
                 f"left_m={left_delta_m!r} right_m={right_delta_m!r} limit_m={limit_m!r}"
             )
-        dx = dy = 0.0
+        dx = dy = count_dx = count_dy = 0.0
         covered_ns = 0
         remaining = []
         for segment in self._odometry_predictions:
@@ -862,8 +891,12 @@ class _PoseFilter:
                 fraction = overlap / (segment.end_ns - segment.start_ns)
                 # Replace only the provisional displacement over the measurement
                 # interval; preserve later prediction and absolute pose corrections.
-                dx += distance * overlap / span_ns * math.cos(segment.yaw_rad) - fraction * segment.dx_m
-                dy += distance * overlap / span_ns * math.sin(segment.yaw_rad) - fraction * segment.dy_m
+                measured_dx = distance * overlap / span_ns * math.cos(segment.yaw_rad)
+                measured_dy = distance * overlap / span_ns * math.sin(segment.yaw_rad)
+                count_dx += measured_dx
+                count_dy += measured_dy
+                dx += measured_dx - fraction * segment.dx_m
+                dy += measured_dy - fraction * segment.dy_m
                 covered_ns += overlap
             if segment.end_ns > current.captured_ns:
                 tail_start = max(segment.start_ns, current.captured_ns)
@@ -876,8 +909,41 @@ class _PoseFilter:
             raise ValueError("L3 encoder interval is outside prediction history")
         self._state[self._X] += dx
         self._state[self._Y] += dy
+        # The signed displacement is an input, independent of the velocity fit.
+        # Preserve its heading uncertainty; calibrated XY process noise remains
+        # in the prediction. No-edge counts do not become a velocity/ZUPT update.
+        self._position_covariance_jacobian((-count_dy, count_dx, 0.0, 0.0))
         self._encoder_anchor = current
         self._odometry_predictions = remaining
+
+    def _position_covariance_jacobian(self, coefficients: tuple[float, ...]) -> None:
+        """Apply the sparse XY Jacobian of count motion or provisional motion.
+
+        Coefficients are dx/dyaw, dy/dyaw, dx/dv, dy/dv. Its inverse simply
+        negates these entries, so the bounded unmeasured tail can be replaced
+        on every count update without accumulating velocity-fit uncertainty.
+        The same map advances the map-alignment cross covariance in L3.
+        """
+        if not any(coefficients):
+            return
+        previous = self._covariance
+        left = [row[:] for row in previous]
+        transition = [row[:] for row in self._state_transition]
+        for row, yaw_gain, velocity_gain in (
+            (self._X, coefficients[0], coefficients[2]),
+            (self._Y, coefficients[1], coefficients[3]),
+        ):
+            for column in range(self._SIZE):
+                left[row][column] += (yaw_gain * previous[self._YAW][column]
+                                     + velocity_gain * previous[self._VELOCITY][column])
+                transition[row][column] += (yaw_gain * self._state_transition[self._YAW][column]
+                                           + velocity_gain * self._state_transition[self._VELOCITY][column])
+        covariance = [row[:] for row in left]
+        for row in range(self._SIZE):
+            covariance[row][self._X] += coefficients[0] * left[row][self._YAW] + coefficients[2] * left[row][self._VELOCITY]
+            covariance[row][self._Y] += coefficients[1] * left[row][self._YAW] + coefficients[3] * left[row][self._VELOCITY]
+        self._covariance = covariance
+        self._state_transition = transition
 
     def _cross_check_wheels(
         self,
@@ -994,6 +1060,7 @@ class _PoseFilter:
         wheel_distance_delta: tuple[float, float] | None,
         *,
         stationary: bool = False,
+        cumulative_counts: bool = False,
     ) -> None:
         x_m, y_m, yaw_rad, velocity_mps, gyro_bias = self._state
 
@@ -1019,7 +1086,7 @@ class _PoseFilter:
         ]
 
         transition = _identity(self._SIZE)
-        if not stationary:
+        if not stationary and not cumulative_counts:
             transition[self._X][self._YAW] = (
                 -distance_m * math.sin(yaw_rad)
             )
@@ -1036,6 +1103,7 @@ class _PoseFilter:
                 if wheel_distance_delta is None
                 else 0.0
             )
+        if not stationary:
             transition[self._YAW][self._GYRO_BIAS] = -dt_s
 
         if not stationary:

@@ -1243,3 +1243,21 @@ Traceback (most recent call last):
 RuntimeError: NAV2_LIFECYCLE_STATUS_STALE
 [WARN] [1795006025.817562707] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
 [WARN] [1795006025.817610300] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1795006420.338140596] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1795006420.338196207] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 993, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 989, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 555, in run
+    frontier.poll()
+  File "/home/alba/project_r2b4/v3/adapters/ros2_frontier.py", line 170, in poll
+    raise RuntimeError("FRONTIER_EXPLORER_STOP_TIMEOUT")
+RuntimeError: FRONTIER_EXPLORER_STOP_TIMEOUT
+[WARN] [1795006436.964249606] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1795006436.964296273] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
