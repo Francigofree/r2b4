@@ -8,7 +8,7 @@ import pytest
 from rig import resolved_config
 from test_v3_dual_frame_localization import frame, observation
 from v3.capture import encode_value
-from v3.contracts import DataField, GLOBAL_FRAME_ID
+from v3.contracts import GLOBAL_FRAME_ID
 from v3.layers.l3_state_estimation import NativeEstimatorStateCheckpoint, NativeStateEstimator
 from v3.replay import _decode_production_value, _migrate_legacy_estimation_checkpoint
 
@@ -141,3 +141,43 @@ def test_historical_dual_ekf_checkpoint_restores_map_alignment_without_map_twist
     assert actual.omega_rad_s == expected.omega_rad_s
     assert (actual.map_to_odom.x_m, actual.map_to_odom.y_m,
             actual.map_to_odom.yaw_rad) == pytest.approx((.7, -.2, yaw))
+
+
+def test_persistent_bias_uncertainty_is_independent_of_tick_frequency():
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    bias_variance = .04
+    config = replace(config, process_noise=(0.,) * 5, stationary_bias_gain=0.,
+        initial_covariance=(.01, .01, .01, .01, bias_variance))
+    variances = []
+    for step_ns in (10_000_000, 20_000_000):
+        estimator = NativeStateEstimator(config)
+        for tick in range(1_000_000_000 // step_ns + 1):
+            f = frame(tick, step_ns=step_ns, speed=.2)
+            heading = observation("ekf_heading", tick, f.context.monotonic_ns,
+                yaw_rad=0., omega_rad_s=.4, confidence=0., omega_confidence=1.)
+            f = replace(f, accepted=tuple(heading if o.kind == "ekf_heading" else o
+                                         for o in f.accepted))
+            estimate = estimator(f)
+        variances.append(estimate.covariance_5x5[12])
+    # With no absolute heading observation, a constant uncertain gyro bias
+    # contributes Pbb * T^2, not N * Pbb * dt^2.
+    assert variances == pytest.approx([.01 + bias_variance] * 2, abs=1e-6)
+
+
+def test_rejected_physical_fix_is_not_reconsidered_from_a_new_publication():
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    estimator = NativeStateEstimator(config)
+    estimator(frame(0))
+    accepted = estimator(with_fix(frame(1)))
+    bad = with_fix(frame(2), x=20.)
+    rejected = estimator(bad)
+    assert rejected.localization_quality.global_fix_status == "NIS_REJECTED"
+    restored = NativeStateEstimator(config)
+    restored.restore(estimator.checkpoint())
+    republished = with_fix(frame(3), ns=bad.context.monotonic_ns, x=.1)
+    actual = estimator(republished)
+    assert restored(republished) == actual
+    assert actual.localization_quality.global_fix_status == "INVALID_MEASUREMENT_TIME"
+    assert actual.localization_quality.global_fix_last_accepted_ns == accepted.context.monotonic_ns
+    assert actual.map_to_odom == accepted.map_to_odom
+    assert not any(e.update_type == "LIDAR_POSE" for e in estimator.last_update_evidence)

@@ -467,6 +467,7 @@ class _PoseFilter:
         "_stationary_until_ns",
         "_last_velocity_evidence_ns",
         "_state",
+        "_state_transition",
     )
 
     def __init__(self, config: NativeStateEstimatorConfig) -> None:
@@ -474,6 +475,7 @@ class _PoseFilter:
             raise TypeError("config must be NativeStateEstimatorConfig")
         self._config = config
         self._state = [0.0] * self._SIZE
+        self._state_transition = _identity(self._SIZE)
         self._covariance = [
             [
                 float(config.initial_covariance[row]) if row == column else 0.0
@@ -515,6 +517,7 @@ class _PoseFilter:
         if not isinstance(checkpoint, PoseFilterStateCheckpoint):
             raise TypeError("checkpoint must be PoseFilterStateCheckpoint")
         self._state = list(checkpoint.state)
+        self._state_transition = _identity(self._SIZE)
         self._covariance = [list(row) for row in checkpoint.covariance]
         self._last_context = checkpoint.last_context
         self._last_omega = checkpoint.last_omega
@@ -530,6 +533,7 @@ class _PoseFilter:
 
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
         self._last_update_evidence = []
+        self._state_transition = _identity(self._SIZE)
         wheel = _optional_observation(frame, "wheel_velocity")
         heading = _optional_observation(frame, "ekf_heading")
 
@@ -968,6 +972,8 @@ class _PoseFilter:
         self._state[self._GYRO_BIAS] += alpha * residual
 
         scale = 1.0 - alpha
+        self._state_transition[self._GYRO_BIAS] = [
+            value * scale for value in self._state_transition[self._GYRO_BIAS]]
         for index in range(self._SIZE):
             if index == self._GYRO_BIAS:
                 continue
@@ -1032,6 +1038,18 @@ class _PoseFilter:
             )
             transition[self._YAW][self._GYRO_BIAS] = -dt_s
 
+        if not stationary:
+            previous_transition = self._state_transition
+            propagated = [row[:] for row in previous_transition]
+            for row, sources in ((self._X, (self._YAW, self._VELOCITY)),
+                                 (self._Y, (self._YAW, self._VELOCITY)),
+                                 (self._YAW, (self._GYRO_BIAS,))):
+                for source in sources:
+                    coefficient = transition[row][source]
+                    if coefficient:
+                        for column in range(self._SIZE):
+                            propagated[row][column] += coefficient * previous_transition[source][column]
+            self._state_transition = propagated
         predicted = _matmul(
             _matmul(transition, self._covariance),
             _transpose(transition),
@@ -1084,7 +1102,11 @@ class _PoseFilter:
             # coupling after prediction; encoder reconciliation removes only
             # provisional motion, not that extra Kalman position correction.
             gain[self._X] = gain[self._Y] = 0.0
+        source_transition = self._state_transition[state_index][:]
         for row in range(self._SIZE):
+            self._state_transition[row] = [
+                value - gain[row] * source_transition[column]
+                for column, value in enumerate(self._state_transition[row])]
             self._state[row] += gain[row] * innovation
         self._state[self._YAW] = _normalize_angle(self._state[self._YAW])
         self._covariance = [
@@ -1194,6 +1216,32 @@ class ConsistencyFailure:
 class MapAlignmentStateCheckpoint:
     map_to_odom: Pose2D
     covariance: tuple[tuple[float, ...], ...]
+    local_cross_covariance: tuple[tuple[float, ...], ...] = ((0.0,) * 5,) * 3
+
+    @classmethod
+    def from_pose_prior(
+        cls, transform: Pose2D, local: Pose2D,
+        global_covariance: list[list[float]], local_covariance: list[list[float]],
+    ) -> MapAlignmentStateCheckpoint:
+        """A map-pose prior independent of the retained local motion state.
+
+        map_T_odom = map_T_base * inverse(odom_T_base), so its uncertainty
+        includes the local pose and the corresponding negative cross terms.
+        This is also the replay-only conversion for historical dual filters.
+        """
+        c, s = math.cos(transform.yaw_rad), math.sin(transform.yaw_rad)
+        dx, dy = c * local.x_m - s * local.y_m, s * local.x_m + c * local.y_m
+        inverse = [[1.0, 0.0, dy], [0.0, 1.0, -dx], [0.0, 0.0, 1.0]]
+        local_jacobian = [[c, -s, 0.0, 0.0, 0.0],
+                          [s, c, 0.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0, 0.0]]
+        local_pose_covariance = _matmul(_matmul(local_jacobian, local_covariance),
+                                       _transpose(local_jacobian))
+        summed = [[global_covariance[row][column] + local_pose_covariance[row][column]
+                   for column in range(3)] for row in range(3)]
+        covariance = _matmul(_matmul(inverse, summed), _transpose(inverse))
+        cross = _matmul(_matmul(inverse, local_jacobian), local_covariance)
+        return cls(transform, tuple(tuple(row) for row in covariance),
+                   tuple(tuple(-value for value in row) for row in cross))
 
     def __post_init__(self) -> None:
         if not isinstance(self.map_to_odom, Pose2D):
@@ -1203,6 +1251,10 @@ class MapAlignmentStateCheckpoint:
                 or any(not math.isfinite(value) for row in self.covariance for value in row)
                 or any(self.covariance[i][i] < 0.0 for i in range(3))):
             raise ValueError("map covariance must be finite planar covariance")
+        if (len(self.local_cross_covariance) != 3
+                or any(len(row) != 5 for row in self.local_cross_covariance)
+                or any(not math.isfinite(value) for row in self.local_cross_covariance for value in row)):
+            raise ValueError("map/local cross covariance must be finite 3x5 covariance")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1236,6 +1288,7 @@ class NativeEstimatorStateCheckpoint:
     wheel_gyro_qualification: str = "UNQUALIFIED"
     last_relative_source_sequence: int | None = None
     last_relative_source_id: str | None = None
+    last_evaluated_fix_ns: int | None = None
 
 
 class NativeStateEstimator:
@@ -1249,12 +1302,13 @@ class NativeStateEstimator:
     def __init__(self, config: NativeStateEstimatorConfig) -> None:
         self._config = config
         self._map_to_odom = Pose2D(config.frame_id, 0.0, 0.0, 0.0)
-        self._map_covariance = [[float(config.initial_covariance[row]) if row == column else 0.0
-                                 for column in range(3)] for row in range(3)]
+        self._map_covariance = [[0.0] * 3 for _ in range(3)]
+        self._map_local_covariance = [[0.0] * 5 for _ in range(3)]
         self._last_update_evidence: tuple[EkfUpdateEvidence, ...] = ()
         self._local = _PoseFilter(replace(config, frame_id=LOCAL_FRAME_ID))
         self._history: list[LocalPoseSample] = []
         self._last_lidar_ns = self._last_fix_ns = self._last_relative_ns = None
+        self._last_evaluated_fix_ns: int | None = None
         self._consistency_x_m = self._consistency_y_m = 0.0
         self._consistency_yaw_rad = 0.0
         self._relative_yaw_error_rad = 0.0
@@ -1281,7 +1335,8 @@ class NativeStateEstimator:
     def checkpoint(self) -> NativeEstimatorStateCheckpoint:
         return NativeEstimatorStateCheckpoint(
             MapAlignmentStateCheckpoint(self._map_to_odom,
-                tuple(tuple(row) for row in self._map_covariance)),
+                tuple(tuple(row) for row in self._map_covariance),
+                tuple(tuple(row) for row in self._map_local_covariance)),
             self._local.checkpoint(), tuple(self._history),
             self._last_lidar_ns, self._last_fix_ns, self._last_relative_ns,
             self._consistency_x_m, self._consistency_y_m, self._relative_rmse_m,
@@ -1293,6 +1348,7 @@ class NativeStateEstimator:
             self._wheel_failure, self._relative_failure,
             self._last_relative_start_ns, self._wheel_gyro_qualification,
             self._last_relative_source_sequence, self._last_relative_source_id,
+            self._last_evaluated_fix_ns,
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -1302,12 +1358,15 @@ class NativeStateEstimator:
             raise ValueError("map alignment checkpoint frame mismatch")
         self._map_to_odom = checkpoint.map_alignment.map_to_odom
         self._map_covariance = [list(row) for row in checkpoint.map_alignment.covariance]
+        self._map_local_covariance = [list(row) for row in checkpoint.map_alignment.local_cross_covariance]
         self._last_update_evidence = ()
         self._local.restore(checkpoint.local_filter)
         self._history = list(checkpoint.history)
         for name in checkpoint.__dataclass_fields__:
             if name not in {"map_alignment", "local_filter", "history"}:
                 setattr(self, "_" + name, getattr(checkpoint, name))
+        if self._last_evaluated_fix_ns is None:
+            self._last_evaluated_fix_ns = self._last_fix_ns
         if checkpoint.slip_suspected and self._wheel_failure is None and self._relative_failure is None:
             # Historical checkpoints have no failure lineage. Conservatively
             # require independent evidence after the restored control boundary.
@@ -1444,14 +1503,15 @@ class NativeStateEstimator:
         # Project delayed global measurements to this tick using only the local
         # displacement over the actual measurement interval, never publication time.
         lidar = _optional_observation(frame, "lidar_pose")
-        if (lidar is not None and self._last_fix_ns is not None
-                and lidar.captured_monotonic_ns <= self._last_fix_ns):
+        if (lidar is not None and self._last_evaluated_fix_ns is not None
+                and lidar.captured_monotonic_ns <= self._last_evaluated_fix_ns):
             # A newer publication/sequence cannot make the same physical fix
-            # independent or move the accepted measurement boundary backwards.
+            # independent, including a previously rejected measurement.
             global_fix_status = "INVALID_MEASUREMENT_TIME"
             frame = replace(frame, accepted=tuple(o for o in fresh if o.kind != "lidar_pose"))
             lidar = None
         if lidar is not None:
+            self._last_evaluated_fix_ns = lidar.captured_monotonic_ns
             measured_local = self._pose_at(lidar.captured_monotonic_ns)
             if measured_local is None:
                 global_fix_status = "LOCAL_HISTORY_MISSING"
@@ -1479,21 +1539,31 @@ class NativeStateEstimator:
                 projected = replace(lidar, values=tuple(DataField(k, v) for k, v in values.items()))
                 frame = replace(frame, accepted=tuple(projected if o is lidar else o for o in frame.accepted))
 
-        # Advance only the map pose uncertainty using the already computed
-        # local displacement. No second motion state or sensor correction pass.
-        self._advance_map_covariance(local, previous_pose, previous, continuous)
+        # The alignment mean/covariance is static between fixes. Transport its
+        # correlation with the local EKF through that EKF's actual linearized
+        # prediction and accepted updates; no second motion model is evaluated.
+        self._map_local_covariance = _matmul(self._map_local_covariance,
+                                            _transpose(self._local._state_transition))
         self._last_update_evidence = self._local.last_update_evidence
         admitted_fix = _optional_observation(frame, "lidar_pose")
         if admitted_fix is not None:
             # A LOST anchor needs a conservative pose prior, independently of
             # stationary odometry. Do not relax the normal fresh-anchor gate.
+            saved_alignment = None
             if source_is_stale(now, self._last_fix_ns, cfg.global_fix_max_age_ns * 3):
-                self._map_covariance = [[
-                    max(self._map_covariance[row][row],
-                        cfg.max_yaw_variance if row == 2 else cfg.max_position_variance * 4)
-                    if row == column else 0.0
-                    for column in range(3)] for row in range(3)]
+                saved_alignment = (self._map_covariance, self._map_local_covariance)
+                pose_covariance, _ = self._map_pose_covariance(pose)
+                prior = [[max(pose_covariance[row][row],
+                              cfg.max_yaw_variance if row == 2 else cfg.max_position_variance * 4)
+                          if row == column else 0.0
+                          for column in range(3)] for row in range(3)]
+                alignment = MapAlignmentStateCheckpoint.from_pose_prior(
+                    self._map_to_odom, pose, prior, self._local._covariance)
+                self._map_covariance = [list(row) for row in alignment.covariance]
+                self._map_local_covariance = [list(row) for row in alignment.local_cross_covariance]
             correction = self._update_lidar(admitted_fix, pose)
+            if not correction.accepted and saved_alignment is not None:
+                self._map_covariance, self._map_local_covariance = saved_alignment
             self._last_update_evidence += (correction,)
             global_fix_status = "ACCEPTED" if correction.accepted else "NIS_REJECTED"
             if correction.accepted:
@@ -1504,10 +1574,13 @@ class NativeStateEstimator:
         global_pose = self._global_pose(pose)
         transform = self._map_to_odom
         # Body twist remains the one odometry estimate, independent of SLAM.
+        pose_covariance, pose_local_cross = self._map_pose_covariance(pose)
         covariance = [[0.0] * 5 for _ in range(5)]
         for row in range(3):
             for column in range(3):
-                covariance[row][column] = self._map_covariance[row][column]
+                covariance[row][column] = pose_covariance[row][column]
+            covariance[row][3] = covariance[3][row] = pose_local_cross[row][3]
+            covariance[row][4] = covariance[4][row] = -pose_local_cross[row][4]
         for row in (3, 4):
             for column in (3, 4):
                 covariance[row][column] = local.covariance_5x5[row * 5 + column]
@@ -1626,43 +1699,44 @@ class NativeStateEstimator:
         return Pose2D(self._config.frame_id,
                       *self._map_to_odom.apply(local.x_m, local.y_m, local.yaw_rad))
 
-    def _advance_map_covariance(
-        self, local: RobotEstimate, previous_pose: Pose2D | None,
-        previous: TickContext | None, continuous: bool,
-    ) -> None:
-        """Conservative planar uncertainty of the fixed map anchor plus odometry.
-
-        The mean is always map_T_odom * local_pose. Only its uncertainty is
-        transported by the SE(2) displacement Jacobian. Unobserved motion noise
-        uses the existing odometry noise model; no covariance subtraction or
-        second velocity/gyro-bias estimate is involved. Local scalar corrections
-        do not claim independent information about the absolute map anchor.
-        """
-        if previous is None or previous_pose is None or not continuous:
-            return
-        now = local.context.monotonic_ns
-        if (self._local._stationary_until_ns is not None
-                and now <= self._local._stationary_until_ns):
-            return
-        dt_s = (now - previous.monotonic_ns) / 1e9
-        dx, dy = local.x_m - previous_pose.x_m, local.y_m - previous_pose.y_m
+    def _map_jacobians(self, local: Pose2D) -> tuple[list[list[float]], list[list[float]]]:
         c, s = math.cos(self._map_to_odom.yaw_rad), math.sin(self._map_to_odom.yaw_rad)
-        dx, dy = c * dx - s * dy, s * dx + c * dy
-        jacobian = [[1.0, 0.0, -dy], [0.0, 1.0, dx], [0.0, 0.0, 1.0]]
-        covariance = _matmul(_matmul(jacobian, self._map_covariance), _transpose(jacobian))
-        scale = dt_s / self._config.process_noise_reference_dt_s
-        # Envelope the local velocity/rate covariance, including its cross term,
-        # so both pose-noise additions are conservative and non-negative.
-        cross = abs(local.covariance_5x5[19])
-        velocity_variance = local.covariance_5x5[18] + cross
-        omega_variance = local.covariance_5x5[24] + cross
-        noise_x, noise_y = (self._config.process_noise[i] * scale for i in (0, 1))
-        covariance[0][0] += c*c*noise_x + s*s*noise_y + velocity_variance*dt_s*dt_s
-        covariance[1][1] += s*s*noise_x + c*c*noise_y + velocity_variance*dt_s*dt_s
-        covariance[0][1] += c*s*(noise_x-noise_y)
-        covariance[1][0] = covariance[0][1]
-        covariance[2][2] += self._config.process_noise[2]*scale + omega_variance*dt_s*dt_s
-        self._map_covariance = covariance
+        dx, dy = c * local.x_m - s * local.y_m, s * local.x_m + c * local.y_m
+        return ([[1.0, 0.0, -dy], [0.0, 1.0, dx], [0.0, 0.0, 1.0]],
+                [[c, -s, 0.0, 0.0, 0.0], [s, c, 0.0, 0.0, 0.0],
+                 [0.0, 0.0, 1.0, 0.0, 0.0]])
+
+    def _map_pose_covariance(self, local: Pose2D) -> tuple[list[list[float]], list[list[float]]]:
+        """Project the joint static-alignment/local-EKF uncertainty into map pose.
+
+        In particular the pose/bias correlation is retained across ticks, so
+        integrated bias uncertainty grows with elapsed time squared, rather
+        than shrinking spuriously when control tick frequency increases.
+        """
+        # Exploit the fixed sparse SE(2) Jacobians on the control path.
+        c, s = math.cos(self._map_to_odom.yaw_rad), math.sin(self._map_to_odom.yaw_rad)
+        dx, dy = c * local.x_m - s * local.y_m, s * local.x_m + c * local.y_m
+        p, cross = self._local._covariance, self._map_local_covariance
+        local_part = [[c * p[0][i] - s * p[1][i] for i in range(5)],
+                      [s * p[0][i] + c * p[1][i] for i in range(5)], p[2][:]]
+        cross_part = [[cross[0][i] - dy * cross[2][i] for i in range(5)],
+                      [cross[1][i] + dx * cross[2][i] for i in range(5)], cross[2][:]]
+        pose_local_cross = [[local_part[row][column] + cross_part[row][column]
+                             for column in range(5)] for row in range(3)]
+        local_pose_part = [[c * row[0] - s * row[1], s * row[0] + c * row[1], row[2]]
+                           for row in local_part]
+        mixed = [[c * row[0] - s * row[1], s * row[0] + c * row[1], row[2]]
+                 for row in cross_part]
+        covariance = [[0.0] * 3 for _ in range(3)]
+        lever = (-dy, dx, 0.0)
+        anchor = self._map_covariance
+        for row in range(3):
+            for column in range(3):
+                covariance[row][column] = (anchor[row][column]
+                    + lever[row] * anchor[2][column] + lever[column] * anchor[row][2]
+                    + lever[row] * lever[column] * anchor[2][2]
+                    + local_pose_part[row][column] + mixed[row][column] + mixed[column][row])
+        return covariance, pose_local_cross
 
     def _stabilize_map_covariance(self) -> None:
         for row in range(3):
@@ -1687,6 +1761,8 @@ class NativeStateEstimator:
 
     def _update_lidar(self, observation: Observation, local: Pose2D) -> EkfUpdateEvidence:
         prior = self._global_pose(local)
+        pose_covariance, pose_local_cross = self._map_pose_covariance(local)
+        alignment_jacobian, local_jacobian = self._map_jacobians(local)
         frame_id = _field_value(observation, "frame_id")
         if frame_id != self._config.frame_id:
             raise ValueError("lidar_pose.frame_id does not match the estimator frame")
@@ -1713,7 +1789,7 @@ class NativeStateEstimator:
         ]
         innovation_covariance = [
             [
-                self._map_covariance[row][column]
+                pose_covariance[row][column]
                 + (variances[row] if row == column else 0.0)
                 for column in range(3)
             ]
@@ -1736,35 +1812,30 @@ class NativeStateEstimator:
                 self._config.lidar_nis_max, False,
             )
 
-        previous = [row[:] for row in self._map_covariance]
-        gain = [
-            [
-                sum(
-                    previous[row][source] * inverse[source][column]
-                    for source in range(3)
-                )
-                for column in range(3)
-            ]
-            for row in range(3)
-        ]
-        corrected = [value + sum(gain[row][column] * innovation[column]
-                                    for column in range(3))
-                     for row, value in enumerate((prior.x_m, prior.y_m, prior.yaw_rad))]
-        yaw = _normalize_angle(corrected[2] - local.yaw_rad)
-        c, s = math.cos(yaw), math.sin(yaw)
-        self._map_to_odom = Pose2D(
-            self._config.frame_id,
-            corrected[0] - c * local.x_m + s * local.y_m,
-            corrected[1] - s * local.x_m - c * local.y_m, yaw,
-        )
-        residual = [[float(row == column) - gain[row][column]
-                     for column in range(3)] for row in range(3)]
-        posterior = _matmul(_matmul(residual, previous), _transpose(residual))
-        for row in range(3):
-            for column in range(3):
-                posterior[row][column] += sum(
-                    gain[row][axis] * variances[axis] * gain[column][axis]
-                    for axis in range(3))
+        previous = self._map_covariance
+        previous_cross = self._map_local_covariance
+        alignment_part = _matmul(previous, _transpose(alignment_jacobian))
+        local_part = _matmul(previous_cross, _transpose(local_jacobian))
+        numerator = [[alignment_part[row][column] + local_part[row][column]
+                      for column in range(3)] for row in range(3)]
+        gain = _matmul(numerator, inverse)
+        adjustment = [sum(gain[row][column] * innovation[column] for column in range(3))
+                      for row in range(3)]
+        transform = self._map_to_odom
+        self._map_to_odom = Pose2D(self._config.frame_id,
+            transform.x_m + adjustment[0], transform.y_m + adjustment[1],
+            _normalize_angle(transform.yaw_rad + adjustment[2]))
+        # Expanded Schmidt/Joseph update with zero local-motion gain. Keep
+        # the same K S K^T form as the scalar EKF update, using only 3x3
+        # products; the local mean/covariance is never updated a second time.
+        reduction = _matmul(gain, _transpose(numerator))
+        innovation_noise = _matmul(_matmul(gain, innovation_covariance), _transpose(gain))
+        posterior = [[previous[row][column] - reduction[row][column]
+                      - reduction[column][row] + innovation_noise[row][column]
+                      for column in range(3)] for row in range(3)]
+        cross_correction = _matmul(gain, pose_local_cross)
+        self._map_local_covariance = [[previous_cross[row][column] - cross_correction[row][column]
+                                      for column in range(5)] for row in range(3)]
         self._map_covariance = posterior
         return EkfUpdateEvidence(
             "LIDAR_POSE", tuple(innovation), max(0.0, nis),

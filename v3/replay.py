@@ -40,7 +40,7 @@ from .composition.native_control import (
     NativeControlCompositionConfig,
     NativeControlStateCheckpoint,
 )
-from .contracts import DeviceHealth, LifecycleState, SafetyDecision, TickContext, Pose2D
+from .contracts import DeviceHealth, LifecycleState, SafetyDecision, TickContext, Pose2D, LOCAL_FRAME_ID
 from .device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from .engine import LayerValue, TickEngine, TickInputs, TickResult, TickTrace
 from .layers.l10_chassis_control import ChassisControlConfig
@@ -707,9 +707,11 @@ def _migrate_legacy_estimation_checkpoint(value: object, *, frame_id: str) -> ob
     lx, ly, lyaw = local_filter.state[:3]
     yaw = math.atan2(math.sin(gyaw - lyaw), math.cos(gyaw - lyaw))
     c, s = math.cos(yaw), math.sin(yaw)
-    alignment = MapAlignmentStateCheckpoint(
+    alignment = MapAlignmentStateCheckpoint.from_pose_prior(
         Pose2D(frame_id, gx - c * lx + s * ly, gy - s * lx - c * ly, yaw),
-        tuple(tuple(row[:3]) for row in global_filter.covariance[:3]),
+        Pose2D(LOCAL_FRAME_ID, lx, ly, lyaw),
+        [list(row[:3]) for row in global_filter.covariance[:3]],
+        [list(row) for row in local_filter.covariance],
     )
     migrated = {key: item for key, item in estimation.items() if key != "global_filter"}
     migrated["map_alignment"] = encode_value(alignment)
