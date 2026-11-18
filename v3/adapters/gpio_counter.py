@@ -80,7 +80,8 @@ class GpioCounterPairConfig:
     right: GpioCounterChannelConfig
     gpio_chip: int = 0
     edge_history_capacity: int = 512
-    diagnostic_event_capacity: int = 2048
+    # Raw A/B decision tracing is an explicit offline probe, not live telemetry.
+    diagnostic_event_capacity: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.left, GpioCounterChannelConfig):
@@ -98,8 +99,8 @@ class GpioCounterPairConfig:
             self.diagnostic_event_capacity,
             "diagnostic_event_capacity",
         )
-        if not 16 <= diagnostic_capacity <= 16384:
-            raise ValueError("diagnostic_event_capacity must be within [16, 16384]")
+        if diagnostic_capacity != 0 and not 16 <= diagnostic_capacity <= 16384:
+            raise ValueError("diagnostic_event_capacity must be 0 or within [16, 16384]")
         if len(set(self.pins)) != 4:
             raise ValueError("left and right counter GPIO pins must be unique")
 
@@ -287,7 +288,8 @@ class NativeGpioSignedCounterPair:
                 edge_history=deque(maxlen=config.edge_history_capacity),
                 b_history=deque(maxlen=config.edge_history_capacity),
                 pending_a_timestamps=[],
-                diagnostic_events=deque(maxlen=config.diagnostic_event_capacity),
+                diagnostic_events=(deque(maxlen=config.diagnostic_event_capacity)
+                    if config.diagnostic_event_capacity else None),
             )
             for side in ("left", "right")
         }
@@ -439,8 +441,10 @@ class NativeGpioSignedCounterPair:
         reason: str,
         candidate_direction: int | None = None,
     ) -> None:
-        assert state.diagnostic_events is not None
-        state.diagnostic_events.append(
+        events = state.diagnostic_events
+        if events is None:
+            return
+        events.append(
             QuadratureAlertEvent(
                 channel=channel,
                 callback_timestamp_ns=callback_timestamp_ns,
@@ -813,8 +817,7 @@ class NativeGpioSignedCounterPair:
             raise ValueError("side must be left or right")
         with self._lock:
             events = self._states[side].diagnostic_events
-            assert events is not None
-            return tuple(events)
+            return () if events is None else tuple(events)
 
     def _release_resources(self, *, suppress_errors: bool) -> None:
         first_error: Exception | None = None

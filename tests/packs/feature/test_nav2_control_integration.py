@@ -9,7 +9,7 @@ from v3.composition.full_fake import OfflineMotorSink
 from v3.composition.native_control import NativeControlComposition
 from v3.contracts import (CommandMode, CommandRequest, DataField, DeviceHealth,
     DeviceHealthState, DeviceSample, GLOBAL_FRAME_ID, LifecycleState, LOCAL_FRAME_ID,
-    NavigationStatus, Pose2D, RawDeviceBatch, RobotEstimate, SafetyDecision,
+    MissionLifecycle, NavigationStatus, Pose2D, QualityState, RawDeviceBatch, RobotEstimate, SafetyDecision,
     TickContext, VelocitySource, Waypoint, WorldSnapshot)
 from v3.contracts.navigation import (Nav2NavigationInput, Nav2NavigationStatus,
     Nav2NavigationRequest, Nav2VelocityGuidance)
@@ -230,6 +230,144 @@ def test_nav2_mission_restart_superseded_sequence_and_sensor_staleness_fail_clos
     result = control.run_tick(_inputs(config, 6, stale, command_id="new"))
     assert _layers(result)["L6"].reason == "NAV2_SENSOR_STALE"
     _zero(result)
+    control.close()
+
+
+@pytest.mark.parametrize("mode", [CommandMode.NAVIGATE, CommandMode.EXPLORE])
+def test_localization_hold_keeps_live_planning_request_zero_motor_and_replay(tmp_path, mode):
+    """A brief L3 loss must not restart Room Cruise's frontier discovery."""
+    config = _config()
+    control = NativeControlComposition(OfflineMotorSink(), config)
+    sink = CaptureSink("nav2-quality-hold", configuration={"production_control": config})
+    restored = None
+    first_request = None
+    proposal = None
+    try:
+        for tick in range(30):
+            inputs = _inputs(config, tick, proposal, mode=mode)
+            samples = inputs.raw_devices.samples
+            if tick in (3, 24):
+                # A bad independent scan interval loses local translation;
+                # only a fresh interval after it can restore L3 quality.
+                samples += (DeviceSample("RPLIDAR_C1", "lidar_relative_motion", tick,
+                    inputs.context.monotonic_ns, tuple(DataField(k, v) for k, v in dict(
+                        start_ns=1_020_000_000 if tick == 3 else 1_080_000_000,
+                        dx_m=.2 if tick == 3 else 0., dy_m=0., dyaw_rad=0.,
+                        rmse_m=.001, observability=1.).items())),)
+            inputs = control.close_inputs(replace(inputs,
+                raw_devices=replace(inputs.raw_devices, samples=samples)))
+            result = control.run_tick(inputs)
+            if restored is not None:
+                assert restored.run_tick(inputs) == result
+            layers = _layers(result)
+            request = control._navigation.pending_navigation_request
+            assert request is not None
+            if first_request is None:
+                first_request = request
+            assert (request.mission_id, request.goal_id, request.goal, request.odom_generation) == (
+                first_request.mission_id, first_request.goal_id, first_request.goal,
+                first_request.odom_generation)
+            assert request.context == inputs.context
+            if 3 <= tick < 24:
+                assert layers["L3"].localization_quality.local_translation is QualityState.LOST
+                assert layers["L6"].reason == "NAV2_LOCALIZATION_HOLD"
+                _zero(result)
+            elif tick:
+                assert layers["L6"].reason == "NAV2_ACTIVE"
+                assert layers["L6"].nav2_child_goal_id == proposal.child_goal_id
+                assert layers["L6"].motion_validity.source_context == proposal.source_context
+                assert layers["L6"].motion_validity.valid_until_ns == proposal.valid_until_ns-1
+            if tick == 12:
+                restored = NativeControlComposition(OfflineMotorSink(), config)
+                restored.restore(control.checkpoint())
+            sink.write(ExecutionRecord(inputs, result))
+            proposal = _guidance(request, sequence=tick+1,
+                produced_ns=inputs.context.monotonic_ns+10_000_000)
+        # Explicit STOP still cancels planning even if localization is held.
+        stopped = _inputs(config, 30, proposal, mode=CommandMode.STOP)
+        result = control.run_tick(stopped)
+        assert control._navigation.pending_navigation_request is None
+        _zero(result)
+        sink.write(ExecutionRecord(stopped, result))
+    finally:
+        control.close()
+        if restored is not None:
+            restored.close()
+    capture = sink.finalize("PASS", tmp_path / "nav2-quality-hold.json")
+    replay = replay_capture(capture, project_root=ROOT)
+    assert replay["status"] == "MATCH", replay["diagnostics"]
+
+
+@pytest.mark.parametrize("invalid", ["startup", "generation", "discontinuity", "frame", "mission"])
+def test_quality_hold_never_starts_or_rebinds_invalid_planning_request(invalid):
+    config = _config()
+    control = NativeControlComposition(OfflineMotorSink(), config)
+    result = control.run_tick(_inputs(config, 0, mode=CommandMode.EXPLORE))
+    layers = _layers(result)
+    state = control.checkpoint().navigation.nav2_state
+    mission = replace(layers["L5"], context=TickContext(1, 1_020_000_000))
+    estimate = replace(layers["L3"].in_local_frame(), context=mission.context,
+        localization_quality=healthy_localization(local_translation=QualityState.LOST))
+    world = replace(layers["L4"], context=mission.context)
+    if invalid == "startup":
+        state = Nav2GuidanceState()
+    elif invalid == "generation":
+        estimate = replace(estimate, localization_quality=replace(
+            estimate.localization_quality, generation=1))
+    elif invalid == "discontinuity":
+        estimate = replace(estimate, localization_quality=replace(
+            estimate.localization_quality, local_pose_continuous=False))
+    elif invalid == "frame":
+        estimate = replace(estimate, local_pose=None, global_pose=None, map_to_odom=None)
+    else:
+        mission = replace(mission, mission_id="replacement")
+    plan, state = accept_nav2_guidance(mission, estimate, world, None, state,
+        max_scan_age_ns=250_000_000, max_odom_age_ns=250_000_000)
+    assert plan.reason == "NAV2_LOCALIZATION_HOLD" and plan.velocity_target is None
+    assert state.request is None
+    control.close()
+
+
+@pytest.mark.parametrize("quality_loss", [dict(local_translation=QualityState.LOST),
+    dict(heading=QualityState.DEGRADED), dict(global_position=QualityState.LOST)])
+def test_quality_recovery_requires_new_velocity_without_renewing_source_evidence(quality_loss):
+    config = _config()
+    control = NativeControlComposition(OfflineMotorSink(), config)
+    layers = _layers(control.run_tick(_inputs(config, 0, mode=CommandMode.EXPLORE)))
+    state = control.checkpoint().navigation.nav2_state
+    original = state.request
+
+    def evaluate(tick, quality, guidance, previous):
+        context = TickContext(tick, 1_000_000_000+tick*20_000_000)
+        return accept_nav2_guidance(replace(layers["L5"], context=context),
+            replace(layers["L3"].in_local_frame(), context=context, localization_quality=quality),
+            replace(layers["L4"], context=context), Nav2NavigationInput(context, guidance), previous,
+            max_scan_age_ns=250_000_000, max_odom_age_ns=250_000_000)
+
+    old = _guidance(original, produced_ns=1_010_000_000)
+    plan, held = evaluate(1, healthy_localization(**quality_loss), old, state)
+    assert plan.reason == "NAV2_LOCALIZATION_HOLD" and plan.velocity_target is None
+    assert held.request.context == TickContext(1, 1_020_000_000)
+    assert held.velocity_not_before_ns == 1_020_000_000
+    stop = MissionManager(config.mission).evaluate(_inputs(config, 1, mode=CommandMode.STOP).command)
+    for stopped in (stop, replace(layers["L5"], context=held.request.context,
+            lifecycle=MissionLifecycle.CANCELLED)):
+        _, cancelled = accept_nav2_guidance(stopped,
+            replace(layers["L3"].in_local_frame(), context=stopped.context,
+                localization_quality=healthy_localization(**quality_loss)),
+            replace(layers["L4"], context=stopped.context), None, held,
+            max_scan_age_ns=250_000_000, max_odom_age_ns=250_000_000)
+        assert cancelled.request is None
+    plan, resumed = evaluate(2, healthy_localization(), old, held)
+    assert plan.reason == "NAV2_SUPERSEDED" and plan.velocity_target is None
+    fresh = _guidance(held.request, sequence=2, produced_ns=1_030_000_000)
+    plan, resumed = evaluate(3, healthy_localization(), fresh, resumed)
+    assert plan.reason == "NAV2_ACTIVE"
+    assert plan.motion_validity.source_context == fresh.source_context
+    assert plan.motion_validity.valid_until_ns == fresh.valid_until_ns-1
+    expired = replace(fresh, command_sequence=3, valid_until_ns=1_070_000_000)
+    plan, _ = evaluate(4, healthy_localization(), expired, resumed)
+    assert plan.reason == "NAV2_STALE" and plan.velocity_target is None
     control.close()
 
 

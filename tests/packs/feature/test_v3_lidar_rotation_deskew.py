@@ -142,11 +142,12 @@ def test_production_process_publishes_safety_before_bracket_then_completes_or_ex
     class Port:
         calls = 0
         lookup_advanced = False
-        def get_raw_scan_snapshot(self):
+        def get_raw_scan_snapshot(self, *, after_revision=None):
             self.calls += 1
             if self.calls == 3:
                 stop.set()
-            return replacement if outcome == "superseded" and self.calls >= 3 else raw
+            snapshot = replacement if outcome == "superseded" and self.calls >= 3 else raw
+            return snapshot if snapshot.raw_scan_id != after_revision else None
         def get_matcher_result(self): return None
         def get_relative_result(self): return None
         def get_runtime_status(self):

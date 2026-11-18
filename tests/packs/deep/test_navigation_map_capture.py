@@ -5,6 +5,7 @@ import os
 import queue
 import sys
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -50,7 +51,9 @@ def _retime_record(record, tick, stamp):
     context = TickContext(tick, stamp)
     inputs = replace(record.inputs, context=context,
         raw_devices=replace(record.inputs.raw_devices, context=context),
-        command=replace(record.inputs.command, context=context, expiry_tick=tick), planner_input=None)
+        command=replace(record.inputs.command, context=context, expiry_tick=tick), planner_input=None,
+        navigation_input=(replace(record.inputs.navigation_input, context=context)
+                          if record.inputs.navigation_input is not None else None))
     layers = tuple(replace(row, output=replace(row.output, context=context))
                    for row in record.result.trace.layers)
     return replace(record, inputs=inputs, result=replace(record.result,
@@ -162,7 +165,7 @@ def _run_producer(monkeypatch, target, *, capacity=96):
         position = 0
         stopped = False
 
-        def get_raw_scan_snapshot(self):
+        def get_raw_scan_snapshot(self, *, after_revision=None):
             scan = scans[self.position]
             self.position += 1
             if self.position == len(scans):
@@ -175,6 +178,11 @@ def _run_producer(monkeypatch, target, *, capacity=96):
         def stop(self): self.stopped = True
 
     port = Port()
+    # These synthetic scan times belong to an explicit measurement clock;
+    # the live geometry freshness gate must see that same clock domain.
+    monkeypatch.setattr(process_lidar_port, "time", SimpleNamespace(
+        monotonic_ns=lambda: scans[max(0, port.position - 1)].scan_end_monotonic_ns + 1_000_000,
+        monotonic=time.monotonic))
     monkeypatch.setitem(sys.modules, "serial", SimpleNamespace(Serial=None))
     monkeypatch.setattr(process_lidar_port, "open_native_lidar_port", lambda *args, **kwargs: port)
     monkeypatch.setattr(process_lidar_port, "_wire_raw",

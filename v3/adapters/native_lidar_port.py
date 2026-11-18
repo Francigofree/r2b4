@@ -581,11 +581,15 @@ class NativeLidarPort:
         if first_error is not None:
             raise first_error
 
-    def get_raw_scan_snapshot(self) -> NativeRawLidarSnapshot | None:
+    def get_raw_scan_snapshot(self, *, after_revision: int | None = None) -> NativeRawLidarSnapshot | None:
         with self._lock:
             snapshot = self._raw_snapshot
-        if snapshot is None:
-            return None
+            # The process producer consumes each immutable physical scan once.
+            # An unchanged revision needs neither a new observation nor another
+            # full point-tuple validation. Unfiltered callers retain fresh health
+            # and observation time on every read.
+            if snapshot is None or snapshot.raw_scan_id == after_revision:
+                return None
         health = self._physical_health()
         observed_monotonic_ns = self._checked_clock()
         return replace(

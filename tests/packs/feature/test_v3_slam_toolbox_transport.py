@@ -286,12 +286,13 @@ def test_real_owner_closure_revokes_old_generation_without_waiting_for_another_r
     stop = threading.Event()
     class Port:
         calls = 0
-        def get_raw_scan_snapshot(self):
+        def get_raw_scan_snapshot(self, *, after_revision=None):
             self.calls += 1
             if self.calls == 3:
                 state[:] = [4, 4, 2_040_000_000, 1]
                 stop.set()
-            return _scan()
+            snapshot = _scan()
+            return snapshot if snapshot.raw_scan_id != after_revision else None
         def get_matcher_result(self): return None
         def get_relative_result(self): return None
         def get_runtime_status(self):

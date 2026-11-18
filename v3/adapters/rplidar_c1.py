@@ -176,9 +176,7 @@ class DecodedPacket:
     point: RplidarPoint
 
 
-def decode_standard_packet(raw: bytes | bytearray | memoryview) -> DecodedPacket | None:
-    """Decode one standard five-byte RPLIDAR measurement packet."""
-
+def _decode_standard_fields(raw: bytes | bytearray | memoryview) -> tuple[bool, float, float, int] | None:
     if len(raw) != 5:
         return None
     b0, b1, b2, b3, b4 = struct.unpack("BBBBB", bytes(raw))
@@ -190,10 +188,16 @@ def decode_standard_packet(raw: bytes | bytearray | memoryview) -> DecodedPacket
     distance_m = float(b3 | (b4 << 8)) / 4_000.0
     if not 0.0 <= angle_deg < 360.0 or not math.isfinite(distance_m):
         return None
-    return DecodedPacket(
-        bool(start_flag),
-        RplidarPoint(angle_deg, distance_m, (b0 >> 2) & 0x3F),
-    )
+    return bool(start_flag), angle_deg, distance_m, (b0 >> 2) & 0x3F
+
+
+def decode_standard_packet(raw: bytes | bytearray | memoryview) -> DecodedPacket | None:
+    """Decode one standard five-byte RPLIDAR measurement packet."""
+    fields = _decode_standard_fields(raw)
+    if fields is None:
+        return None
+    start, angle, distance, quality = fields
+    return DecodedPacket(start, RplidarPoint(angle, distance, quality))
 
 
 def resolve_rplidar_port() -> str:
@@ -235,6 +239,7 @@ class NativeRplidarC1:
         self._monotonic_ns = monotonic_ns
         self._lock = threading.Lock()
         self._serial: RplidarSerialPort | None = None
+        self._port_name: str | None = config.port
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._running = False
@@ -304,6 +309,11 @@ class NativeRplidarC1:
     def get_runtime_status(self) -> dict[str, object]:
         now_ns = self._checked_clock()
         with self._lock:
+            # Discovery belongs to connect/reconnect. Before the first connect,
+            # retain one diagnostic candidate instead of globbing /dev on every
+            # health poll; a connection attempt always selects the device anew.
+            if self._port_name is None:
+                self._port_name = resolve_rplidar_port()
             serial_port = self._serial
             connected = bool(
                 serial_port is not None and getattr(serial_port, "is_open", False)
@@ -313,7 +323,7 @@ class NativeRplidarC1:
             return {
                 "running": self._running,
                 "connected": connected,
-                "port": self._config.port or resolve_rplidar_port(),
+                "port": self._port_name,
                 "baudrate": self._config.baudrate,
                 "last_data_age_s": (
                     max(0.0, (now_ns - last_byte_ns) / 1_000_000_000.0)
@@ -362,6 +372,8 @@ class NativeRplidarC1:
 
     def _connect(self) -> None:
         port_name = self._config.port or resolve_rplidar_port()
+        with self._lock:
+            self._port_name = port_name
         serial_port = self._serial_factory(
             port_name,
             self._config.baudrate,
@@ -520,14 +532,15 @@ class NativeRplidarC1:
                 self._invalid_packet_count += 1
                 return
             while len(self._rx_buffer) >= 5:
-                decoded = decode_standard_packet(self._rx_buffer[:5])
-                if decoded is None:
+                fields = _decode_standard_fields(self._rx_buffer[:5])
+                if fields is None:
                     del self._rx_buffer[0]
                     self._invalid_packet_count += 1
                     continue
                 del self._rx_buffer[:5]
                 packet_ns = self._checked_clock()
-                if decoded.new_scan_start:
+                new_scan_start, angle, distance, quality = fields
+                if new_scan_start:
                     if self._building and self._building_start_ns is not None:
                         scan_start_ns = self._building_start_ns
                         scan_end_ns = packet_ns
@@ -548,8 +561,11 @@ class NativeRplidarC1:
                 elif self._building_start_ns is None:
                     # Discard packets until the first real revolution boundary.
                     continue
-                point = RplidarPoint(decoded.point.angle_deg, decoded.point.distance_m,
-                                     decoded.point.quality, packet_ns)
+                # Build the validated immutable point once, with its original
+                # packet receipt. The public decoder also supports standalone
+                # packets, but its intermediate untimed point is unnecessary
+                # in this acquisition path.
+                point = RplidarPoint(angle, distance, quality, packet_ns)
                 if (
                     self._config.minimum_distance_m
                     <= point.distance_m

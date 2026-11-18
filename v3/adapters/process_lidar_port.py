@@ -691,11 +691,11 @@ def _lidar_owner_process_main(
         last_relative_revision = int(getattr(initial_relative, "source_sequence", 0) or 0)
         last_status_ns = time.monotonic_ns()
         while not stop_event.is_set():
-            raw = port.get_raw_scan_snapshot()
+            raw = port.get_raw_scan_snapshot(after_revision=last_raw_revision)
             matcher = slam_result if slam_enabled else port.get_matcher_result()
             relative = port.get_relative_result()
             now_ns = time.monotonic_ns()
-            raw_revision = int(getattr(raw, "raw_scan_id", 0) or 0)
+            raw_revision = last_raw_revision if raw is None else raw.raw_scan_id
             matcher_revision = int(getattr(matcher, "matcher_result_id", 0) or 0)
             relative_revision = int(getattr(relative, "source_sequence", 0) or 0)
             raw_changed = raw_revision != last_raw_revision

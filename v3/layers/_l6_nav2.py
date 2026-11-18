@@ -46,10 +46,14 @@ def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
     if mission.context != estimate.context or mission.context != world.context:
         return hold("NAV2_CONTEXT_MISMATCH"), replace(state, request=None)
     quality = estimate.localization_quality
-    if (quality.local_translation is QualityState.LOST or quality.heading is not QualityState.GOOD
-            or quality.global_position is not QualityState.GOOD
-            or not quality.local_pose_continuous or quality.pose_discontinuity
+    localization_ready = (quality.local_translation is not QualityState.LOST
+        and quality.heading is QualityState.GOOD
+        and quality.global_position is QualityState.GOOD)
+    if (not quality.local_pose_continuous or quality.pose_discontinuity
             or estimate.map_to_odom is None or estimate.frame_id != LOCAL_FRAME_ID):
+        return hold("NAV2_LOCALIZATION_HOLD"), replace(state, request=None)
+    if not localization_ready and (state.request is None
+            or state.request.odom_generation != quality.generation):
         return hold("NAV2_LOCALIZATION_HOLD"), replace(state, request=None)
     goal = state.bound_goal or mission.target_pose
     if mission.mode is CommandMode.NAVIGATE and mission.target_frame_id == LOCAL_FRAME_ID:
@@ -70,6 +74,14 @@ def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
         issued_requests=(issued + (request,))[-24:],
         bound_odom_generation=(quality.generation if state.bound_odom_generation is None
             else state.bound_odom_generation))
+    if not localization_ready:
+        # A recoverable quality hold revokes motion, not the same-frame mission's
+        # planning request. Cancelling here also destroys Room Cruise's coverage
+        # progress and repeats frontier startup after a brief sensor dropout.
+        # Only a live L5 mission renews this heartbeat; no velocity lifetime is
+        # renewed. Resume requires a command produced after the hold barrier.
+        return hold("NAV2_LOCALIZATION_HOLD"), replace(state,
+            velocity_not_before_ns=max(state.velocity_not_before_ns or 0, now))
     if state.completed:
         return hold("NAV2_SUCCEEDED", NavigationStatus.COMPLETE), state
     if event is None or event.error is not None or event.guidance is None:

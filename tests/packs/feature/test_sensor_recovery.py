@@ -192,7 +192,7 @@ def test_lidar_owner_crash_restarts_fresh_transport_and_source_identity(monkeypa
     class Port:
         def __init__(self, base):
             self.sequence = base
-        def get_raw_scan_snapshot(self):
+        def get_raw_scan_snapshot(self, *, after_revision=None):
             self.sequence += 1
             stamp = time.monotonic_ns()
             return NativeRawLidarSnapshot(self.sequence, stamp/1e9, stamp, stamp, stamp,

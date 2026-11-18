@@ -125,6 +125,30 @@ def startup_driver(port):
     return driver
 
 
+def test_status_reports_selected_port_without_repeating_discovery_and_reconnect_rediscovers(monkeypatch):
+    import v3.adapters.rplidar_c1 as module
+    discoveries = []
+    candidates = iter(("/dev/first", "/dev/reconnected"))
+    def discover():
+        value = next(candidates)
+        discoveries.append(value)
+        return value
+    monkeypatch.setattr(module, "resolve_rplidar_port", discover)
+    port = StartupSerial(((NativeRplidarC1._SCAN_DESCRIPTOR,),
+                          (NativeRplidarC1._SCAN_DESCRIPTOR,)))
+    driver = startup_driver(port)
+    try:
+        assert driver.start()
+        for _ in range(100):
+            assert driver.get_runtime_status()["port"] == "/dev/first"
+        assert discoveries == ["/dev/first"]
+        driver._connect()
+        assert driver.get_runtime_status()["port"] == "/dev/reconnected"
+        assert discoveries == ["/dev/first", "/dev/reconnected"]
+    finally:
+        driver.stop()
+
+
 def test_fragmented_startup_ack_preserves_first_measurement_and_closes_on_stop():
     packet = _packet(start=True, angle_deg=0, distance_m=1)
     port = StartupSerial(((b'\xa5', b'\x5a\x05', b'\x00\x00\x40\x81' + packet),))

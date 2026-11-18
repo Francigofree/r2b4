@@ -52,6 +52,32 @@ def _relative_owner(input_budget_ns, result_budget_ns):
     return owner, state, scan, budget
 
 
+def test_revision_filtered_scan_read_skips_old_payload_but_unfiltered_health_stays_fresh(monkeypatch):
+    owner, state, scan, _ = _relative_owner(150_000_000, 250_000_000)
+    assert owner.get_raw_scan_snapshot(after_revision=0) is None
+    owner.poll_once_for_test()
+    first = owner.get_raw_scan_snapshot(after_revision=0)
+    assert first.raw_scan_id == scan.revision and first.raw_scan is scan.points
+    assert first.observed_monotonic_ns == state.now and first.health == "OK"
+    with monkeypatch.context() as patch:
+        def forbidden():
+            pytest.fail("unchanged scan must not poll health or revalidate points")
+        patch.setattr(owner._driver, "get_runtime_status", forbidden)
+        patch.setattr(owner, "_checked_clock", forbidden)
+        assert owner.get_raw_scan_snapshot(after_revision=first.raw_scan_id) is None
+    owner._raw_snapshot = replace(owner._raw_snapshot, raw_scan_id=1)
+    assert owner.get_raw_scan_snapshot(after_revision=first.raw_scan_id).raw_scan_id == 1
+    owner._raw_snapshot = replace(owner._raw_snapshot, raw_scan_id=scan.revision)
+    state.now += 1_000_000_000
+    assert owner.get_raw_scan_snapshot(after_revision=first.raw_scan_id) is None
+    stale = owner.get_raw_scan_snapshot()
+    assert stale.health == "STALE" and stale.raw_scan is scan.points
+    assert stale.measurement_monotonic_ns == first.measurement_monotonic_ns
+    assert stale.observed_monotonic_ns == state.now
+    owner._running = False
+    assert owner.get_raw_scan_snapshot().health == "ERROR"
+
+
 @pytest.mark.parametrize("input_budget,result_budget", (
     (150_000_000, 250_000_000), (250_000_000, 150_000_000),
 ))
@@ -64,7 +90,10 @@ def test_relative_heading_may_arrive_after_fixed_guard_until_inclusive_midpoint_
     assert owner.get_runtime_status()["last_matcher_reason"] == "HEADING_BRACKET_UNAVAILABLE"
     physical = owner.get_raw_scan_snapshot()
     assert physical.health == "OK" and physical.raw_scan is scan.points
-    assert physical.summary["minimum_clearance_m"] == 1.
+    # The forward ray is one metre from the offset laser, so its clearance is
+    # measured from the chassis front rather than the optical origin.
+    assert physical.summary["minimum_clearance_m"] == pytest.approx(
+        1. + owner.config.matcher.lidar_x_offset_m - owner.config.safety_body_bounds_m[1])
 
     state.now, state.heading_ready = MID+budget, True
     owner.poll_once_for_test()
