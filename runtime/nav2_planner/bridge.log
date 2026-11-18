@@ -1120,3 +1120,37 @@ RuntimeError: NAV2_LIFECYCLE_STARTUP_TIMEOUT
 [WARN] [1794997959.969612078] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
 [WARN] [1794999699.665574052] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
 [WARN] [1794999699.665638571] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1795000907.379898450] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1795000907.379941432] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[WARN] [1795000977.503179407] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1795000977.503316558] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 993, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 989, in main
+    return run(parser.parse_args())
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 556, in run
+    active = edge_call("lifecycle_poll", lifecycle.poll, now)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/nav2_navigation_bridge.py", line 224, in edge_call
+    return function(*values, **options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/v3/adapters/nav2_lifecycle.py", line 83, in poll
+    raise RuntimeError("NAV2_LIFECYCLE_STARTUP_TIMEOUT")
+RuntimeError: NAV2_LIFECYCLE_STARTUP_TIMEOUT
+[WARN] [1795001087.396100920] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1795001087.396148494] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+/home/alba/project_r2b4/runtime/deps/nav2-planner/lib/python3.12/site-packages/rclpy/action/server.py:421: RuntimeWarning: failed to send response (timeout): client will not receive response, at /home/runner/conda-bld/bld/rattler-build_ros2-rmw-fastrtps-shared-cpp_1791448957/work/ros2-rmw-fastrtps-shared-cpp/src/work/src/rmw_response.cpp:153, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/service.c:400
+  self._handle.send_cancel_response(request_header, cancel_response)
+[WARN] [1795001309.885330566] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1795001309.885466753] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+/home/alba/project_r2b4/runtime/deps/nav2-planner/lib/python3.12/site-packages/rclpy/action/server.py:421: RuntimeWarning: failed to send response (timeout): client will not receive response, at /home/runner/conda-bld/bld/rattler-build_ros2-rmw-fastrtps-shared-cpp_1791448957/work/ros2-rmw-fastrtps-shared-cpp/src/work/src/rmw_response.cpp:153, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/service.c:400
+  self._handle.send_cancel_response(request_header, cancel_response)
+[WARN] [1795001413.859472949] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1795001413.859522134] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+/home/alba/project_r2b4/runtime/deps/nav2-planner/lib/python3.12/site-packages/rclpy/action/server.py:421: RuntimeWarning: failed to send response (timeout): client will not receive response, at /home/runner/conda-bld/bld/rattler-build_ros2-rmw-fastrtps-shared-cpp_1791448957/work/ros2-rmw-fastrtps-shared-cpp/src/work/src/rmw_response.cpp:153, at /home/runner/conda-bld/bld/rattler-build_ros2-rcl_1791449373/work/ros2-rcl/src/work/src/rcl/service.c:400
+  self._handle.send_cancel_response(request_header, cancel_response)

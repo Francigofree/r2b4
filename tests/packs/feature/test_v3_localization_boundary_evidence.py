@@ -145,10 +145,14 @@ def test_global_fix_diagnostics_identify_the_l3_boundary_without_refreshing_acce
     assert missing.global_fix_status == "NO_ADMITTED_FIX"
     assert missing.global_fix_measurement_ns is None
     assert missing.global_fix_last_accepted_ns == accepted.global_fix_last_accepted_ns
-    history_missing = estimator(_with_fix(_frame(4), ns=990_000_000)).localization_quality
+    no_anchor = NativeStateEstimator(config)
+    no_anchor(_frame(0))
+    history_missing = no_anchor(_with_fix(_frame(1), ns=990_000_000)).localization_quality
     assert history_missing.global_fix_status == "LOCAL_HISTORY_MISSING"
+    estimator(_frame(4))
     stale_frame = _frame(5)
-    stale_ns = stale_frame.context.monotonic_ns - config.max_measurement_age_ns - 1
+    stale_ns = stale_frame.context.monotonic_ns - (
+        config.global_pose_max_age_ns or config.max_measurement_age_ns) - 1
     stale = estimator(_with_fix(stale_frame, ns=stale_ns)).localization_quality
     assert stale.global_fix_status == "STALE"
     assert stale.global_fix_measurement_ns == stale_ns

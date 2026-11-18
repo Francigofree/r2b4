@@ -246,7 +246,12 @@ class RobotEstimate:
         if self.local_pose is None or self.frame_id == self.local_pose.frame_id:
             return self
         pose = self.local_pose
-        covariance = list(self.covariance_5x5)
+        # Map pose correlations cannot accompany local quality variances.
+        # Retain the shared body-twist block; the local pose contract is the
+        # independent quality envelope, with no claimed map cross-correlation.
+        covariance = [value if row >= 3 and column >= 3 else 0.0
+                      for row in range(5) for column, value in enumerate(
+                          self.covariance_5x5[row * 5:(row + 1) * 5])]
         covariance[0] = covariance[6] = self.localization_quality.local_sigma_m**2
         covariance[12] = self.localization_quality.yaw_sigma_rad**2
         return replace(self, frame_id=pose.frame_id, x_m=pose.x_m, y_m=pose.y_m,

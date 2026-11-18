@@ -40,13 +40,15 @@ from .composition.native_control import (
     NativeControlCompositionConfig,
     NativeControlStateCheckpoint,
 )
-from .contracts import DeviceHealth, LifecycleState, SafetyDecision, TickContext
+from .contracts import DeviceHealth, LifecycleState, SafetyDecision, TickContext, Pose2D
 from .device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from .engine import LayerValue, TickEngine, TickInputs, TickResult, TickTrace
 from .layers.l10_chassis_control import ChassisControlConfig
 from .layers.l11_actuator_control import WheelSpeedMap
 from .layers.l12_safety_final import LidarSafetyConfig
-from .layers.l3_state_estimation import NativeStateEstimatorConfig
+from .layers.l3_state_estimation import (
+    MapAlignmentStateCheckpoint, NativeStateEstimatorConfig, PoseFilterStateCheckpoint,
+)
 
 
 V3_REPLAY_RESULT_SCHEMA = "R2B4_REPLAYER_V3_RESULT_V3"
@@ -288,7 +290,7 @@ def replay_capture(
         general_payload,
         closed_inputs,
     )
-    checkpoint = _production_checkpoint(general_payload)
+    checkpoint = _production_checkpoint(general_payload, frame_id=config.estimation.frame_id)
 
     first_results, first_writes = _run_native_replay(
         execution_entries,
@@ -682,12 +684,45 @@ def _production_inputs(tick: Mapping[str, object]) -> TickInputs:
     return decoded
 
 
+def _migrate_legacy_estimation_checkpoint(value: object, *, frame_id: str) -> object:
+    """Convert historical map EKF state to a static alignment, only at replay ingress.
+
+    The generic source-following decoder remains unchanged. Old captures retain
+    their original measurements/config; their redundant map velocity/bias state
+    is deliberately not restored into the sole odometry EKF.
+    """
+    state = _mapping(value, "initial_state_checkpoint")
+    estimation = _mapping(state.get("estimation"), "checkpoint.estimation")
+    if "global_filter" not in estimation:
+        return value
+    if "map_alignment" in estimation:
+        raise V3ReplayError("checkpoint contains both legacy map filter and map alignment")
+    global_filter = _decode_production_value(estimation["global_filter"],
+        PoseFilterStateCheckpoint, "checkpoint.estimation.global_filter")
+    local_filter = _decode_production_value(estimation.get("local_filter"),
+        PoseFilterStateCheckpoint, "checkpoint.estimation.local_filter")
+    if global_filter.last_context != local_filter.last_context:
+        raise V3ReplayError("legacy estimator checkpoints are not aligned")
+    gx, gy, gyaw = global_filter.state[:3]
+    lx, ly, lyaw = local_filter.state[:3]
+    yaw = math.atan2(math.sin(gyaw - lyaw), math.cos(gyaw - lyaw))
+    c, s = math.cos(yaw), math.sin(yaw)
+    alignment = MapAlignmentStateCheckpoint(
+        Pose2D(frame_id, gx - c * lx + s * ly, gy - s * lx - c * ly, yaw),
+        tuple(tuple(row[:3]) for row in global_filter.covariance[:3]),
+    )
+    migrated = {key: item for key, item in estimation.items() if key != "global_filter"}
+    migrated["map_alignment"] = encode_value(alignment)
+    return {**state, "estimation": migrated}
+
+
 def _production_checkpoint(
-    payload: Mapping[str, object],
+    payload: Mapping[str, object], *, frame_id: str,
 ) -> NativeControlStateCheckpoint | None:
     value = payload.get("initial_state_checkpoint")
     if value is None:
         return None
+    value = _migrate_legacy_estimation_checkpoint(value, frame_id=frame_id)
     decoded = _decode_production_value(
         value,
         NativeControlStateCheckpoint,
