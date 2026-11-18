@@ -1232,6 +1232,14 @@ class PublicRobotInterfaceAdapter:
         self.client = client
         self.controller = controller
 
+    def read_capability(self, resource: str):
+        # These host-state reads are available independently of V3/vision.
+        # Skill and other dynamic reads retain live library discovery.
+        if resource not in READS | QUERIES:
+            return None
+        return {"kind": "read", "supported": True, "available": True, "ready": True,
+                "owner": "host", "reason": "V3_INDEPENDENT_PUBLIC_STATE"}
+
     def capabilities(self):
         from v3.action_catalog import action_descriptor
         result = {name: {"kind": "read" if name in READS | QUERIES else "action", "supported": True,

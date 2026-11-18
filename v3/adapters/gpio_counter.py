@@ -529,13 +529,17 @@ class NativeGpioSignedCounterPair:
         assert state.b_history is not None
         previous: tuple[int, int] | None = None
         following: tuple[int, int] | None = None
-        for event in state.b_history:
-            if event[0] < physical_tick:
-                previous = event
+        # Accepted B timestamps are strictly increasing. A refers to the
+        # current edge (minus debounce), so its neighbours are at the newest
+        # end of this bounded history. Keep the same bracketing/guard proof
+        # without walking hundreds of old transitions on every A callback.
+        for event in reversed(state.b_history):
+            if event[0] > physical_tick:
+                following = event
                 continue
             if event[0] == physical_tick:
                 return None, "B_AT_A_TIMESTAMP"
-            following = event
+            previous = event
             break
         if guard_ns > 0:
             if previous is not None and physical_tick - previous[0] <= guard_ns:

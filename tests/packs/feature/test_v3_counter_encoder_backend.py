@@ -41,6 +41,35 @@ def _assert_rejected(reading) -> None:
 def _sample_values(snapshot) -> dict[str, object]:
     return {field.key: field.value for field in snapshot.samples[0].values}
 
+
+def test_b_history_bracket_preserves_physical_a_direction_and_guard_boundaries():
+    from bisect import bisect_left
+    from collections import deque
+    from random import Random
+    from v3.adapters.gpio_counter import NativeGpioSignedCounterPair, _CounterState
+
+    random = Random(1811)
+    for size in (0, 1, 2, 32, 512):
+        stamps = sorted(random.sample(range(1_000, 100_000), size))
+        events = [(stamp, index % 2) for index, stamp in enumerate(stamps)]
+        state = _CounterState(initial_level_b=1, b_history=deque(events, maxlen=512))
+        queries = {0, 100_001, *random.sample(range(100_001), 100)}
+        queries.update(stamp + delta for stamp in stamps for delta in (-51, -50, -1, 0, 1, 50, 51))
+        for stamp in queries:
+            index = bisect_left(stamps, stamp)
+            for guard in (0, 1, 50):
+                previous = events[index-1] if index else None
+                following = events[index] if index < size else None
+                if following is not None and following[0] == stamp:
+                    expected = None, "B_AT_A_TIMESTAMP"
+                elif guard and previous is not None and stamp-previous[0] <= guard:
+                    expected = None, "B_UNSTABLE_BEFORE_A"
+                elif guard and following is not None and following[0]-stamp <= guard:
+                    expected = None, "B_UNSTABLE_AFTER_A"
+                else:
+                    expected = previous[1] if previous is not None else 1, "B_STABLE_AT_A"
+                assert NativeGpioSignedCounterPair._b_evidence_at_physical_a(state, stamp, guard) == expected
+
 def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
     backend, left, right = _backend((_snapshot(100), _timed(110, 100)), (_snapshot(200), _timed(195, 200)))
     backend.read(TickContext(0, 1000000000))

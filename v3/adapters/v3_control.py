@@ -25,6 +25,17 @@ class V3ControlInterfaceAdapter:
     def __init__(self, controller: OperatorController) -> None:
         self.controller = controller
 
+    @staticmethod
+    def _read_capability(runtime_status: object) -> dict[str, object]:
+        ready = isinstance(runtime_status, Mapping)
+        return {"kind": "read", "supported": True, "available": ready, "ready": ready,
+                "reason": None if ready else "NO_LIVE_RUNTIME_STATUS"}
+
+    def read_capability(self, resource: str) -> Mapping[str, object] | None:
+        if resource not in self.read_capability_names:
+            return None
+        return self._read_capability(self.controller.live_runtime_status())
+
     def capabilities(self) -> Mapping[str, Mapping[str, object]]:
         status = self.controller.status()
         runtime_running = bool(status.get("runtime_running"))
@@ -37,24 +48,8 @@ class V3ControlInterfaceAdapter:
         current = "RUNTIME_READY" if runtime_ready else (
             "RUNTIME_RUNNING_NOT_READY" if runtime_running else "RUNTIME_WILL_AUTO_START"
         )
-        read_ready = isinstance(runtime_status, Mapping)
         result: dict[str, dict[str, object]] = {
-            "v3.status": {
-                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
-            },
-            "v3.pose": {
-                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
-            },
-            "v3.safety": {
-                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
-            },
-            "v3.health": {
-                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
-            },
+            name: self._read_capability(runtime_status) for name in self.read_capability_names
         }
         for name, descriptor in ACTION_CATALOG.items():
             if not name.startswith("v3.command."):

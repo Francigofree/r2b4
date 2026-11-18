@@ -439,7 +439,14 @@ class RobotInterface:
         if len(owners) != 1:
             raise RobotInterfaceError(f"ambiguous interface capability: {name}")
         adapter = owners[0]
-        capability = adapter.capabilities().get(name)
+        # Polling one read must not require discovery of unrelated actions,
+        # skill modules or device capabilities. The owner still evaluates its
+        # live availability on this request; adapters without a targeted read
+        # descriptor retain the full-catalog path.
+        describe_read = getattr(adapter, "read_capability", None) if expected_kind == "read" else None
+        capability = describe_read(name) if callable(describe_read) else None
+        if capability is None:
+            capability = adapter.capabilities().get(name)
         if capability is None:
             raise RobotInterfaceError(
                 f"adapter {adapter.name} declared but did not report capability: {name}"

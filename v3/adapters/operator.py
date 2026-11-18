@@ -19,6 +19,9 @@ class OperatorInterfaceAdapter:
     def __init__(self, controller: OperatorController) -> None:
         self.controller = controller
 
+    def read_capability(self, resource: str) -> Mapping[str, object] | None:
+        return self._read(True) if resource in self.read_capability_names else None
+
     def capabilities(self) -> Mapping[str, Mapping[str, object]]:
         status = self.controller.status()
         running = bool(status.get("runtime_running"))

@@ -8,7 +8,7 @@ import pytest
 from r2b4_orchestration.robot_runtime import PublicRobotClient
 from r2b4_voice.robot_context import RobotContextBuilder
 from v3.adapters.vision_media_socket import VisionClient
-from v3.robot_interface import RobotInterface
+from v3.robot_interface import RobotInterface, RobotInterfaceError
 
 
 class Controller:
@@ -87,6 +87,70 @@ def test_default_interface_routes_legacy_behaviors_to_one_public_service(compose
     assert other.read("world.snapshot") == composed.world
     assert len({str(path) for path, _, _ in composed.calls}) == 1
     assert composed.controller.calls == []
+
+
+def test_status_reads_skip_action_discovery_but_keep_live_availability(monkeypatch, composed):
+    adapter = next(a for a in composed.interface.adapters if a.name == "v3_control")
+    def forbidden():
+        raise AssertionError("a status read must not discover the action catalog")
+    monkeypatch.setattr(adapter, "capabilities", forbidden)
+    monkeypatch.setattr(composed.controller, "status", forbidden)
+    assert composed.interface.read("v3.status") is composed.controller.status_value
+    composed.controller.status_value = None
+    with pytest.raises(RobotInterfaceError, match="NO_LIVE_RUNTIME_STATUS"):
+        composed.interface.read("v3.status")
+
+
+def test_public_state_read_does_not_discover_skills_or_probe_devices(monkeypatch, composed):
+    adapter = next(a for a in composed.interface.adapters if a.name == "public_robot")
+    def forbidden():
+        raise AssertionError("host-state read must not discover unrelated capabilities")
+    monkeypatch.setattr(adapter, "capabilities", forbidden)
+    monkeypatch.setattr(composed.controller, "live_runtime_status", forbidden)
+    monkeypatch.setattr(VisionClient, "status", lambda *_: forbidden())
+    assert composed.interface.read("behavior.state") == composed.behavior
+    assert [(operation, args) for _, operation, args in composed.calls] == [
+        ("read", {"resource": "behavior.state"})]
+
+
+@pytest.mark.parametrize("live_status", [None, {"state": "RUNNING", "ready_for_active": False},
+                                         {"state": "RUNNING", "fault_layer": "L12"}])
+def test_targeted_read_descriptors_match_full_catalog(monkeypatch, composed, live_status):
+    composed.controller.status_value = live_status
+    for adapter in composed.interface.adapters:
+        targeted = getattr(adapter, "read_capability", None)
+        if targeted is None:
+            continue
+        catalog = adapter.capabilities()
+        for resource in adapter.capability_names:
+            descriptor = targeted(resource)
+            if descriptor is not None:
+                assert descriptor == catalog[resource]
+
+
+def test_read_descriptor_fallback_and_ambiguity(tmp_path):
+    class Adapter:
+        name = "test"
+        capability_names = frozenset({"test.read"})
+        def capabilities(self):
+            return {"test.read": {"kind": "read", "supported": True, "available": True}}
+        def read(self, resource):
+            return resource
+    adapter = Adapter()
+    robot = RobotInterface(tmp_path, controller=object(), adapters=(adapter,))
+    assert robot.read("test.read") == "test.read"
+    adapter.read_capability = lambda _: None
+    assert robot.read("test.read") == "test.read"
+    adapter.read_capability = lambda _: {"kind": "read", "supported": True, "available": False,
+                                         "reason": "OWNER_UNAVAILABLE"}
+    with pytest.raises(RobotInterfaceError, match="OWNER_UNAVAILABLE"):
+        robot.read("test.read")
+    def forbidden(_):
+        raise AssertionError("ambiguous owners must be rejected before descriptor lookup")
+    adapter.read_capability = forbidden
+    robot = RobotInterface(tmp_path, controller=object(), adapters=(adapter, Adapter()))
+    with pytest.raises(RobotInterfaceError, match="ambiguous"):
+        robot.read("test.read")
 
 
 def test_local_v3_action_survives_public_world_service_failure(monkeypatch, composed):
