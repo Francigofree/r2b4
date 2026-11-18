@@ -578,6 +578,7 @@ class _PoseFilter:
                 and self._encoder_anchor.source_id in frame.degraded_sources):
             # Explicit sensor outage is not an ordinary multi-rate duplicate.
             # No count interval or prediction history can bridge that outage.
+            self._position_covariance_jacobian(self._prediction_position_jacobian())
             self._encoder_rebase_pending = True
             self._odometry_predictions = []
 
@@ -701,6 +702,7 @@ class _PoseFilter:
                 # never reconcile displacement across the missing interval.
                 # Keep cumulative-mode ownership until the rebase so scalar
                 # velocity/yaw updates cannot correct local X/Y through gains.
+                self._position_covariance_jacobian(self._prediction_position_jacobian())
                 self._encoder_rebase_pending = True
                 self._odometry_predictions = []
 
@@ -726,7 +728,7 @@ class _PoseFilter:
                     dt_s,
                     wheel_distance_delta,
                     stationary=stationary_prediction,
-                    cumulative_counts=cumulative_counts,
+                    cumulative_counts=cumulative_counts and not self._encoder_rebase_pending,
                 )
                 if self._encoder_anchor is not None and not self._encoder_rebase_pending:
                     self._odometry_predictions.append(OdometryPrediction(
@@ -773,19 +775,13 @@ class _PoseFilter:
                     update_type="YAW",
                 )
 
-        if wheel is not None:
-            self._reconcile_encoder(wheel, frame.context)
+        reanchored = wheel is not None and self._reconcile_encoder(wheel, frame.context)
         if self._encoder_anchor is not None and not stationary_prediction:
-            pending_dx = pending_dy = velocity_dx = velocity_dy = 0.0
-            for segment in self._odometry_predictions:
-                pending_dx += segment.dx_m
-                pending_dy += segment.dy_m
-                dt_s = (segment.end_ns - segment.start_ns) / 1e9
-                velocity_dx += dt_s * math.cos(segment.yaw_rad)
-                velocity_dy += dt_s * math.sin(segment.yaw_rad)
-            self._provisional_position_jacobian = (
-                -pending_dy, pending_dx, velocity_dx, velocity_dy)
-            self._position_covariance_jacobian(self._provisional_position_jacobian)
+            self._provisional_position_jacobian = self._prediction_position_jacobian()
+            # After a continuity reset, ordinary prediction already contains
+            # this tail. Mark its removable part without adding it twice.
+            if not (reanchored and self._last_context is not None and self._dt_s(frame) > 0.0):
+                self._position_covariance_jacobian(self._provisional_position_jacobian)
 
         # Preserve the established R2B4 output semantics: trusted gyro rate is
         # bias-corrected after every local measurement correction. A fresh wheel
@@ -841,12 +837,12 @@ class _PoseFilter:
             return None  # Older captures may carry only acquisition deltas.
         return tuple(_numeric_value(wheel, key) for key in keys)
 
-    def _reconcile_encoder(self, wheel: Observation, context: TickContext) -> None:
+    def _reconcile_encoder(self, wheel: Observation, context: TickContext) -> bool:
         totals = self._encoder_totals(wheel)
         if totals is None:
             if self._encoder_anchor is not None:
                 raise ValueError("L3 cumulative encoder measurement disappeared")
-            return
+            return False
         generation = next((field.value for field in wheel.values if field.key == "counter_generation"), 0)
         if type(generation) is not int or generation < 0:
             raise ValueError("wheel_velocity.counter_generation must be non-negative integer")
@@ -860,6 +856,9 @@ class _PoseFilter:
             raise ValueError("L3 encoder generation moved backwards")
         if (previous is None or self._encoder_rebase_pending
                 or current.counter_generation != previous.counter_generation):
+            # A new baseline cannot measure the abandoned interval. Preserve
+            # its full uncertainty before discarding reconciliation history.
+            self._position_covariance_jacobian(self._prediction_position_jacobian())
             self._encoder_anchor = current
             self._encoder_rebase_pending = False
             self._odometry_predictions = []
@@ -868,7 +867,7 @@ class _PoseFilter:
                 self._odometry_predictions = [OdometryPrediction(
                     current.captured_ns, context.monotonic_ns, self._state[self._YAW], 0.0, 0.0,
                 )]
-            return
+            return True
         span_ns = current.captured_ns - previous.captured_ns
         distance = 0.5 * (current.left_m - previous.left_m + current.right_m - previous.right_m)
         limit_m = self._config.max_abs_wheel_velocity_mps * span_ns / 1e9 + 1e-9
@@ -915,6 +914,17 @@ class _PoseFilter:
         self._position_covariance_jacobian((-count_dy, count_dx, 0.0, 0.0))
         self._encoder_anchor = current
         self._odometry_predictions = remaining
+        return False
+
+    def _prediction_position_jacobian(self) -> tuple[float, ...]:
+        dx = dy = velocity_dx = velocity_dy = 0.0
+        for segment in self._odometry_predictions:
+            dx += segment.dx_m
+            dy += segment.dy_m
+            dt_s = (segment.end_ns - segment.start_ns) / 1e9
+            velocity_dx += dt_s * math.cos(segment.yaw_rad)
+            velocity_dy += dt_s * math.sin(segment.yaw_rad)
+        return -dy, dx, velocity_dx, velocity_dy
 
     def _position_covariance_jacobian(self, coefficients: tuple[float, ...]) -> None:
         """Apply the sparse XY Jacobian of count motion or provisional motion.
