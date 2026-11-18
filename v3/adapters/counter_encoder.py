@@ -488,7 +488,7 @@ class NativeCounterEncoderBackend:
         delta = edges[-1].pulse_count - (edges[-2].pulse_count if len(edges) > 1 else 0)
         return delta if delta in (-1, 1) else 0
 
-    def _stationary_estimate(
+    def _no_edge_estimate(
         self,
         *,
         observed_ns: int,
@@ -497,13 +497,15 @@ class NativeCounterEncoderBackend:
     ) -> _WheelVelocityEstimate:
         horizon_ns = self._config.maximum_estimation_window_ns
         bounded_ns = max(0, min(horizon_ns, observed_ns))
-        trust = min(1.0, bounded_ns / horizon_ns)
+        # Silence bounds neither callback completeness nor physical motion.
+        # Zero is only the unavailable scalar placeholder; more source polls
+        # must never promote it to a fully trusted velocity measurement.
         return _WheelVelocityEstimate(
             velocity_mps=0.0,
             pulse_delta=0,
             window_ns=bounded_ns,
             uncertainty_mps=None,
-            trust=trust,
+            trust=0.0,
             timebase=timebase,
             start_edge_timestamp_ns=start_edge_timestamp_ns,
             end_edge_timestamp_ns=None,
@@ -530,7 +532,7 @@ class NativeCounterEncoderBackend:
         if not edges:
             if snapshot.pulse_count != previous.pulse_count:
                 return None
-            return self._stationary_estimate(
+            return self._no_edge_estimate(
                 observed_ns=now_ns - self._stationary_since_ns,
                 timebase=None,
             )
@@ -539,7 +541,7 @@ class NativeCounterEncoderBackend:
         if snapshot.pulse_count == previous.pulse_count:
             edge_age_ns = max(0, now_ns - newest.timestamp_ns)
             if edge_age_ns > self._config.maximum_sample_interval_ns:
-                return self._stationary_estimate(
+                return self._no_edge_estimate(
                     observed_ns=edge_age_ns,
                     start_edge_timestamp_ns=newest.timestamp_ns,
                 )
@@ -770,8 +772,8 @@ class NativeCounterEncoderBackend:
 
     @staticmethod
     def _published_velocity(estimate: _WheelVelocityEstimate | None) -> float:
-        # Partial edge fits stay visible in diagnostics but never masquerade as
-        # a control-grade speed.  Snapshot-derived standstill is always zero.
+        # Partial/no-edge fits stay visible in diagnostics. Their scalar zero
+        # is unavailable feedback, never proof of physical standstill.
         if estimate is None:
             return 0.0
         if estimate.timebase == "TICK_SNAPSHOT":

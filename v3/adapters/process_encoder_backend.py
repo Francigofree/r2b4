@@ -9,6 +9,7 @@ from __future__ import annotations
 import multiprocessing as mp
 import errno
 import pickle
+import sys
 import time
 import threading
 from dataclasses import replace
@@ -21,13 +22,28 @@ from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset,
 
 from .counter_encoder import CounterEncoderBackendConfig, NativeCounterEncoderBackend
 from .gpio_counter import GpioCounterPairConfig, NativeGpioSignedCounterPair
-from .live_encoder import EncoderVelocityReading, NativeEncoderConfig, NativeEncoderSource
+from .live_encoder import EncoderRejectionCode, EncoderVelocityReading, NativeEncoderConfig, NativeEncoderSource
 
 _START_METHOD = "spawn"
 _MAX_RESTARTS = 3
 _RESTART_BACKOFF_S = .25
 _RECOVERY_STABLE_NS = 60_000_000_000
 _MAILBOX_BYTES = 16_384  # Scalar reading/diagnostics only; never raw edge history.
+
+
+def _require_notification_thread(lgpio: Any) -> None:
+    """Sampling progress is not proof that lgpio still delivers GPIO alerts.
+
+    lgpio owns this thread internally. A dead notification thread requires a
+    fresh process, not continued publication of apparently healthy standstill.
+    Silence from an otherwise live thread is deliberately NOT a restart signal:
+    without physical motion evidence it is indistinguishable from standstill.
+    """
+    notification = getattr(lgpio, "_notify_thread", None)
+    if notification is None or not callable(getattr(notification, "is_alive", None)):
+        raise RuntimeError("ENCODER_NOTIFICATION_THREAD_UNSUPPORTED")
+    if not notification.is_alive():
+        raise OSError(errno.EIO, "ENCODER_NOTIFICATION_THREAD_STOPPED")
 
 
 class _EncoderMailbox:
@@ -96,6 +112,7 @@ def _encoder_process_main(
             )
         import lgpio
 
+        _require_notification_thread(lgpio)
         counter_pair = NativeGpioSignedCounterPair(
             lgpio, counter_config, monotonic_ns=time.monotonic_ns,
         )
@@ -113,11 +130,21 @@ def _encoder_process_main(
                 time.sleep((next_deadline_ns - now_ns) / 1_000_000_000.0)
                 continue
             context = TickContext(sequence, now_ns)
+            _require_notification_thread(lgpio)
             reading = backend.read(context)
             if not isinstance(reading, EncoderVelocityReading):
                 raise TypeError("encoder backend returned invalid reading")
-            if sequence_base == 0 or (reading.timing_valid and not reading.stale and reading.trust == 1.0):
-                mailbox.publish(("reading", replace(reading, counter_generation=generation)))
+            _require_notification_thread(lgpio)
+            # Recovery validates the acquisition/counter, not wheel motion.
+            # A quiet but healthy new owner may have no velocity fit at all.
+            counter_ready = (reading.timing_valid and not reading.stale
+                and reading.diagnostics is not None
+                and reading.diagnostics.rejection_code in {
+                    EncoderRejectionCode.NONE, EncoderRejectionCode.BASELINE,
+                })
+            if sequence_base == 0 or counter_ready:
+                mailbox.publish(("reading", replace(reading, counter_generation=generation,
+                                                   notification_thread_alive=True)))
             sequence += 1
             next_deadline_ns += process_config.sample_period_ns
             completed_ns = time.monotonic_ns()
@@ -126,8 +153,13 @@ def _encoder_process_main(
                 next_deadline_ns += missed * process_config.sample_period_ns
     except BaseException as exc:
         failed = True
+        recoverable = isinstance(exc, OSError) and exc.errno not in (errno.EACCES, errno.EPERM, errno.EINVAL)
         mailbox.publish(("error", type(exc).__name__, str(exc)[:256],
-                         isinstance(exc, OSError) and exc.errno not in (errno.EACCES, errno.EPERM, errno.EINVAL)))
+                         recoverable))
+        # Edge-only failure evidence, after notifying the bounded supervisor.
+        # A sampling sequence alone cannot diagnose a lost GPIO notification.
+        print(f"ENCODER_OWNER_ERROR generation={generation} recoverable={recoverable} "
+              f"{type(exc).__name__}: {str(exc)[:256]!r}", file=sys.stderr, flush=True)
     finally:
         if counter_pair is not None:
             try:

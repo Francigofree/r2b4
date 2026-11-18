@@ -334,9 +334,12 @@ class EncoderVelocityReading:
     timing_valid: bool
     diagnostics: EncoderEdgeDiagnostics | None = None
     counter_generation: int = 0
+    notification_thread_alive: bool | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.counter_generation, "counter_generation")
+        if self.notification_thread_alive is not None and type(self.notification_thread_alive) is not bool:
+            raise ValueError("notification_thread_alive must be bool or None")
         _nonnegative_integer(self.sequence, "sequence")
         _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
         _finite(self.left_mps, "left_mps")
@@ -480,7 +483,9 @@ class NativeEncoderSource:
                 DataField("measurement_timing_valid", reading.timing_valid),
                 DataField("left_velocity_quality", velocity_quality(reading.left_mps, self._config.minimum_reliable_speed_mps, self._config.velocity_unreliable_below_mps)),
                 DataField("right_velocity_quality", velocity_quality(reading.right_mps, self._config.minimum_reliable_speed_mps, self._config.velocity_unreliable_below_mps)),
-            ) + self._diagnostic_fields(reading.diagnostics),
+            ) + (() if reading.notification_thread_alive is None else (
+                DataField("notification_thread_alive", reading.notification_thread_alive),
+            )) + self._diagnostic_fields(reading.diagnostics),
         )
         return LiveDeviceSnapshot(context, health, (sample,))
 

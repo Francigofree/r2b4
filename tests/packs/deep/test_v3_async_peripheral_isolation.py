@@ -330,7 +330,9 @@ def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path,
     (tmp_path / 'lgpio.py').write_text(
         'from v3_test_fixtures import FakeGpio\n'
         'from pathlib import Path\n'
+        'from types import SimpleNamespace\n'
         'import os, threading, time\n'
+        '_notify_thread = SimpleNamespace(is_alive=lambda: True)\n'
         f'_gpio = FakeGpio({initial_levels!r})\n'
         'RISING_EDGE = 1\nBOTH_EDGES = 3\nSET_PULL_UP = 32\n'
         'def gpiochip_open(chip):\n'

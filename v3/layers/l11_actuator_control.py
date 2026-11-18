@@ -10,6 +10,7 @@ from v3.wheel_motion import velocity_quality, validate_velocity_quality_band
 from v3.contracts import (
     ActuatorRequest,
     AdmittedFrame,
+    DeviceHealthState,
     Observation,
     RejectionReason,
     TickContext,
@@ -75,6 +76,17 @@ class WheelFeedbackEvidence:
     feedback_transition_until_ns: int | None
     error_type: str | None
     error_message: str | None
+    notification_thread_alive: bool | None = None
+    raw_left_pulse_count: int | None = None
+    raw_right_pulse_count: int | None = None
+    left_last_callback_received_ns: int | None = None
+    right_last_callback_received_ns: int | None = None
+    left_last_callback_latency_ns: int | None = None
+    right_last_callback_latency_ns: int | None = None
+    left_max_callback_latency_ns: int | None = None
+    right_max_callback_latency_ns: int | None = None
+    source_health_state: str | None = None
+    source_health_reason: str | None = None
 
 
 def _finite_float(value: object, name: str) -> float:
@@ -540,6 +552,7 @@ class WheelActuatorController:
         feedback = self._last_feedback or previous_feedback
         values = {} if feedback is None else {item.key: item.value for item in feedback.values}
         source = None if feedback is None else feedback.source_device_id
+        health = next((item for item in frame.device_health if item.device_id == source), None)
         rejected = next((item for item in frame.rejected if item.source_device_id == source), None)
         accepted = any(item.kind == WHEEL_FEEDBACK_KIND for item in frame.accepted)
         state = "ACCEPTED" if accepted else "MISSING" if feedback is None else "CACHED"
@@ -579,6 +592,13 @@ class WheelActuatorController:
             self._feedback_transition_until_ns,
             None if error is None else type(error).__name__,
             None if error is None else str(error)[:256],
+            scalar("notification_thread_alive", bool),
+            scalar("raw_left_pulse_count", int), scalar("raw_right_pulse_count", int),
+            scalar("left_last_callback_received_ns", int), scalar("right_last_callback_received_ns", int),
+            scalar("left_last_callback_latency_ns", int), scalar("right_last_callback_latency_ns", int),
+            scalar("left_max_callback_latency_ns", int), scalar("right_max_callback_latency_ns", int),
+            None if health is None else health.state.value,
+            None if health is None else health.reason,
         )
 
     def _evaluate(
@@ -591,6 +611,20 @@ class WheelActuatorController:
         fresh = tuple(item for item in frame.accepted if item.kind == WHEEL_FEEDBACK_KIND)
         if len(fresh) > 1:
             raise ValueError("L11 requires at most one new wheel observation")
+        restarting = tuple(item for item in frame.device_health
+            if item.state is DeviceHealthState.DEGRADED and item.reason == "ENCODER_RESTARTING"
+            and (self._last_feedback is None or item.device_id == self._last_feedback.source_device_id))
+        if restarting:
+            if len(restarting) != 1 or fresh or any(
+                item.source_device_id == restarting[0].device_id for item in frame.rejected
+            ):
+                raise ValueError("L11 restarting encoder must not publish feedback")
+            # The edge supervisor owns a bounded recovery budget. Never use
+            # pre-restart feedback or carry its PI/edge watchdog into a new
+            # counter generation. L12 independently enforces physical STOP
+            # from this same closed DEGRADED health; mission ownership stays L5.
+            self.reset()
+            return ActuatorRequest(wheels.context, 0.0, 0.0)
         if fresh:
             self._last_feedback = fresh[0]
         dt_s = self._control_dt_s(wheels.context)
@@ -1078,10 +1112,11 @@ class WheelActuatorController:
 
         timebase_key = f"{side}_estimation_timebase"
         # Only enforce timebase when the production diagnostic field exists.
-        # A TICK_SNAPSHOT zero is a good standstill observation, but under a
-        # non-zero wheel command it is not proof that the encoder is tracking
-        # motion.  This is the per-wheel missing-feedback watchdog.
-        if timebase_key in values and values.get(timebase_key) != "GPIO_EDGE_HISTORY":
+        # TICK_SNAPSHOT carries a no-edge zero placeholder, not measured
+        # standstill or motion. It cannot enter PI under a nonzero demand.
+        native = (timebase_key in values or f"raw_{side}_pulse_count" in values
+                  or f"{side}_last_accepted_edge_timestamp_ns" in values)
+        if native and values.get(timebase_key) != "GPIO_EDGE_HISTORY":
             return None
         return measured
 

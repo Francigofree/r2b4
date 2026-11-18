@@ -137,7 +137,10 @@ def test_compact_lidar_transport_cannot_block_on_dead_publisher():
             child.join(2.)
 
 
-def test_recovering_sensors_stop_without_latching_and_replay_closed_recovery(tmp_path):
+@pytest.mark.parametrize('device_id,reason', [
+    ('BNO055_IMU', 'IMU_RESTARTING'), ('WHEEL_ENCODERS', 'ENCODER_RESTARTING'),
+])
+def test_recovering_sensors_stop_without_latching_and_replay_closed_recovery(tmp_path, device_id, reason):
     config = _config()
     writer = OfflineMotorSink()
     control = NativeControlComposition(writer, config)
@@ -145,27 +148,32 @@ def test_recovering_sensors_stop_without_latching_and_replay_closed_recovery(tmp
     proposal = None
     mission_id = None
     try:
-        for tick in range(9):
+        # Recovery may outlast L11's ordinary feedback-loss watchdog. Its
+        # explicit edge lifecycle is bounded by the supervisor instead.
+        for tick in range(45):
             inputs = _inputs(config, tick, proposal)
-            if tick in (2, 3):
-                health = tuple(DeviceHealth(h.device_id, DeviceHealthState.DEGRADED, 'IMU_RESTARTING')
-                    if h.device_id == 'BNO055_IMU' else h for h in inputs.raw_devices.device_health)
+            if 2 <= tick < 38:
+                health = tuple(DeviceHealth(h.device_id, DeviceHealthState.DEGRADED, reason)
+                    if h.device_id == device_id else h for h in inputs.raw_devices.device_health)
                 inputs = replace(inputs, raw_devices=replace(inputs.raw_devices,
                     device_health=health, samples=tuple(s for s in inputs.raw_devices.samples
-                        if s.device_id != 'BNO055_IMU')))
+                        if s.device_id != device_id)))
             closed = control.close_inputs(inputs)
             result = control.run_tick(closed)
             if tick == 0:
-                proposal = _guidance(control._navigation.pending_navigation_request)
-                mission_id = proposal.mission_id
-            if tick in (2, 3):
+                request = control._navigation.pending_navigation_request
+                mission_id = request.mission_id
+            proposal = _guidance(request, sequence=tick + 1, produced_ns=inputs.context.monotonic_ns)
+            if 2 <= tick < 38:
                 assert result.final_actuation.safety_decision is SafetyDecision.STOP
                 assert not result.final_actuation.enabled
                 assert result.final_actuation.left_output == result.final_actuation.right_output == 0.
+                if device_id == 'WHEEL_ENCODERS':
+                    assert control._actuator_control.checkpoint().last_feedback is None
             assert result.final_actuation.safety_decision is not SafetyDecision.FAULT
             assert _layers(result)['L5'].mission_id == mission_id
             sink.write(ExecutionRecord(closed, result))
-        assert any(w.enabled for w in writer.writes[4:])
+        assert any(w.enabled for w in writer.writes[38:])
     finally:
         control.close()
     capture = sink.finalize('PASS', tmp_path/'recovery.json')

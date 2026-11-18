@@ -653,6 +653,11 @@ class _PoseFilter:
                 and standstill
                 and abs(left_mps) < self._config.still_velocity_threshold_mps
                 and abs(right_mps) < self._config.still_velocity_threshold_mps
+                and measured_omega is not None
+                and heading is not None
+                and 0 <= frame.context.monotonic_ns - heading.captured_monotonic_ns <= self._config.max_measurement_age_ns
+                and omega_confidence >= self._config.quality.minimum_sensor_trust
+                and abs(measured_omega) < self._config.stationary_bias_omega_max_rad_s
             )
 
         stationary_prediction = self._stationary_prediction_active(
@@ -779,19 +784,24 @@ class _PoseFilter:
 
         Both physical wheel windows must advance before the combined velocity
         correction is independent again. Count reconciliation and freshness of
-        the acquisition continue on every admitted snapshot. A stationary
-        snapshot has its own observation time, without inventing a GPIO edge.
+        the acquisition continue on every admitted snapshot. A no-edge poll is
+        not an independent velocity or standstill measurement, even if an old
+        producer assigned its zero placeholder full trust.
         """
         if "left_estimation_timebase" not in values and "right_estimation_timebase" not in values:
+            if any(name in values for name in (
+                "raw_left_pulse_count", "raw_right_pulse_count",
+                "left_last_accepted_edge_timestamp_ns", "right_last_accepted_edge_timestamp_ns",
+            )):
+                return False  # Incomplete native metadata is not a legacy velocity source.
             return True  # Historical velocity-only sources.
         evidence = []
         for side in ("left", "right"):
-            if values.get(f"{side}_estimation_timebase") == "GPIO_EDGE_HISTORY":
-                measured_ns = values.get(f"{side}_estimation_end_edge_timestamp_ns")
-                if type(measured_ns) is not int or not 0 <= measured_ns <= wheel.captured_monotonic_ns:
-                    raise ValueError("L3 encoder velocity edge time is invalid")
-            else:
-                measured_ns = wheel.captured_monotonic_ns
+            if values.get(f"{side}_estimation_timebase") != "GPIO_EDGE_HISTORY":
+                return False
+            measured_ns = values.get(f"{side}_estimation_end_edge_timestamp_ns")
+            if type(measured_ns) is not int or not 0 <= measured_ns <= wheel.captured_monotonic_ns:
+                raise ValueError("L3 encoder velocity edge time is invalid")
             evidence.append(measured_ns)
         previous = self._last_velocity_evidence_ns
         if previous is not None and any(now <= old for now, old in zip(evidence, previous)):
@@ -837,10 +847,15 @@ class _PoseFilter:
             return
         span_ns = current.captured_ns - previous.captured_ns
         distance = 0.5 * (current.left_m - previous.left_m + current.right_m - previous.right_m)
-        if max(abs(current.left_m - previous.left_m), abs(current.right_m - previous.right_m)) > (
-            self._config.max_abs_wheel_velocity_mps * span_ns / 1e9 + 1e-9
-        ):
-            raise ValueError("L3 cumulative encoder displacement exceeds physical bound")
+        limit_m = self._config.max_abs_wheel_velocity_mps * span_ns / 1e9 + 1e-9
+        left_delta_m = current.left_m - previous.left_m
+        right_delta_m = current.right_m - previous.right_m
+        if max(abs(left_delta_m), abs(right_delta_m)) > limit_m:
+            raise ValueError(
+                "L3 cumulative encoder displacement exceeds physical bound: "
+                f"from_ns={previous.captured_ns} dt_ns={span_ns} "
+                f"left_m={left_delta_m!r} right_m={right_delta_m!r} limit_m={limit_m!r}"
+            )
         dx = dy = 0.0
         covered_ns = 0
         remaining = []
