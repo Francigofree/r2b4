@@ -36,8 +36,8 @@ def _require_notification_thread(lgpio: Any) -> None:
 
     lgpio owns this thread internally. A dead notification thread requires a
     fresh process, not continued publication of apparently healthy standstill.
-    Silence from an otherwise live thread is deliberately NOT a restart signal:
-    without physical motion evidence it is indistinguishable from standstill.
+    Silence alone is indistinguishable from standstill. The GPIO owner also
+    checks physical B levels against delivered callbacks before publication.
     """
     notification = getattr(lgpio, "_notify_thread", None)
     if notification is None or not callable(getattr(notification, "is_alive", None)):
@@ -134,6 +134,7 @@ def _encoder_process_main(
             reading = backend.read(context)
             if not isinstance(reading, EncoderVelocityReading):
                 raise TypeError("encoder backend returned invalid reading")
+            counter_pair.check_notification_delivery(time.monotonic_ns())
             _require_notification_thread(lgpio)
             # Recovery validates the acquisition/counter, not wheel motion.
             # A quiet but healthy new owner may have no velocity fit at all.

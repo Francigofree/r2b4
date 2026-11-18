@@ -150,6 +150,63 @@ def test_nav2_native_chain_expiry_safety_no_local_compute_and_persisted_replay(t
     assert replay["determinism"]["repeated_trace_match"]
 
 
+def test_delayed_fresh_command_after_pending_preserves_command_order_revocation_and_replay(tmp_path):
+    config = _config()
+    control = NativeControlComposition(OfflineMotorSink(), config)
+    restored = None
+    sink = CaptureSink('nav2-delayed-after-pending', configuration={'production_control': config})
+    request = None
+    # The live failure was seq336 ACTIVE -> seq337 PENDING -> seq338 ACTIVE,
+    # with the last controller result produced 51.5 ms before the PENDING.
+    rows = [
+        (None, None, None, None),
+        (Nav2NavigationStatus.ACTIVE, 1_000_000_000, 1_030_000_000, 'NAV2_ACTIVE'),
+        (Nav2NavigationStatus.PENDING, 1_040_000_000, None, 'NAV2_PENDING'),
+        (Nav2NavigationStatus.ACTIVE, 1_035_000_000, None, 'NAV2_ACTIVE'),
+        (Nav2NavigationStatus.PENDING, 1_080_000_000, None, 'NAV2_PENDING'),
+        (Nav2NavigationStatus.ACTIVE, 1_030_000_000, None, 'NAV2_SUPERSEDED'),
+        (Nav2NavigationStatus.ACTIVE, 1_090_000_000, None, 'NAV2_ACTIVE'),
+        (Nav2NavigationStatus.STALE, 1_140_000_000, None, 'NAV2_STALE'),
+        (Nav2NavigationStatus.PENDING, 1_160_000_000, None, 'NAV2_PENDING'),
+        (Nav2NavigationStatus.ACTIVE, 1_130_000_000, None, 'NAV2_SUPERSEDED'),
+        (Nav2NavigationStatus.ACTIVE, 1_170_000_000, None, 'NAV2_ACTIVE'),
+        (Nav2NavigationStatus.ACTIVE, 1_180_000_000, 1_220_000_000, 'NAV2_STALE'),
+    ]
+    try:
+        for tick, (status, stamp, deadline, reason) in enumerate(rows):
+            guidance = None if status is None else _guidance(request,
+                sequence=336+tick, produced_ns=stamp, status=status,
+                v_mps=.25 if status is Nav2NavigationStatus.ACTIVE else 0.)
+            if deadline is not None:
+                guidance = replace(guidance, valid_until_ns=deadline)
+            inputs = control.close_inputs(_inputs(config, tick, guidance, mode=CommandMode.EXPLORE))
+            result = control.run_tick(inputs)
+            if restored is not None:
+                assert restored.run_tick(inputs) == result
+            layers = _layers(result)
+            if tick == 0:
+                request = control._navigation.pending_navigation_request
+            else:
+                assert layers['L6'].reason == reason
+                if reason == 'NAV2_ACTIVE':
+                    validity = layers['L6'].motion_validity
+                    assert validity.source_context == guidance.source_context
+                    assert validity.valid_until_ns == guidance.valid_until_ns-1
+                else:
+                    _zero(result)
+            if tick == 2:
+                restored = NativeControlComposition(OfflineMotorSink(), config)
+                restored.restore(control.checkpoint())
+            sink.write(ExecutionRecord(inputs, result))
+    finally:
+        control.close()
+        if restored is not None:
+            restored.close()
+    capture = sink.finalize('PASS', tmp_path/'nav2-delayed-after-pending.json')
+    replay = replay_capture(capture, project_root=ROOT)
+    assert replay['status'] == 'MATCH', replay['diagnostics']
+
+
 def test_nav2_mission_restart_superseded_sequence_and_sensor_staleness_fail_closed():
     config = _config()
     control = NativeControlComposition(OfflineMotorSink(), config)

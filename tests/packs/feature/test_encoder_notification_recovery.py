@@ -4,6 +4,7 @@ Only process supervision and real scalar encoder transport run here. No GPIO
 module, motor, device I/O or wall-time control loop is opened.
 """
 from dataclasses import replace
+import errno
 import multiprocessing
 import sys
 from types import SimpleNamespace
@@ -22,14 +23,14 @@ from v3.composition.native_control import NativeControlComposition
 from v3.contracts import DeviceHealth, DeviceHealthState, SafetyDecision, TickContext
 
 
-def _edge(monkeypatch):
+def _edge(monkeypatch, failure='thread'):
     # Inherit only the injected GPIO seam into the child. Production keeps
     # spawn; fork here makes importing a real GPIO module impossible.
     context = multiprocessing.get_context('fork')
     alive = context.RawValue('b', True)
     monkeypatch.setattr(encoder, '_START_METHOD', 'fork')
     monkeypatch.setitem(sys.modules, 'lgpio', SimpleNamespace(
-        _notify_thread=SimpleNamespace(is_alive=lambda: bool(alive.value))))
+        _notify_thread=SimpleNamespace(is_alive=lambda: failure != 'thread' or bool(alive.value))))
 
     class Pair:
         left_counter = right_counter = SimpleNamespace(
@@ -46,6 +47,10 @@ def _edge(monkeypatch):
         def close(self):
             pass
 
+        def check_notification_delivery(self, now_ns):
+            if failure == 'delivery' and not alive.value:
+                raise OSError(errno.EIO, 'ENCODER_NOTIFICATION_DELIVERY_STALLED:left')
+
     monkeypatch.setattr(encoder, 'NativeGpioSignedCounterPair', Pair)
     resolved = resolved_config()
     inputs = resolved.runtime.sensor_inputs.inputs
@@ -59,8 +64,9 @@ def _read(edge):
     return edge.read(TickContext(0, time.monotonic_ns()))
 
 
-def test_notification_death_revokes_fresh_sampling_and_recovers_new_generation(monkeypatch):
-    edge, alive, source_config = _edge(monkeypatch)
+@pytest.mark.parametrize('failure', ['thread', 'delivery'])
+def test_notification_loss_revokes_fresh_sampling_and_recovers_new_generation(monkeypatch, failure):
+    edge, alive, source_config = _edge(monkeypatch, failure)
     try:
         # A live thread without pulses is legal standstill, not a restart cue.
         initial = _read(edge)
@@ -124,6 +130,76 @@ def test_notification_recovery_exhaustion_is_bounded_and_terminal(monkeypatch):
 def test_unknown_lgpio_notification_api_is_not_assumed_healthy():
     with pytest.raises(RuntimeError, match='ENCODER_NOTIFICATION_THREAD_UNSUPPORTED'):
         encoder._require_notification_thread(SimpleNamespace())
+
+
+def test_physical_pin_contradiction_detects_live_but_silent_notification_delivery():
+    from v3.adapters.gpio_counter import NativeGpioSignedCounterPair
+    from v3_test_fixtures import FakeGpio
+
+    config = resolved_config().runtime.sensor_inputs.inputs.encoder_counter
+    gpio = FakeGpio()
+    clock = [1_000_000_000]
+    pair = NativeGpioSignedCounterPair(gpio, config, monotonic_ns=lambda: clock[0])
+    try:
+        # Five minutes of quiet pins must never be treated as device failure.
+        for tick in range(15_000):
+            clock[0] += 20_000_000
+            pair.check_notification_delivery(clock[0])
+        channel = config.left
+        gpio.emit(channel.pin_b, 1, clock[0], chip=config.gpio_chip)
+        before = pair.snapshot_pair(TickContext(0, clock[0]))
+        # GPIO changes physically, but no notification is delivered. Even a
+        # live Python thread and fresh sampling cannot explain this as quiet.
+        gpio.levels[channel.pin_b] = 0
+        clock[0] += 100_000_000
+        pair.check_notification_delivery(clock[0])  # tolerate bounded delay
+        clock[0] += 60_000_000
+        pair.check_notification_delivery(clock[0])
+        # A later pin sample can alias back to its old level. The observed
+        # contradiction remains until actual callback progress, not a poll.
+        gpio.levels[channel.pin_b] = 1
+        clock[0] += 40_000_000
+        with pytest.raises(OSError, match='ENCODER_NOTIFICATION_DELIVERY_STALLED:left'):
+            pair.check_notification_delivery(clock[0])
+        after = pair.snapshot_pair(TickContext(1, clock[0]))
+        assert after.left.pulse_count == before.left.pulse_count
+        assert after.left.edge_history == before.left.edge_history
+        assert after.left.last_callback_received_ns == before.left.last_callback_received_ns
+        # Genuine delivery, including a B-only edge without wheel pulses,
+        # clears the contradiction; no synthetic motion evidence is needed.
+        gpio.emit(channel.pin_b, 0, clock[0], chip=config.gpio_chip)
+        pair.check_notification_delivery(clock[0])
+    finally:
+        pair.close()
+
+
+def test_callback_racing_physical_pin_read_cannot_trigger_restart():
+    from v3.adapters.gpio_counter import NativeGpioSignedCounterPair
+    from v3_test_fixtures import FakeGpio
+
+    config = resolved_config().runtime.sensor_inputs.inputs.encoder_counter
+    gpio = FakeGpio()
+    clock = [1_000_000_000]
+    pair = NativeGpioSignedCounterPair(gpio, config, monotonic_ns=lambda: clock[0])
+    try:
+        channel = config.right
+        gpio.emit(channel.pin_b, 1, clock[0], chip=config.gpio_chip)
+        clock[0] += 200_000_000
+        original = gpio.gpio_read
+
+        def racing_read(handle, pin):
+            value = original(handle, pin)
+            if pin == channel.pin_b:
+                gpio.emit(pin, 0, clock[0], chip=config.gpio_chip)
+            return value
+
+        gpio.gpio_read = racing_read
+        pair.check_notification_delivery(clock[0])
+        gpio.gpio_read = original
+        clock[0] += 200_000_000
+        pair.check_notification_delivery(clock[0])
+    finally:
+        pair.close()
 
 
 def test_restarting_health_with_published_feedback_is_still_a_hard_fault():

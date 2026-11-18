@@ -68,7 +68,10 @@ controller_server:
     odom_topic: /r2b4/odom
     speed_limit_topic: /speed_limit
     costmap_update_timeout: 0.2
-    failure_tolerance: 0.0
+    # Retry transient NoValidControl on fresh controller/costmap cycles before
+    # aborting the child and starting recovery. Nav2 publishes zero meanwhile;
+    # command/sensor expiry and final V3 collision safety remain independent.
+    failure_tolerance: 0.5
     min_x_velocity_threshold: 0.01
     min_y_velocity_threshold: 0.0
     min_theta_velocity_threshold: 0.01

@@ -23,6 +23,7 @@ class Nav2GuidanceState:
     bound_goal: Waypoint | None = None
     issued_requests: tuple[Nav2NavigationRequest, ...] = ()
     bound_odom_generation: int | None = None
+    velocity_not_before_ns: int | None = None
 
 
 def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
@@ -82,13 +83,25 @@ def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
             or guidance.source_context.monotonic_ns < state.mission_started.monotonic_ns):
         return hold("NAV2_IDENTITY_MISMATCH"), state
     previous = state.last_guidance
+    velocity_floor = state.velocity_not_before_ns
     if previous is not None:
+        # PENDING dates an availability observation, not a controller command.
+        # A delayed but still fresh ACTIVE may predate that observation. Keep
+        # physical command order independently from status packet order.
+        pending_completion = (previous.status is Nav2NavigationStatus.PENDING
+            and guidance.status is Nav2NavigationStatus.ACTIVE)
+        if previous.status is not Nav2NavigationStatus.PENDING:
+            velocity_floor = max(velocity_floor or 0, previous.produced_ns)
         if (guidance.worker_generation < previous.worker_generation
                 or (guidance.worker_generation == previous.worker_generation
                     and (guidance.command_sequence < previous.command_sequence
-                         or guidance.produced_ns < previous.produced_ns
+                         or (guidance.produced_ns < previous.produced_ns and not pending_completion)
                          or (guidance.command_sequence == previous.command_sequence and guidance != previous)))):
             return hold("NAV2_SUPERSEDED"), state
+    if (guidance.status is Nav2NavigationStatus.ACTIVE
+            and velocity_floor is not None
+            and guidance.produced_ns < velocity_floor):
+        return hold("NAV2_SUPERSEDED"), state
     if not guidance.produced_ns <= now < guidance.valid_until_ns:
         # A cached expired proposal can outlive the bounded issued-request
         # history. Expiry is its cause, not a new identity failure. Rejection
@@ -98,7 +111,11 @@ def accept_nav2_guidance(mission: MissionIntent, estimate: RobotEstimate,
         if item.context == guidance.source_context), None)
     if source_request is None or guidance.transform_revision != source_request.transform_revision:
         return hold("NAV2_IDENTITY_MISMATCH"), state
-    state = replace(state, last_guidance=guidance)
+    # A revocation remains a barrier even after later PENDING heartbeats.
+    # Otherwise ACTIVE(T1) -> STALE(T3) -> PENDING(T4) could admit old T2.
+    state = replace(state, last_guidance=guidance, velocity_not_before_ns=(
+        velocity_floor if guidance.status is Nav2NavigationStatus.PENDING
+        else max(velocity_floor or 0, guidance.produced_ns)))
     if guidance.status is Nav2NavigationStatus.SUCCEEDED:
         if mission.mode is CommandMode.NAVIGATE:
             pose = estimate.global_pose

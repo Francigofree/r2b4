@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import threading
 from collections import deque
 from dataclasses import dataclass
@@ -214,6 +215,7 @@ class _CounterState:
     last_callback_received_ns: int | None = None
     last_callback_latency_ns: int | None = None
     max_callback_latency_ns: int | None = None
+    delivery_mismatch_since_ns: int | None = None
 
 
 class _CounterView:
@@ -745,6 +747,35 @@ class NativeGpioSignedCounterPair:
             return SignedPulseCounterPairSnapshot(
                 left, right, self._running, self._running, captured_ns,
             )
+
+    def check_notification_delivery(self, now_ns: int) -> None:
+        """Detect physical B changes missing from a still-alive notifier.
+
+        This is device-owner I/O, never a control read or synthetic pulse.
+        Quiet, matching pins are legal standstill. An observed contradiction
+        must persist without callback progress across multiple polls.
+        """
+        for side, channel in (("left", self._config.left), ("right", self._config.right)):
+            with self._lock:
+                before = self._states[side].last_callback_received_ns
+            # Do not hold the callback lock across physical I/O. A callback
+            # racing this read invalidates the comparison below.
+            level = self._read_level(channel.pin_b)
+            with self._lock:
+                state = self._states[side]
+                if (before != state.last_callback_received_ns
+                        or (before is not None and now_ns - before < 150_000_000)):
+                    state.delivery_mismatch_since_ns = None
+                    continue
+                if level == state.level_b and state.delivery_mismatch_since_ns is None:
+                    continue
+                if state.delivery_mismatch_since_ns is None:
+                    state.delivery_mismatch_since_ns = now_ns
+                elif now_ns - state.delivery_mismatch_since_ns >= 40_000_000:
+                    raise OSError(errno.EIO,
+                        f"ENCODER_NOTIFICATION_DELIVERY_STALLED:{side}:"
+                        f"last_callback_ns={before}:mismatch_since_ns={state.delivery_mismatch_since_ns}:"
+                        f"current_b={level}:delivered_b={state.level_b}")
 
     def _snapshot_locked(self, side: str) -> SignedPulseCounterSnapshot:
         state = self._states[side]
