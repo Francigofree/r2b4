@@ -707,7 +707,7 @@ def _migrate_legacy_estimation_checkpoint(value: object, *, frame_id: str) -> ob
     lx, ly, lyaw = local_filter.state[:3]
     yaw = math.atan2(math.sin(gyaw - lyaw), math.cos(gyaw - lyaw))
     c, s = math.cos(yaw), math.sin(yaw)
-    alignment = MapAlignmentStateCheckpoint.from_pose_prior(
+    alignment = MapAlignmentStateCheckpoint.from_global_pose(
         Pose2D(frame_id, gx - c * lx + s * ly, gy - s * lx - c * ly, yaw),
         Pose2D(LOCAL_FRAME_ID, lx, ly, lyaw),
         [list(row[:3]) for row in global_filter.covariance[:3]],

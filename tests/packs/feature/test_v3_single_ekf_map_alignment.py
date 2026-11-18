@@ -181,3 +181,61 @@ def test_rejected_physical_fix_is_not_reconsidered_from_a_new_publication():
     assert actual.localization_quality.global_fix_last_accepted_ns == accepted.context.monotonic_ns
     assert actual.map_to_odom == accepted.map_to_odom
     assert not any(e.update_type == "LIDAR_POSE" for e in estimator.last_update_evidence)
+
+
+def test_accumulated_odometry_uncertainty_increases_global_fix_weight():
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    weights = []
+
+    def rate_frame(tick):
+        f = frame(tick)
+        heading = observation("ekf_heading", tick, f.context.monotonic_ns,
+            yaw_rad=0., omega_rad_s=.2, confidence=0., omega_confidence=1.)
+        return replace(f, accepted=tuple(heading if o.kind == "ekf_heading" else o
+                                        for o in f.accepted))
+
+    for waiting_ticks in (3, 70):
+        estimator = NativeStateEstimator(config)
+        estimator(rate_frame(0))
+        estimator(with_fix(rate_frame(1), x=0., y=0., yaw=.004))
+        for tick in range(2, waiting_ticks):
+            estimator(rate_frame(tick))
+        reference = NativeStateEstimator(config)
+        reference.restore(estimator.checkpoint())
+        f = rate_frame(waiting_ticks)
+        prior = reference(f)
+        actual = estimator(with_fix(f, x=prior.x_m + .1,
+            y=prior.y_m, yaw=prior.yaw_rad))
+        assert actual.localization_quality.global_fix_status == "ACCEPTED"
+        assert estimator.checkpoint().local_filter == reference.checkpoint().local_filter
+        assert_covariance_valid(actual.covariance_5x5)
+        weights.append((actual.x_m - prior.x_m) / .1)
+    assert 0. < weights[0] < weights[1] < 1.
+
+
+def test_map_alignment_reconstructs_the_joint_pose_posterior_after_a_finite_fix():
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    estimator = NativeStateEstimator(config)
+    estimator(counted_arc(0))
+    estimator(with_fix(counted_arc(1)))
+    for tick in range(2, 8):
+        estimator(counted_arc(tick))
+    reference = NativeStateEstimator(config)
+    reference.restore(estimator.checkpoint())
+    f = counted_arc(8)
+    prior = reference(f)
+    p = np.array(prior.covariance_5x5).reshape(5, 5)
+    r = np.diag((.02, .12, .01)) / .9
+    gain = p[:3, :3] @ np.linalg.inv(p[:3, :3] + r)
+    residual = np.eye(3) - gain
+    expected_pose = np.array((prior.x_m, prior.y_m, prior.yaw_rad)) + gain @ (
+        np.array((.4, -.2, .3)) - np.array((prior.x_m, prior.y_m, prior.yaw_rad)))
+    expected_covariance = residual @ p[:3, :3] @ residual.T + gain @ r @ gain.T
+    expected_cross = residual @ p[:3, 3:]
+    actual = estimator(with_fix(f))
+    assert actual.localization_quality.global_fix_status == "ACCEPTED"
+    assert (actual.x_m, actual.y_m, actual.yaw_rad) == pytest.approx(expected_pose)
+    covariance = np.array(actual.covariance_5x5).reshape(5, 5)
+    assert covariance[:3, :3] == pytest.approx(expected_covariance, abs=1e-10)
+    assert covariance[:3, 3:] == pytest.approx(expected_cross, abs=1e-10)
+    assert estimator.checkpoint().local_filter == reference.checkpoint().local_filter
