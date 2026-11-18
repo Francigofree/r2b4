@@ -206,6 +206,7 @@ def run(args) -> int:
     import rclpy
     from rclpy.signals import SignalHandlerOptions
     from rclpy.node import Node
+    from rclpy.event_handler import PublisherEventCallbacks, SubscriptionEventCallbacks
     from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
     from geometry_msgs.msg import TransformStamped, PoseWithCovarianceStamped
     from sensor_msgs.msg import LaserScan
@@ -245,7 +246,19 @@ def run(args) -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
-    node = Node("r2b4_slam_bridge")
+    class SlamBridgeNode(Node):
+        # Fixed ROS endpoints need no default log-only QoS/type event handlers
+        # in every wait set. Explicit event callbacks remain supported; source
+        # freshness, lifecycle and transport failure checks are unchanged.
+        def create_publisher(self, *values, **options):
+            options.setdefault("event_callbacks", PublisherEventCallbacks(use_default_callbacks=False))
+            return super().create_publisher(*values, **options)
+
+        def create_subscription(self, *values, **options):
+            options.setdefault("event_callbacks", SubscriptionEventCallbacks(use_default_callbacks=False))
+            return super().create_subscription(*values, **options)
+
+    node = SlamBridgeNode("r2b4_slam_bridge", start_parameter_services=False)
     broadcaster = TransformBroadcaster(node)
     static_broadcaster = StaticTransformBroadcaster(node)
     publisher = node.create_publisher(LaserScan, "/r2b4/slam/scan", 1)

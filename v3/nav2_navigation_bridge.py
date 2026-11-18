@@ -133,6 +133,7 @@ def run(args):
     import rclpy
     from rclpy.action import ActionClient
     from rclpy.node import Node
+    from rclpy.event_handler import PublisherEventCallbacks, SubscriptionEventCallbacks
     from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
     from rclpy.signals import SignalHandlerOptions
     from geometry_msgs.msg import PoseStamped, TwistStamped
@@ -174,7 +175,23 @@ def run(args):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
-    node = Node("r2b4_nav2_navigation_bridge")
+    class NavigationBridgeNode(Node):
+        # The bridge (including TF/diagnostics) uses fixed endpoint QoS and
+        # source-time/lifecycle checks. rclpy's default incompatibility handlers
+        # only log warnings, but each adds a waitable to every executor turn.
+        # Omit those logs, retaining any explicitly requested event callbacks.
+        def create_publisher(self, *values, **options):
+            options.setdefault("event_callbacks", PublisherEventCallbacks(use_default_callbacks=False))
+            return super().create_publisher(*values, **options)
+
+        def create_subscription(self, *values, **options):
+            options.setdefault("event_callbacks", SubscriptionEventCallbacks(use_default_callbacks=False))
+            return super().create_subscription(*values, **options)
+
+    # Parameters are declared locally by diagnostics; no remote parameter
+    # service is used on this bridge. The controller parameter client below
+    # still talks to controller_server through its unchanged ROS service.
+    node = NavigationBridgeNode("r2b4_nav2_navigation_bridge", start_parameter_services=False)
     frontier = Ros2FrontierExplorer(node, args.frontier_executable, args.frontier_params,
         status_path.parent / "frontier.log", ros_offset_ns)
     geometry = args.robot_geometry
