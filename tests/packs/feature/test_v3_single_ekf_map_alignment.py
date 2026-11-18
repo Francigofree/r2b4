@@ -239,3 +239,58 @@ def test_map_alignment_reconstructs_the_joint_pose_posterior_after_a_finite_fix(
     assert covariance[:3, :3] == pytest.approx(expected_covariance, abs=1e-10)
     assert covariance[:3, 3:] == pytest.approx(expected_cross, abs=1e-10)
     assert estimator.checkpoint().local_filter == reference.checkpoint().local_filter
+
+
+def test_native_nav2_motion_survives_map_corrections_and_replays(tmp_path):
+    from test_nav2_control_integration import _config, _guidance, _inputs, _layers
+    from rig import ROOT
+    from v3.capture import CaptureSink
+    from v3.composition.full_fake import OfflineMotorSink
+    from v3.composition.native_control import NativeControlComposition
+    from v3.contracts import NavigationStatus
+    from v3.execution import ExecutionRecord
+    from v3.replay import replay_capture
+
+    config = _config()
+    control = NativeControlComposition(OfflineMotorSink(), config)
+    sink = CaptureSink("single-ekf-nav2", configuration={"production_control": config})
+    guidance = None
+    restored = None
+    revisions = set()
+    moving = False
+    try:
+        for tick in range(12):
+            inputs = _inputs(config, tick, guidance)
+            if tick >= 4:
+                samples = tuple(replace(sample, values=tuple(
+                    replace(field, value=.2) if field.key in {"x_m", "yaw_rad"} else field
+                    for field in sample.values)) if sample.kind == "lidar_pose" else sample
+                    for sample in inputs.raw_devices.samples)
+                inputs = replace(inputs, raw_devices=replace(inputs.raw_devices, samples=samples))
+            inputs = control.close_inputs(inputs)
+            result = control.run_tick(inputs)
+            layers = _layers(result)
+            if restored is not None:
+                assert restored.run_tick(inputs) == result
+            if tick:
+                assert layers["L6"].status is NavigationStatus.ACTIVE
+                assert layers["L8"].requested_v_mps == .25
+                moving |= bool(result.final_actuation.left_output or result.final_actuation.right_output)
+            estimate = layers["L3"]
+            assert estimate.local_pose.x_m == estimate.local_pose.y_m == estimate.local_pose.yaw_rad == 0.
+            assert estimate.v_mps == estimate.omega_rad_s == 0.
+            revisions.add(estimate.transform_revision)
+            guidance = _guidance(control._navigation.pending_navigation_request, sequence=tick+1)
+            sink.write(ExecutionRecord(inputs, result))
+            if tick == 6:
+                restored = NativeControlComposition(OfflineMotorSink(), config)
+                restored.restore(control.checkpoint())
+    finally:
+        control.close()
+        if restored is not None:
+            restored.close()
+    assert moving and len(revisions) > 1
+    capture = sink.finalize("PASS", tmp_path / "single-ekf-nav2.json")
+    replay = replay_capture(capture, project_root=ROOT)
+    assert replay["status"] == "MATCH", replay["diagnostics"]
+    assert replay["determinism"]["repeated_trace_match"]
