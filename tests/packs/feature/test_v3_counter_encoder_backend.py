@@ -70,6 +70,54 @@ def test_b_history_bracket_preserves_physical_a_direction_and_guard_boundaries()
                     expected = previous[1] if previous is not None else 1, "B_STABLE_AT_A"
                 assert NativeGpioSignedCounterPair._b_evidence_at_physical_a(state, stamp, guard) == expected
 
+
+def test_production_gpio_omits_raw_trace_without_changing_encoder_evidence(monkeypatch):
+    from dataclasses import replace
+    from rig import resolved_config
+    from v3.adapters import gpio_counter
+    from v3_test_fixtures import FakeGpio
+
+    inputs = resolved_config().runtime.sensor_inputs.inputs
+    assert inputs.encoder_counter.diagnostic_event_capacity == 0
+
+    def run(capacity):
+        config = replace(inputs.encoder_counter, diagnostic_event_capacity=capacity)
+        gpio, clock = FakeGpio(), [1_000_000_000]
+        pair = gpio_counter.NativeGpioSignedCounterPair(gpio, config, monotonic_ns=lambda: clock[0])
+        backend = NativeCounterEncoderBackend(pair.left_counter, pair.right_counter,
+            inputs.encoder_backend, snapshot_pair=pair.snapshot_pair)
+        readings = []
+        try:
+            for cycle in range(100):
+                base = 1_000_000_000 + cycle*1_000_000
+                for phase in range(3):
+                    for channel in (config.left, config.right):
+                        forward = channel.forward_b_level ^ int(channel.invert)
+                        stamp = base + (250_000+channel.a_debounce_micros*1_000
+                            if phase == 1 else phase*250_000)
+                        clock[0] = stamp
+                        gpio.emit(channel.pin_a if phase == 1 else channel.pin_b,
+                            1 if phase == 1 else forward if phase == 0 else 1-forward,
+                            stamp, chip=config.gpio_chip)
+                if cycle % 5 == 4:
+                    readings.append(backend.read(TickContext(cycle, clock[0])))
+            snapshot = pair.snapshot_pair(TickContext(100, clock[0]))
+            return readings, snapshot, pair.diagnostic_events("left"), pair.diagnostic_events("right")
+        finally:
+            pair.close()
+
+    traced = run(16)
+    assert len(traced[2]) == len(traced[3]) == 16
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("raw trace allocation on the production callback path")
+
+    monkeypatch.setattr(gpio_counter, "QuadratureAlertEvent", forbidden)
+    compact = run(0)
+    assert compact[:2] == traced[:2]
+    assert compact[2:] == ((), ())
+
+
 def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
     backend, left, right = _backend((_snapshot(100), _timed(110, 100)), (_snapshot(200), _timed(195, 200)))
     backend.read(TickContext(0, 1000000000))
@@ -133,7 +181,7 @@ def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
         clock_ns[0] = 1_070_000_000
         gpio.emit(channel.pin_a, 1, event_ns, chip=inputs.encoder_counter.gpio_chip)
         values = _sample_values(source.read(TickContext(1, clock_ns[0])))
-        assert values['left_last_a_timestamp_ns'] == physical_ns
+        assert values['left_last_accepted_edge_timestamp_ns'] == physical_ns
         assert values['left_last_callback_received_ns'] == clock_ns[0]
         assert values['left_last_callback_latency_ns'] == clock_ns[0] - event_ns
         assert values['left_max_callback_latency_ns'] == clock_ns[0] - event_ns
@@ -301,6 +349,7 @@ def test_first_read_from_stopped_counter_is_invalid_zero_baseline():
 @pytest.mark.parametrize('jitter_ns', (0, 75_000))
 def test_production_velocity_range_preserves_accuracy_and_small_pi_output_error(speed_mps, sign, jitter_ns):
     from dataclasses import replace
+    from types import SimpleNamespace
     from rig import resolved_config
     from v3.contracts import AdmittedFrame, DataField, Observation, WheelVelocitySetpoint
     from v3.layers.l11_actuator_control import WheelActuatorController
@@ -324,12 +373,15 @@ def test_production_velocity_range_preserves_accuracy_and_small_pi_output_error(
             values.append(SignedPulseCounterSnapshot(history[-1].pulse_count if history else 0,
                                                      edge_history=history, confirmed_direction=sign))
         snapshots[side] = tuple(values)
-    source = NativeEncoderSource(NativeCounterEncoderBackend(
-        Counter(snapshots['left']), Counter(snapshots['right']), inputs.encoder_backend), inputs.encoder_source)
+    backend = NativeCounterEncoderBackend(
+        Counter(snapshots['left']), Counter(snapshots['right']), inputs.encoder_backend)
+    latest = SimpleNamespace()
+    source = NativeEncoderSource(SimpleNamespace(read=lambda _: latest.reading), inputs.encoder_source)
     controller = WheelActuatorController(config.speed_map, config.wheel_pi)
     ideal = WheelActuatorController(config.speed_map, config.wheel_pi)
     for tick, now_ns in enumerate(times):
         context = TickContext(tick, now_ns)
+        latest.reading = backend.read(context)
         snapshot = source.read(context)
         if tick == 0:
             continue
@@ -339,11 +391,11 @@ def test_production_velocity_range_preserves_accuracy_and_small_pi_output_error(
         assert values['trust'] == 1.
         for side in ('left', 'right'):
             assert values[f'{side}_mps'] == pytest.approx(sign * speed_mps, rel=.004, abs=1e-8)
-            assert values[f'{side}_estimation_window_ns'] >= inputs.encoder_backend.minimum_estimation_window_ns
+            assert getattr(latest.reading.diagnostics, f'{side}_estimation_window_ns') >= inputs.encoder_backend.minimum_estimation_window_ns
             assert values[f'raw_{side}_distance_m'] == pytest.approx(
                 values[f'raw_{side}_pulse_count'] * getattr(inputs.encoder_backend, f'{side}_step_distance_m'))
             if jitter_ns:
-                assert values[f'{side}_velocity_uncertainty_mps'] > 0.
+                assert getattr(latest.reading.diagnostics, f'{side}_velocity_uncertainty_mps') > 0.
         wheel = Observation(sample.kind, sample.device_id, sample.sequence,
                             sample.captured_monotonic_ns, sample.values)
         frame = AdmittedFrame(context, (wheel,), ())
@@ -400,6 +452,7 @@ def test_velocity_repair_preserves_scalar_process_mailbox_observation_semantics(
         assert actual == expected
         sample = actual.samples[0]
         values = _sample_values(actual)
+        assert "computed_left_mps" not in values and "left_edge_history_count" not in values
         assert (sample.sequence, sample.captured_monotonic_ns) == (sequence, measurement_ns)
         assert values['raw_left_pulse_count'] == -values['raw_right_pulse_count']
         assert all(isinstance(value, (str, int, float, bool, type(None))) for value in values.values())
@@ -408,8 +461,8 @@ def test_velocity_repair_preserves_scalar_process_mailbox_observation_semantics(
             assert 0. < values['trust'] < 1.
             assert 0. < values['left_measurement_trust'] < 1.
             assert values['raw_left_pulse_count'] == 5
-            assert values['computed_left_mps'] > inputs.encoder_backend.maximum_abs_velocity_mps
-            assert values['computed_right_mps'] < -inputs.encoder_backend.maximum_abs_velocity_mps
+            assert reading.diagnostics.computed_left_mps > inputs.encoder_backend.maximum_abs_velocity_mps
+            assert reading.diagnostics.computed_right_mps < -inputs.encoder_backend.maximum_abs_velocity_mps
             assert values['rejection_code'] == 'BASELINE'
             assert actual.health.state is DeviceHealthState.OK
             assert values['left_mps'] == values['right_mps'] == 0.
@@ -493,7 +546,7 @@ def test_quadrature_rejection_parts_preserve_physical_edges_and_scalar_transport
                                      NativeEncoderConfig('ENC', .5))
         values = _sample_values(source.read(TickContext(11, 1_021_000_000)))
         for side in ('left', 'right'):
-            assert [values[f'{side}_{part}_rejections'] for part in
+            assert [getattr(reading.diagnostics, f'{side}_{part}_rejections') for part in
                     ('b_duplicate', 'a_phase', 'direction')] == [1, 1, 2]
         assert all(isinstance(value, (str, int, float, bool, type(None))) for value in values.values())
         assert 'edge_history' not in values

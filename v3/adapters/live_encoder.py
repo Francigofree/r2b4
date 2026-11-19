@@ -493,6 +493,11 @@ class NativeEncoderSource:
     def _diagnostic_fields(
         diagnostics: EncoderEdgeDiagnostics | None,
     ) -> tuple[DataField, ...]:
+        """Publish control lineage and bounded integrity/delivery probes only.
+
+        Detailed fit, quadrature and pin history stay at the encoder edge;
+        they are not rebuilt as DataFields on every control sample.
+        """
         if diagnostics is None:
             return ()
         return (
@@ -505,15 +510,10 @@ class NativeEncoderSource:
             DataField("right_last_accepted_edge_timestamp_ns", diagnostics.right_last_accepted_edge_timestamp_ns),
             DataField("left_last_accepted_edge_direction", diagnostics.left_last_accepted_edge_direction),
             DataField("right_last_accepted_edge_direction", diagnostics.right_last_accepted_edge_direction),
-            DataField("sample_interval_ns", diagnostics.sample_interval_ns),
             DataField("left_counter_running", diagnostics.left_counter_running),
             DataField("right_counter_running", diagnostics.right_counter_running),
-            DataField("left_read_errors", diagnostics.left_read_errors),
-            DataField("right_read_errors", diagnostics.right_read_errors),
             DataField("left_read_error_delta", diagnostics.left_read_error_delta),
             DataField("right_read_error_delta", diagnostics.right_read_error_delta),
-            DataField("left_invalid_alerts", diagnostics.left_invalid_alerts),
-            DataField("right_invalid_alerts", diagnostics.right_invalid_alerts),
             DataField(
                 "left_invalid_alert_delta",
                 diagnostics.left_invalid_alert_delta,
@@ -522,10 +522,6 @@ class NativeEncoderSource:
                 "right_invalid_alert_delta",
                 diagnostics.right_invalid_alert_delta,
             ),
-            DataField("computed_left_mps", diagnostics.computed_left_mps),
-            DataField("computed_right_mps", diagnostics.computed_right_mps),
-            DataField("instantaneous_left_mps", diagnostics.instantaneous_left_mps),
-            DataField("instantaneous_right_mps", diagnostics.instantaneous_right_mps),
             DataField("raw_left_distance_m", diagnostics.raw_left_distance_m),
             DataField("raw_right_distance_m", diagnostics.raw_right_distance_m),
             DataField("left_distance_delta_m", diagnostics.left_distance_delta_m),
@@ -537,14 +533,6 @@ class NativeEncoderSource:
             DataField(
                 "right_estimation_pulse_delta",
                 diagnostics.right_estimation_pulse_delta,
-            ),
-            DataField(
-                "left_estimation_window_ns",
-                diagnostics.left_estimation_window_ns,
-            ),
-            DataField(
-                "right_estimation_window_ns",
-                diagnostics.right_estimation_window_ns,
             ),
             DataField(
                 "left_estimation_timebase",
@@ -570,56 +558,12 @@ class NativeEncoderSource:
                 "right_estimation_end_edge_timestamp_ns",
                 diagnostics.right_estimation_end_edge_timestamp_ns,
             ),
-            DataField("left_edge_history_count", diagnostics.left_edge_history_count),
-            DataField("right_edge_history_count", diagnostics.right_edge_history_count),
-            DataField(
-                "instantaneous_left_interval_ns",
-                diagnostics.instantaneous_left_interval_ns,
-            ),
-            DataField(
-                "instantaneous_right_interval_ns",
-                diagnostics.instantaneous_right_interval_ns,
-            ),
-            DataField(
-                "left_velocity_uncertainty_mps",
-                diagnostics.left_velocity_uncertainty_mps,
-            ),
-            DataField(
-                "right_velocity_uncertainty_mps",
-                diagnostics.right_velocity_uncertainty_mps,
-            ),
             DataField("left_measurement_trust", diagnostics.left_measurement_trust),
             DataField("right_measurement_trust", diagnostics.right_measurement_trust),
-            DataField(
-                "maximum_abs_velocity_mps",
-                diagnostics.maximum_abs_velocity_mps,
-            ),
-            DataField("left_quadrature_rejections", diagnostics.left_quadrature_rejections),
-            DataField("right_quadrature_rejections", diagnostics.right_quadrature_rejections),
-            DataField("left_b_duplicate_rejections", diagnostics.left_b_duplicate_rejections),
-            DataField("right_b_duplicate_rejections", diagnostics.right_b_duplicate_rejections),
-            DataField("left_a_phase_rejections", diagnostics.left_a_phase_rejections),
-            DataField("right_a_phase_rejections", diagnostics.right_a_phase_rejections),
-            DataField("left_direction_rejections", diagnostics.left_direction_rejections),
-            DataField("right_direction_rejections", diagnostics.right_direction_rejections),
             DataField("left_quadrature_rejection_delta", diagnostics.left_quadrature_rejection_delta),
             DataField("right_quadrature_rejection_delta", diagnostics.right_quadrature_rejection_delta),
-            DataField("left_direction_change_candidates", diagnostics.left_direction_change_candidates),
-            DataField("right_direction_change_candidates", diagnostics.right_direction_change_candidates),
-            DataField("left_direction_changes_confirmed", diagnostics.left_direction_changes_confirmed),
-            DataField("right_direction_changes_confirmed", diagnostics.right_direction_changes_confirmed),
             DataField("left_confirmed_direction", diagnostics.left_confirmed_direction),
             DataField("right_confirmed_direction", diagnostics.right_confirmed_direction),
-            DataField("left_pending_direction", diagnostics.left_pending_direction),
-            DataField("right_pending_direction", diagnostics.right_pending_direction),
-            DataField("left_pending_direction_edges", diagnostics.left_pending_direction_edges),
-            DataField("right_pending_direction_edges", diagnostics.right_pending_direction_edges),
-            DataField("left_last_a_timestamp_ns", diagnostics.left_last_a_timestamp_ns),
-            DataField("right_last_a_timestamp_ns", diagnostics.right_last_a_timestamp_ns),
-            DataField("left_last_b_timestamp_ns", diagnostics.left_last_b_timestamp_ns),
-            DataField("right_last_b_timestamp_ns", diagnostics.right_last_b_timestamp_ns),
-            DataField("left_last_b_level", diagnostics.left_last_b_level),
-            DataField("right_last_b_level", diagnostics.right_last_b_level),
             DataField("left_last_callback_received_ns", diagnostics.left_last_callback_received_ns),
             DataField("right_last_callback_received_ns", diagnostics.right_last_callback_received_ns),
             DataField("left_last_callback_latency_ns", diagnostics.left_last_callback_latency_ns),
